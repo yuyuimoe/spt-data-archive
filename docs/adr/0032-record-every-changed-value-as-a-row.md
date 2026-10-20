@@ -1,8 +1,9 @@
 # ADR-0032: Record every changed value as a row
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
+**Depends on:** ADR-0034 (the address of an object; Proposed)
 
 ## Context
 
@@ -24,7 +25,9 @@ Today it says so for items only.
 
 A test also showed a second limit (TD-46). When an array changes length, the diff collapses the whole array into one path. WTT-Armory grows a slot filter from 30 to 39 entries. The archive says "this array changed" and cannot say which entry arrived.
 
-A third limit has no row at all. A trader assorts stays a canonical hash. ECOTI adds nine offers to Peacekeeper and changes two traders, and the archive stores 733 change paths: none of them is an offer. The driver named the identity of an offer: the trader, the item and what the player pays with. A player buys the same item in more than one way. One example is a P90 for 90,000 roubles, or for two AA batteries, both at Mechanic. The measurement in the Decision section confirms that rule. It also shows where the rule needs one more part.
+A third limit has no row at all. A trader assorts stays a canonical hash. ECOTI adds nine offers to Peacekeeper and changes two traders, and the archive stores 733 change paths: none of them is an offer. The driver named the identity of an offer: the trader, the item and what the player pays with. A player buys the same item in more than one way. One example is a P90 for 90,000 roubles, or for two AA batteries, both at Mechanic. The measurement in the Decision section confirms that rule.
+
+The driver named a fourth limit: the id of every object can be made at run time (ADR-0034). An offer is therefore named by an address that the archive derives. It is not named by an id that a run produces.
 
 ## Decision
 
@@ -36,15 +39,17 @@ A third limit has no row at all. A trader assorts stays a canonical hash. ECOTI 
 
 3. **Quests, traders and customizations get paths.** Their template row stays. Their full object stays in its table (ADR-0002). Each changed value becomes a path row under the template.
 
-4. **Assort becomes a row type. An offer has three keys.** The template kind is `assort`. The template id is the offer key, `<traderId>:<rootTemplateId>:<barterChannel>`.
-   - The barter channel is the set of templates that the player pays with, sorted and joined by `+`. It is the rouble template, the euro template, or a barter item such as `619cbfcc…+66b37f11…`. The amount is not part of the key. An offer that becomes more expensive keeps its identity. The change is then a `set` path on the amount, and not a removed offer plus an added offer.
-   - Evidence, measured on the 4.1.6 baseline: 6,131 offers, 317 channels, 4,901 offers in roubles, 618 in euros and 156 in dollars. 144 pairs of (trader, root template) hold more than one offer, and 167 offers are paid with two to five different items at once. The three parts name 6,100 keys. The remaining 23 keys hold two to five offers each.
-   - When a key holds more than one offer, the key gains `@<4 hex digits of the canonical hash of the offer's preset>`. Two offers pair first by preset, then by canonical order. Fifteen of those 23 keys are not separated by the loyalty level, because the offers differ only by attached parts or by durability.
-   - The payment is addressed by its template and not by its position: `/barter/<templateId>/count`. A position would name different payers in the next run.
-   - The offer tree is stored in `mod_trader_assort_items`: one row for the root and one row for each attached part, with the instance ids of the run. The tree stays self-consistent because a dataset is written once.
+4. **Assort becomes a row type. An offer is named by a content ULID.** The template kind is `assort`. The template id is a content ULID over three parts (ADR-0034): the address of the trader, the address of the root item, and the payment channel.
+   - The payment channel is the set of templates that the player pays with, named by their addresses, sorted, unique and joined by `+`. It is the rouble template, the euro template, or a barter item. The amount is not part of the seed. An offer that becomes more expensive keeps its id, so the change is a `set` path on the amount.
+   - Evidence, measured on the 4.1.6 baseline: 6,131 offers, 317 channels, 4,901 offers in roubles, 618 in euros and 156 in dollars. 144 pairs of (trader, root item) hold more than one offer. 167 offers are paid with two to five items at once.
+   - The three parts name 6,100 offers. The remaining 23 groups hold two to five offers each, and they differ by preset: attached parts, durability, buy limit or loyalty level.
+   - When a run holds more than one offer of one seed, the seed gains the canonical hash of the offer preset. The preset is the offer tree without instance ids, without amounts and without `upd`. A change to a preset field of such an offer therefore reads as a removal and an addition. That is 23 groups of 6,131 offers in 4.1.6.
+   - Three of those 23 groups hold offers that are identical in every part. Their ids differ only by their order in canonical form. The archive states them as separate rows and cannot say which one changed. The runbook names that case.
+   - The payment is addressed by its template and not by its position: `/barter/<template address>/count`. A position would name different payers in the next run.
+   - The offer tree is stored in `mod_trader_assort_items`: one row for the root and one row for each attached part. The tree stays self-consistent because a dataset is written once.
    - A part is keyed by its slot and not by its position: `/parts/<slotId>/upd/StackObjectsCount`.
-   - The same key matches a run against its baseline. Today the diff renumbers the assort instance ids by position (ADR-0028, decision 3), so an added offer at position 0 shifts every position after it. With the key the diff pairs real offers.
-   - A quest unlock stays attached to the offer by the same key: `mod_trader_quest_assorts` holds the dataset, the offer key, the status and the quest id. The 4.1.6 baseline has 236 such links, 5 with the status `started` and 231 with `success`. The `questassort.json` file names offers by instance id, which the server renumbers on every boot; the key removes that dependency.
+   - The same id matches a run against its baseline. Today the diff renumbers the assort instance ids by position (ADR-0028, decision 3), so an offer added at position 0 shifts every position after it. With the address the diff pairs real offers (ADR-0034, decision 8).
+   - A quest unlock stays attached to the offer by the same id: `mod_trader_quest_assorts` holds the dataset, the offer id, the status and the quest address. The 4.1.6 baseline has 236 such links, 5 with the status `started` and 231 with `success`. The `questassort.json` file names offers by instance id, which the server renumbers on every boot. The address removes that dependency.
 
 5. **The old value comes from the baseline.** The new value comes from the run. A removed value has no new value. An added value has no old value. A volatile path (ADR-0028) never becomes a row, because it never differs.
 
@@ -73,7 +78,7 @@ An added item costs one template row. A changed value costs one path row. A ques
 
 For this project the trade is right. The archive exists to answer questions about mod data. A dataset that only holds a hash answers no question. Row volume is bounded by what a mod changes, and a mod that changes everything is rare.
 
-The second trade-off is the offer key. A key of trader, root template and barter channel is readable, and it survives a price change. It fails in one case: a trader sells the same template through the same channel in several offers that differ only by preset. The rule of decision 4 separates those offers by the hash of the preset. A change to such a preset therefore looks like a removal and an addition. This is 23 keys of 6,131 offers in 4.1.6, and 3 of those keys hold offers that are identical in preset, amount and loyalty level. The archive states those as separate rows and cannot say which one changed. We accept that case and state it in the runbook.
+The second trade-off is the identity of an offer. An address of trader, root item and payment channel survives a price change. It also survives a boot that makes new instance ids, which no id could do (ADR-0034). It fails in one case: a trader sells the same item through the same channel in several offers that differ only by preset. Decision 4 separates those offers by the hash of the preset. A change to such a preset then reads as a removal and an addition. That is 23 groups of 6,131 offers in 4.1.6. Three of those groups hold offers that are identical in every part, so the archive cannot say which one changed. We accept that case and state it in the runbook.
 
 ## Consequences
 
@@ -121,52 +126,60 @@ Feature: Answer what a mod changed, value by value
     When I read the change paths of the customization "C1" in "D1"
     Then one path row names the changed side
 
-  # ADR-0032 decision 4. An assort offer is a template with a stable key.
+  # ADR-0032 decision 4. An assort offer is a template named by a content ULID.
 
   @unverified
   Scenario: An added offer is a template of the kind "assort"
-    Given the dataset "D1" adds one offer of the template "T1", paid in roubles, to the trader "TR1"
+    Given the dataset "D1" adds one offer of the item "T1", paid in roubles, to the trader "TR1"
     When I read the templates of "D1"
     Then one template has the kind "assort"
-    And its template id is "TR1:T1:<rouble template id>"
+    And its template id is a content ULID of the trader, the item and the channel
     And its operation is "added"
 
   @unverified
-  Scenario: A price that rises from 9 to 10 keeps the identity of the offer
-    Given the dataset "D1" changes the rouble count of the offer of the template "T1" at the trader "TR1" from 9 to 10
+  Scenario: A price that rises from 9 to 10 keeps the id of the offer
+    Given the dataset "D1" changes the rouble count of the offer of the item "T1" at the trader "TR1" from 9 to 10
     When I read the change paths of that offer in "D1"
-    Then one path row is "/barter/<rouble template id>/count"
+    Then one path row is "/barter/<rouble address>/count"
     And its old value is "9"
     And its new value is "10"
     And no offer of "D1" has the operation "removed"
 
   @unverified
+  Scenario: A new instance id in the next boot keeps the id of the offer
+    Given the trader "TR1" sells the item "T1" for roubles
+    And the next boot gives every assort row a new instance id
+    When I archive the next run of the same install
+    Then the offer keeps its template id
+    And the run adds no template
+
+  @unverified
   Scenario: Two ways to pay for one item are two offers
-    Given the trader "TR1" sells the template "T1" for roubles and for two batteries
+    Given the trader "TR1" sells the item "T1" for roubles and for two batteries
     When I read the templates of the kind "assort" of the dataset "D1"
-    Then two offers hold the template id "T1"
-    And their template ids differ only in the barter channel
-    And the channel of one offer names the battery template
+    Then two offers name the item "T1"
+    And their template ids differ
+    And the channel of one offer names the battery item
 
   @unverified
   Scenario: A part of an offer is keyed by its slot
-    Given the dataset "D1" changes the durability of the part in the slot "mod_muzzle" of the offer "TR1:T1"
-    When I read the change paths of the offer "TR1:T1" in "D1"
+    Given the dataset "D1" changes the durability of the part in the slot "mod_muzzle" of the offer of "T1" at "TR1"
+    When I read the change paths of that offer in "D1"
     Then the path names the slot "mod_muzzle"
     And the path names no array position
 
   @unverified
-  Scenario: A trader that sells one template twice through one channel gets one key per offer
-    Given the trader "TR1" sells the template "T1" for roubles in two offers with different presets
+  Scenario: A trader that sells one item twice through one channel gets one id per offer
+    Given the trader "TR1" sells the item "T1" for roubles in two offers with different presets
     When I read the templates of the kind "assort" of the dataset "D1"
     Then the two offers have two different template ids
-    And both ids start with "TR1:T1:<rouble template id>@"
+    And the next run of the same content gives the same two ids
 
   @unverified
-  Scenario: A quest that unlocks an offer is linked through the offer key
-    Given the quest "Q1" unlocks the offer of the template "T1" at the trader "TR1" when it succeeds
+  Scenario: A quest that unlocks an offer is linked through the offer id
+    Given the quest "Q1" unlocks the offer of the item "T1" at the trader "TR1" when it succeeds
     When I read the offers of "D1" that a quest unlocks
-    Then one offer has the key of "T1"
+    Then one offer is the offer of "T1"
     And its status is "success"
     And its quest is "Q1"
 
@@ -195,7 +208,7 @@ Feature: Answer what a mod changed, value by value
 1. [ ] Rename `mod_item_changes` to `mod_change_paths` and widen the kind check (migration).
 2. [ ] Emit one path per leaf in `RunDiff`, and drop the whole-array path (closes TD-46).
 3. [ ] Emit paths for quests, traders and customizations in `RunDiff`; keep the full object rows.
-4. [ ] Add the `assort` template kind, the offer key rule and the offer tree import.
+4. [ ] Add the `assort` template kind, the content ULID of an offer and the offer tree import (ADR-0034, action items 1 to 5).
 5. [ ] Extend the content hash input list in ADR-0029 amendment 4 when a hash-only kind becomes a row (no hash change expected: the rows replace the hash of the same file).
 6. [ ] Close TD-45 for the kinds that now have rows; keep the open part for locations and bots.
 7. [ ] Update the API surface and the query spec once the rows exist.
@@ -205,5 +218,6 @@ Feature: Answer what a mod changed, value by value
 - ADR-0002 (jsonb next to promoted columns).
 - ADR-0013 (dataset-keyed rows), ADR-0017 (a template operation above its paths), ADR-0022 (customizations).
 - ADR-0027 (the run directory is transport), ADR-0028 (canonical form), ADR-0029 (content hash, amendment 4).
+- ADR-0034 (the address of an object; the offer id is built from three addresses).
 - `docs/specs/mod-registry.feature`, `docs/tech-debt.md` (TD-45, TD-46).
 - `src/SptArchive.Core/Canonical/RunDiff.cs`, `src/SptArchive.Archiver/Runs/RunImporter.cs`.

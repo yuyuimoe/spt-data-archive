@@ -72,6 +72,7 @@ row. A gap that blocks the current slice is not a row: it is the slice.
 | TD-17 | Architecture | A full replace creates dead rows and holds one long transaction (ADR-0009). | 2 | 2 | 3 | 12 | Table bloat and long locks can appear on large runs. |
 | TD-18 | Code | Many parts of the server database are not imported (see the `@backlog` scenario in `archive-official-data.feature`). | 3 | 2 | 4 | 10 | The archive is not complete. |
 | TD-19 | Architecture | The write path for admin changes is undefined. | 2 | 2 | 4 | 8 | The driver plans an admin panel or authorized services. |
+| TD-48 | Data | A stored id is the id the run gave the object, and a run can make that id. A mod that calls `MongoId.New()` for an added item, or that clones an item, makes the same content read as different content in the next boot: the contribution moves, the content hash moves and ADR-0029 stores a second dataset. The server already renews every assort instance id on every boot (ADR-0028, 5,090 values). Measured on 2026-10-20 over the 19 runs: WTT-Armory ships all 833 added item ids as text, so that mod is stable; ECOTI ships no item file and its 9 ids carry authoring mint times (2026-08-14 to 2026-10-19), and 53 of the 833 ids are hand-written hex with no valid MongoId time. ADR-0034 decides the address; nothing implements it yet. | 3 | 3 | 2 | 24 | A restart can look like a mod release, and two datasets claim to hold different content that is the same. |
 
 ## Resolved items
 

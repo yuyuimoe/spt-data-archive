@@ -15,6 +15,9 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Template operation** | What a mod does to one template id: `added`, `modified` or `removed`. One row in `mod_templates` for each touched template (ADR-0017). |
 | **Contribution** | Everything a run adds and changes, measured against the baseline of its release: the template operations, the item paths with the old value from the baseline, and the locale entries (ADR-0013). A dataset stores the contribution and its content hash covers it. |
 | **Content hash** | The SHA-256 of a contribution together with the configuration text, the manifest of the files the mod ships and the canonical hash of every changed file that has no row (ADR-0029, amendment 4). Two mod versions with the same hash share one dataset. |
+| **Address** | The name the archive gives an object (ADR-0034). It is the id of the baseline when the baseline holds the object. Otherwise it is a content ULID, because the run made the object. |
+| **Content ULID** | A 26-character id that the archive derives from a seed: the kind of the object and its identity fields (ADR-0034). The time half is zero, so a boot that makes new instance ids does not change it. |
+| **Pinned** | An object that the baseline of a release holds, so its own id is its address (ADR-0034). Every official row is pinned. |
 | **Unstored change** | A file that the run changed and that no `mod_*` table holds: a trader's assort, a location, a bot type, a price table. Its canonical hash enters the content hash, so two datasets that differ only there stay apart, and the import names it in the log (TD-45). |
 | **Added template** | A template id that the baseline does not have and the target export does. Its path rows have no old value. |
 | **Modified template** | A template id that the baseline and the target export both have, with different content. |

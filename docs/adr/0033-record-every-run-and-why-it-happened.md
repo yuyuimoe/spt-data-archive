@@ -1,6 +1,6 @@
 # ADR-0033: Record every run and why it happened
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 
