@@ -1,0 +1,45 @@
+# Throwaway PostgreSQL for local development, migration work and tests.
+#
+# This is NOT the deployment stack. That is ../compose.yaml (db + redis + api + archiver).
+# This file has no secrets and no persistence promise: "down -v" erases everything.
+#
+#   podman compose -f docker/compose.yml up -d
+#   podman compose -f docker/compose.yml logs -f db
+#   podman compose -f docker/compose.yml down -v
+#
+# It must live in this directory. A "compose.yml" next to ../compose.yaml is shadowed by it
+# (Compose picks compose.yaml and only warns), so the root file would never run.
+
+# Namespace the project so containers and volumes cannot collide with another stack
+# on the same machine, for example the penpot stack.
+name: sptarchive-dev
+
+services:
+  db:
+    # Fully qualified on purpose: podman asks for a registry when a short name is used.
+    image: docker.io/library/postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive_owner
+      # Development-only credentials, not secrets. Override them from the shell if you like.
+      POSTGRES_PASSWORD: ${ARCHIVE_OWNER_PASSWORD:-dev_owner_password}
+      # Read by 01-reader-role.sh to create the read-only role the Api uses.
+      ARCHIVE_READER_PASSWORD: ${ARCHIVE_READER_PASSWORD:-dev_reader_password}
+    # Loopback only. The database is never reachable from the network.
+    ports:
+      - "127.0.0.1:${ARCHIVE_DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+      # Creates archive_reader (SELECT only), the same role shape as production.
+      # Runs once, only when the data directory is empty.
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive_owner -d archive"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata_dev:

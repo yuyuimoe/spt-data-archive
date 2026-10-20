@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The first tests of the archive (TD-06). They run against the development database of
+    docker/compose.yml, so they check the real Postgres schema and not an in-memory substitute.
+    ADR-0012 plans Reqnroll on top of xUnit; the Gherkin bindings come in their own slice.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/SptArchive.Core/SptArchive.Core.csproj" />
+    <ProjectReference Include="../../src/SptArchive.Archiver/SptArchive.Archiver.csproj" />
+  </ItemGroup>
+
+</Project>

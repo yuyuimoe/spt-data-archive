@@ -1,0 +1,52 @@
+<Project>
+
+  <!--
+    One version per package for the whole solution (TD-07).
+    Before this file existed the versions were floating (10.0.*, 16.*, *), so the Api resolved
+    EF Core 10.0.4 through Npgsql while Core compiled against 10.0.13. The Api then failed with
+    CS1705: it referenced an assembly that Core had built against a newer EF Core than the Api saw.
+
+    Transitive pinning is on, so a package that arrives through a project reference is lifted to
+    the version stated here. Without it the Api would still take EF Core from its own graph only.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- EF Core. Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 accepts [10.0.4, 11.0.0),
+       HotChocolate.Data.EntityFramework 16.6.9 needs 10.0.0 or later: 10.0.13 satisfies both. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
+  </ItemGroup>
+
+  <!-- Hosting and cache -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.13" />
+  </ItemGroup>
+
+  <!-- GraphQL -->
+  <ItemGroup>
+    <PackageVersion Include="HotChocolate.AspNetCore" Version="16.6.9" />
+    <PackageVersion Include="HotChocolate.Data.EntityFramework" Version="16.6.9" />
+  </ItemGroup>
+
+  <!-- Tests (ADR-0012: Reqnroll runs on xUnit; these are the first tests, see TD-06) -->
+  <ItemGroup>
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+  </ItemGroup>
+
+  <!-- Logging -->
+  <ItemGroup>
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+
+</Project>

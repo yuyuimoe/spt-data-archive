@@ -1,0 +1,89 @@
+namespace SptArchive.Core.Entities;
+
+/// <summary>
+/// One template that a mod dataset touches, with the operation it applies to it (ADR-0017).
+/// A template is one item, quest or trader, identified by its template id.
+/// </summary>
+/// <remarks>
+/// The operation lives here and not on the path rows. Under the ADR-0013 shape an added item and a
+/// new property of an old item both had no old value, so the archive could not tell them apart.
+/// </remarks>
+public class ModTemplate
+{
+    public Guid DatasetId { get; set; }
+
+    public ModDataset Dataset { get; set; } = null!;
+
+    /// <summary>"item", "quest" or "trader".</summary>
+    public required string Kind { get; set; }
+
+    /// <summary>The template id, the quest id or the trader id.</summary>
+    public required string TemplateId { get; set; }
+
+    /// <summary>"added", "modified" or "removed".</summary>
+    public required string Op { get; set; }
+
+    /// <summary>The item <c>_parent</c> node of an added item. Null otherwise.</summary>
+    public string? ParentId { get; set; }
+}
+
+/// <summary>
+/// One changed property path under a <see cref="ModTemplate"/> (ADR-0017). The path is an RFC 6901
+/// JSON pointer such as <c>/_props/Weight</c>.
+/// </summary>
+/// <remarks>
+/// The old value comes from the official table of the server release in the observation. An added
+/// template has no old value, and a removed template has no new value; the Archiver enforces both.
+/// </remarks>
+public class ModItemChange
+{
+    public Guid DatasetId { get; set; }
+
+    /// <summary>Always "item". The column repeats the parent key so the foreign key can name it.</summary>
+    public string Kind { get; set; } = ModTemplateKind.Item;
+
+    public required string TemplateId { get; set; }
+
+    /// <summary>The JSON pointer of the changed value.</summary>
+    public required string Path { get; set; }
+
+    /// <summary>"set" or "remove".</summary>
+    public required string Op { get; set; }
+
+    /// <summary>The value before the mod, as JSON. Null for an added template or a new property.</summary>
+    public string? OldValue { get; set; }
+
+    /// <summary>The value after the mod, as JSON. Null for a removed property.</summary>
+    public string? NewValue { get; set; }
+
+    public ModTemplate Template { get; set; } = null!;
+}
+
+/// <summary>What a mod dataset touched (ADR-0017).</summary>
+public static class ModTemplateKind
+{
+    public const string Item = "item";
+    public const string Quest = "quest";
+    public const string Trader = "trader";
+
+    public static readonly string[] All = [Item, Quest, Trader];
+}
+
+/// <summary>The operation of one template under a dataset (ADR-0017).</summary>
+public static class ModTemplateOperation
+{
+    public const string Added = "added";
+    public const string Modified = "modified";
+    public const string Removed = "removed";
+
+    public static readonly string[] All = [Added, Modified, Removed];
+}
+
+/// <summary>The operation of one changed path (ADR-0017).</summary>
+public static class ModItemChangeOperation
+{
+    public const string Set = "set";
+    public const string Remove = "remove";
+
+    public static readonly string[] All = [Set, Remove];
+}

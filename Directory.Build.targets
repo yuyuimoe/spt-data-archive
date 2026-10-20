@@ -1,0 +1,21 @@
+<Project InitialTargets="RemoveStrayEfOutputDirectory">
+
+  <!--
+    dotnet ef writes its design-time build host into a directory whose name contains a literal
+    backslash ("bin\Debug"). On Linux that is one directory name, and the MSBuild item globs
+    normalize the backslash while they walk the project. When bin/Debug does not exist yet, the walk
+    throws, MSBuild keeps the glob text as a file name, and a clean build dies with
+    "CS2001: Source file '**/*.cs' could not be found". The directory is removed before the build
+    reads those items, so a clean build works after any dotnet ef command.
+    The "?" pattern is needed because MSBuild rewrites a backslash in a command into a path
+    separator; the pattern stays unquoted so the shell expands it. On Windows there is no such
+    directory, so the target only runs elsewhere.
+  -->
+  <Target Name="RemoveStrayEfOutputDirectory" Condition="'$(OS)' != 'Windows_NT'">
+    <Exec Command="rm -rf &quot;$(MSBuildProjectDirectory)&quot;/bin?Debug"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          ContinueOnError="true" />
+  </Target>
+
+</Project>

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SptArchive.Api/SptArchive.Api.csproj" />
+    <Project Path="src/SptArchive.Archiver/SptArchive.Archiver.csproj" />
+    <Project Path="src/SptArchive.Core/SptArchive.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SptArchive.Tests/SptArchive.Tests.csproj" />
+  </Folder>
+</Solution>

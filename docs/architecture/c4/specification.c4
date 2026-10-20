@@ -1,0 +1,50 @@
+// C4 vocabulary for the SPT Data Archive.
+// Levels: person / softwareSystem (context), container (containers), component (components).
+
+specification {
+  element person {
+    style {
+      shape person
+      color primary
+    }
+  }
+
+  element softwareSystem {
+    style {
+      color slate
+    }
+  }
+
+  element container {
+    style {
+      color primary
+    }
+  }
+
+  element component {
+    style {
+      color sky
+    }
+  }
+
+  element database {
+    style {
+      shape cylinder
+      color green
+    }
+  }
+
+  element cache {
+    style {
+      shape queue
+      color amber
+    }
+  }
+
+  // The element or relationship is designed but not built yet.
+  tag planned
+
+  // Deployment vocabulary (see deployment.c4).
+  deploymentNode environment
+  deploymentNode host
+}

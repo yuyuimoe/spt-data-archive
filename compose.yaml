@@ -1,0 +1,69 @@
+# Local / production stack for the SPT data archive.
+#
+#   docker compose up -d db redis api       # long-running services
+#   docker compose run --rm archiver        # one archive run (schedule this with cron / a systemd timer)
+#
+# Secrets come from .env (see .env.example). Postgres and Redis are NOT published to the host.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive_owner
+      POSTGRES_PASSWORD: ${ARCHIVE_OWNER_PASSWORD:?set ARCHIVE_OWNER_PASSWORD in .env}
+      ARCHIVE_READER_PASSWORD: ${ARCHIVE_READER_PASSWORD:?set ARCHIVE_READER_PASSWORD in .env}
+    # Modest memory settings; raise shared_buffers if the host has room to spare.
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "work_mem=16MB", "-c", "max_connections=50"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive_owner -d archive"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Pure cache: bounded memory, least-recently-used eviction, no persistence.
+    command: ["redis-server", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
+
+  api:
+    build:
+      context: .
+      dockerfile: src/SptArchive.Api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      # The API connects as the read-only role.
+      ConnectionStrings__Archive: Host=db;Database=archive;Username=archive_reader;Password=${ARCHIVE_READER_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+  archiver:
+    build:
+      context: .
+      dockerfile: src/SptArchive.Archiver/Dockerfile
+    profiles: ["jobs"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # The Archiver connects as the owner: it creates the schema (migrations) and writes the data.
+      ConnectionStrings__Archive: Host=db;Database=archive;Username=archive_owner;Password=${ARCHIVE_OWNER_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+      Archive__DatabasePath: /spt-data/database
+    volumes:
+      # Path to the server's SPT_Data folder on the host (after "git lfs pull"), mounted read-only.
+      - ${SPT_DATA_PATH:?set SPT_DATA_PATH in .env}:/spt-data:ro
+
+volumes:
+  pgdata:

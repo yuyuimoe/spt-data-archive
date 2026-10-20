@@ -1,0 +1,18 @@
+// Deployment of the containers. Matches compose.yaml.
+// Postgres and Redis are not published to the host. Only the Api publishes a port.
+
+deployment {
+
+  environment prod 'Docker Compose stack' {
+
+    host dockerHost 'Docker host' {
+      description 'One machine that runs compose.yaml.'
+
+      instanceOf archive.db
+      instanceOf archive.redis
+      instanceOf archive.api
+      instanceOf archive.archiver
+      instanceOf archive.modRunner
+    }
+  }
+}

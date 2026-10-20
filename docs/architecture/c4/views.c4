@@ -1,0 +1,85 @@
+// C4 views. Level 1 = index. Level 2 = containers. Level 3 = components. Then dynamic views.
+
+views {
+
+  // ------------------------------------------------ Level 1: system context
+
+  view index {
+    title 'C4 level 1: System context'
+    include consumer, maintainer, archive, sptServer, modSources, edge
+  }
+
+  // ----------------------------------------------------- Level 2: containers
+
+  view containers of archive {
+    title 'C4 level 2: Containers'
+    include *
+  }
+
+  // ---------------------------------------------------- Level 3: components
+
+  view apiComponents of archive.api {
+    title 'C4 level 3: Components of the Api'
+    include *
+  }
+
+  view archiverComponents of archive.archiver {
+    title 'C4 level 3: Components of the Archiver'
+    include *
+  }
+
+  view modRunnerComponents of archive.modRunner {
+    title 'C4 level 3: Components of the Mod Runner'
+    include *
+  }
+
+  // ------------------------------------------------------------- Dynamic
+
+  dynamic view archiveRun {
+    title 'Dynamic: One archive run'
+
+    maintainer -> archive.archiver.archiveJob 'Starts the job'
+    archive.archiver.archiveJob -> archive.archiver.sourceSupport 'Hashes every JSON file'
+    archive.archiver.archiveJob -> archive.archiver.archiverDbAccess 'Looks for a succeeded run with the same hash'
+    archive.archiver.archiverDbAccess -> archive.db 'Reads archive_runs'
+    archive.archiver.archiveJob -> archive.archiver.importers 'If the data changed: runs each importer'
+    archive.archiver.importers -> archive.archiver.archiverDbAccess 'Deletes the old official rows and writes the new rows in batches'
+    archive.archiver.archiverDbAccess -> archive.db 'Commits one transaction'
+    archive.archiver.archiveJob -> archive.redis 'Publishes the new dataset version'
+  }
+
+  dynamic view modRun {
+    title 'Dynamic: Archive one mod version'
+
+    archive.archiver -> archive.modRunner 'Asks for one mod version'
+    archive.modRunner -> sptServer 'Starts a server from a pinned commit, with the dependencies and the mod, and without bundles'
+    archive.modRunner -> archive.db 'Reads the dependency baseline, writes the dataset, the change rows and the observation'
+  }
+
+  dynamic view queryCacheMiss {
+    title 'Dynamic: Query, cache miss'
+
+    consumer -> archive.api.queryCache 'POST /graphql'
+    archive.api.queryCache -> archive.redis 'Reads the dataset version and looks up the response'
+    archive.api.queryCache -> archive.api.graphql 'No entry found: runs the query'
+    archive.api.graphql -> archive.api.apiDbAccess 'Builds the query'
+    archive.api.apiDbAccess -> archive.db 'Runs SELECT with the read-only role'
+    archive.api.queryCache -> archive.redis 'Stores the response if it has no errors'
+  }
+
+  dynamic view queryCacheHit {
+    title 'Dynamic: Query, cache hit'
+
+    consumer -> archive.api.queryCache 'POST /graphql'
+    archive.api.queryCache -> archive.redis 'Reads the dataset version and looks up the response'
+    archive.redis -> archive.api.queryCache 'Returns the stored response'
+    archive.api.queryCache -> consumer 'Answers with X-Cache: HIT. The database is not used.'
+  }
+
+  // ---------------------------------------------------------- Deployment
+
+  deployment view production {
+    title 'Deployment: Docker Compose stack'
+    include prod.**
+  }
+}

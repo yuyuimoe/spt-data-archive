@@ -1,0 +1,44 @@
+# Architecture Decision Records
+
+An ADR records one decision, the reason for it and what it causes. Each ADR ends with Gherkin scenarios that state what must stay true.
+
+## Index
+
+| ADR | Decision | Status |
+|-----|----------|--------|
+| [0001](0001-use-postgresql.md) | Use PostgreSQL as the archive database | Accepted |
+| [0002](0002-hybrid-columns-and-jsonb.md) | Store variable data as jsonb next to a few real columns | Accepted |
+| [0003](0003-separate-official-and-mod-tables.md) | Keep official data and mod data in separate tables | Accepted |
+| [0004](0004-read-server-json-directly.md) | Read the official data directly from the server JSON files | Accepted |
+| [0005](0005-mod-ingestion-strategy.md) | Choose how to ingest mod data | Superseded by ADR-0013 |
+| [0006](0006-thin-readonly-graphql-api.md) | Serve the archive through a thin read-only GraphQL API | Accepted |
+| [0007](0007-dotnet-stack.md) | Build every project in C# on .NET 10 | Accepted |
+| [0008](0008-redis-response-cache.md) | Cache complete GraphQL responses in Redis with a dataset version in the key | Accepted |
+| [0009](0009-run-to-completion-archiver.md) | Run the Archiver as a job that replaces the official data in one transaction | Accepted |
+| [0010](0010-archive-scope-latest-or-versioned.md) | Decide whether the archive keeps one dataset or many server versions | Superseded by ADR-0014 |
+| [0011](0011-backups-with-pg-dump.md) | Back up with pg_dump after each successful run | Accepted |
+| [0012](0012-reqnroll-for-gherkin.md) | Run the Gherkin specs with Reqnroll | Proposed |
+| [0013](0013-mod-ingestion-by-isolated-run.md) | Ingest mod data by running one mod in an isolated server container | Accepted |
+| [0014](0014-keep-every-archived-spt-release.md) | Keep every archived server release under one version key | Accepted |
+| [0015](0015-suppress-bundles-with-a-patch-mod.md) | Suppress bundle loading with a HarmonyX patch mod | Accepted |
+| [0016](0016-probe-mod-compatibility.md) | Probe mod compatibility when a server release arrives | Accepted |
+| [0017](0017-record-a-template-operation.md) | Record one template operation for every item that a mod touches | Accepted |
+| [0018](0018-do-not-delete-mod-data-in-the-first-release.md) | Do not delete mod data in the first release | Accepted |
+| [0019](0019-reject-a-version-the-archive-does-not-hold.md) | Reject a server version that the archive does not hold | Accepted |
+
+## Status meanings
+
+- **Accepted:** The driver made this decision. Do not change the behavior without a new ADR.
+- **Proposed:** The assistant wrote the design and the driver has not confirmed it. The code follows it. Ask the driver before you build on it.
+- **Proposed (decision needed):** No decision exists. Do not guess. Ask the driver.
+- **Deprecated:** The decision no longer applies.
+- **Superseded by ADR-NNNN:** A newer ADR replaced it.
+
+## Rules
+
+1. Write a new ADR for any change that affects more than one component, the data model or an external system.
+2. Copy `0000-template.md`. Use the next free number. Use a short file name in lower case with hyphens.
+3. Never edit the decision of an Accepted ADR. Write a new ADR and mark the old one as Superseded.
+4. Write the Verification scenarios as Gherkin. Use the tags `@unverified`, `@backlog` and `@decision-needed` as in `docs/specs/README.md`.
+5. Update the index in this file in the same change.
+6. Run `python3 scripts/check-docs.py` before you finish.

@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+.env
+*.dump
+
+# Local agent tooling state (not project source)
+.pi/

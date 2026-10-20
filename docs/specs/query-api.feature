@@ -1,0 +1,202 @@
+Feature: Query the archive through a read-only GraphQL API
+  As an API consumer
+  I want to filter, sort and page archive data with GraphQL
+  So that I can get official and mod data without access to the server
+
+  Background:
+    Given an archive database with official data and mod data
+    And the Api is running
+
+  # -------------------------------------------------------------- Read only
+
+  @unverified
+  Scenario: The schema has no mutations
+    When I read the GraphQL schema
+    Then the schema has a Query type
+    And the schema has no Mutation type
+
+  @unverified
+  Scenario: The database role cannot write
+    Given the Api connects as the role "archive_reader"
+    When that role runs an INSERT on the table "items"
+    Then PostgreSQL rejects the statement with a permission error
+
+  @unverified
+  Scenario: The reader role can read tables created by later migrations
+    Given a migration creates a new table
+    When the role "archive_reader" runs a SELECT on that table
+    Then the query succeeds
+
+  # ------------------------------------------------------ Official vs. mods
+
+  @unverified
+  Scenario: Official items and mod items are separate collections
+    Given the official item "A1" and the mod item "B1" of the mod "mod-x"
+    When I query "items"
+    Then the result has "A1"
+    And the result does not have "B1"
+    When I query "modItems"
+    Then the result has "B1"
+    And the result does not have "A1"
+
+  @unverified
+  Scenario: A mod item states the mod it belongs to
+    Given the mod item "B1" of the mod "mod-x"
+    When I query "modItems" and select the field "mod"
+    Then the result shows the mod "mod-x"
+
+  # ------------------------------------------------- Filter, sort and page
+
+  @unverified
+  Scenario: Items can be filtered by name
+    Given the official items "weapon_a", "weapon_b" and "ammo_c"
+    When I query "items" with the filter name starts with "weapon_"
+    Then the result has "weapon_a" and "weapon_b"
+    And the result does not have "ammo_c"
+
+  @unverified
+  Scenario: A single item can be read by id
+    Given the official item "A1"
+    When I query "item" with the id "A1"
+    Then the result is the item "A1"
+
+  @unverified
+  Scenario: An unknown id returns null
+    When I query "item" with the id "does-not-exist"
+    Then the result is null
+    And the response has no errors
+
+  @unverified
+  Scenario: Translations are found by entity
+    Given the locale entries of the entity "A1" in the languages "en" and "ru"
+    When I query "translations" with the entity id "A1" and the language "en"
+    Then the result has only the "en" entries of "A1"
+
+  @unverified
+  Scenario: Trader offers can be found by item
+    Given the traders "T1" and "T2" sell the item "A1"
+    When I query "assortItems" with the template id "A1"
+    Then the result has one row for "T1" and one row for "T2"
+
+  @unverified
+  Scenario: Paged results report the total
+    Given 120 official items
+    When I query "items" for the first 50 with the total count
+    Then the result has 50 nodes
+    And the total count is 120
+    And the result has a next page
+
+  # ------------------------------------------------------------------ Limits
+
+  @unverified
+  Scenario Outline: A query that breaks a limit is rejected
+    When I send a query that <violation>
+    Then the response has an error
+    And the database does not run the query
+
+    Examples:
+      | violation                       |
+      | asks for a page larger than 200 |
+      | nests deeper than 10 levels     |
+
+  @unverified
+  Scenario: A slow query is stopped
+    Given a query that runs longer than 10 seconds
+    When I send it
+    Then the response has a timeout error
+
+  # ------------------------------------------------------------------ Cache
+
+  @unverified
+  Scenario: A repeated query is answered from the cache
+    Given the cache is empty
+    When I send the same query twice
+    Then the first response has the header "X-Cache" with the value "MISS"
+    And the second response has the header "X-Cache" with the value "HIT"
+    And both responses have the same body
+
+  @unverified
+  Scenario: A new archive run makes old cached answers unreachable
+    Given a cached answer exists
+    When the Archiver finishes a successful run
+    And I send the same query
+    Then the response has the header "X-Cache" with the value "MISS"
+
+  @unverified
+  Scenario: Responses with errors are not cached
+    Given a query that returns GraphQL errors
+    When I send it twice
+    Then both responses have the header "X-Cache" with the value "MISS"
+
+  @unverified
+  Scenario: A large request body is not cached
+    When I send a query body larger than 32 KB
+    Then the response has no "X-Cache" header
+
+  @unverified
+  Scenario: The Api works when Redis is down
+    Given Redis is not reachable
+    When I send a valid query
+    Then the response has the data
+    And the Api logs a warning
+
+  # -------------------------------------------------- Server version (ADR-0014)
+
+  @unverified
+  Scenario: An official query without a version answers from the latest release
+    Given the archive holds the releases "4.0.12" and "4.0.13"
+    When I query "items" without a version argument
+    Then the answer comes from "4.0.13"
+    And the answer states the version "4.0.13"
+
+  @unverified
+  Scenario: An official query with a version answers from that release
+    Given the archive holds the releases "4.0.12" and "4.0.13"
+    When I query "items" with the version "4.0.12"
+    Then the answer states the version "4.0.12"
+    And no row of "4.0.13" is in the answer
+
+  @unverified
+  Scenario: An unknown version is an error, not an empty answer
+    When I query "items" with the version "9.9.9"
+    Then the response has an error that names "9.9.9"
+    And the error names the latest archived release
+    And the response has no empty list
+
+  @unverified
+  Scenario: A version range is rejected
+    Given the archive holds the releases "4.0.12" and "4.0.13"
+    When I query "items" with the version "^9.9.9"
+    Then the response has an error that names "^9.9.9"
+    And the error states that the argument takes one exact archived release
+    And the error code is not the error code of an unknown release
+    And the response has no empty list
+
+  @unverified
+  Scenario: One release does not answer for another release
+    Given the archive holds the releases "4.0.12" and "4.0.13"
+    When I query "items" for "4.0.12" and then for "4.0.13"
+    Then both responses have the header "X-Cache" with the value "MISS"
+
+  # ----------------------------------------------------------------- Health
+
+  @unverified
+  Scenario: The health endpoint answers
+    When I request "/healthz"
+    Then the response status is 200
+
+  # ---------------------------------------------------------- Not built yet
+
+  @backlog
+  Scenario: Official and mod items can be read in one list
+    Given the official item "A1" and the mod item "B1"
+    When I query "allItems"
+    Then the result has "A1" and "B1"
+    And each row states whether it is official or from a mod
+
+  @backlog
+  Scenario: JSON properties are returned as JSON values
+    Given the item "A1" has the property "Weight" 0.5 in its "props" column
+    When I query "items" and select "props"
+    Then the field "props" is a JSON object
+    And it is not an escaped string

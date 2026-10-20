@@ -1,0 +1,157 @@
+// C4 model of the SPT Data Archive.
+// Source of truth for the structure. Views are in views.c4. Decisions are in docs/adr.
+
+model {
+
+  // ---------------------------------------------------------------- People
+
+  consumer = person 'API Consumer' {
+    description 'A mod developer, tool or website that reads item, quest, trader and translation data.'
+  }
+
+  maintainer = person 'Maintainer' {
+    description 'Starts archive runs, restores backups and administers the archive.'
+  }
+
+  // ------------------------------------------------------- External systems
+
+  sptServer = softwareSystem 'SPT Server repository' {
+    description 'The server-csharp repository. Its SPT_Data/database folder holds the JSON database. Large files such as items.json use Git LFS.'
+  }
+
+  modSources = softwareSystem 'Mod sources' {
+    #planned
+    description 'The mod releases of the catalog, with their versions, server ranges and dependency sets. The archive installs one mod version per container (ADR-0013).'
+  }
+
+  edge = softwareSystem 'Edge proxy' {
+    #planned
+    description 'Rate limiting and TLS in front of the Api. The Api has no rate limit of its own.'
+  }
+
+  // ------------------------------------------------------------ The system
+
+  archive = softwareSystem 'SPT Data Archive' {
+    description 'Stores the SPT server data model in PostgreSQL, with official and mod data kept apart, and serves it through a public read-only GraphQL API.'
+
+    api = container 'Api' {
+      technology 'ASP.NET Core, HotChocolate'
+      description 'Public read-only GraphQL endpoint. It has no mutations.'
+
+      queryCache = component 'Query Cache Middleware' {
+        technology 'ASP.NET Core middleware'
+        description 'Caches complete GraphQL responses. The key is the request body hash plus the dataset version.'
+      }
+
+      graphql = component 'GraphQL Query' {
+        technology 'HotChocolate'
+        description 'One Query type. Paging, filtering and sorting for official and mod collections.'
+      }
+
+      apiDbAccess = component 'ArchiveDbContext (Api)' {
+        technology 'EF Core, SptArchive.Core'
+        description 'Pooled no-tracking context. It connects with the read-only database role.'
+      }
+    }
+
+    archiver = container 'Archiver' {
+      technology '.NET Worker Service'
+      description 'Run-to-completion job. It reads the server JSON, replaces the official tables and exits.'
+
+      archiveJob = component 'Archive Job' {
+        technology 'BackgroundService'
+        description 'Hashes the source, skips unchanged data, runs importers in one transaction, records the run, announces the dataset.'
+      }
+
+      importers = component 'Importers' {
+        technology 'IImporter implementations'
+        description 'Locale, Item, Quest and Trader importers. Each one reads one part of the JSON database.'
+      }
+
+      sourceSupport = component 'Source Support' {
+        technology 'C# helpers'
+        description 'JSON reading, Git LFS pointer check, source hashing and batched writes.'
+      }
+
+      archiverDbAccess = component 'ArchiveDbContext (Archiver)' {
+        technology 'EF Core, SptArchive.Core'
+        description 'Pooled context. It connects with the owner role, applies migrations and writes data.'
+      }
+    }
+
+    modRunner = container 'Mod Runner' {
+      technology 'Docker, one server container per mod version'
+      description 'Starts a throwaway server container for one mod version and its dependencies. No network, read-only mount, hard kill. It writes the final in-memory database to JSON (ADR-0013).'
+
+      exporterMod = component 'Exporter Mod' {
+        technology 'C# server mod, HarmonyX'
+        description 'Runs at the load stage after PostSptModLoader. Writes the final database to JSON, asserts the mod GUID is present, then stops the host.'
+      }
+
+      bundlePatch = component 'Bundle Patch' {
+        technology 'C# server mod, HarmonyX prefix patch'
+        description 'Stops the bundle step before it runs. The run fails when the patch is not applied (ADR-0015).'
+      }
+
+      baselineCache = component 'Baseline Cache' {
+        technology 'C# helper, content addressed'
+        description 'Keeps the export of a dependency set without the target mod, so mods with the same dependencies share one baseline.'
+      }
+    }
+
+    db = database 'PostgreSQL' {
+      technology 'PostgreSQL 17'
+      description 'Official tables and mod tables with identical columns, plus mods, languages and archive runs.'
+    }
+
+    redis = cache 'Redis' {
+      technology 'Redis 7'
+      description 'Response cache and the dataset version key. Bounded memory, no persistence.'
+    }
+  }
+
+  // ----------------------------------------------- Relationships: context
+
+  consumer -> edge 'Sends GraphQL requests' {
+    #planned
+  }
+  edge -> archive.api 'Forwards requests' {
+    #planned
+  }
+  consumer -> archive.api 'Sends GraphQL requests over HTTPS'
+  maintainer -> archive.archiver 'Starts a run (cron, systemd timer or docker compose run)'
+  archive.archiver -> sptServer 'Reads SPT_Data/database (read-only mount)'
+  archive.archiver -> modSources 'Reads the mod versions, their server ranges and their dependency sets' {
+    #planned
+  }
+  archive.archiver -> archive.modRunner 'Starts one run per mod version'
+  archive.modRunner -> sptServer 'Runs the server from a pinned commit (read-only mount)'
+  archive.modRunner -> archive.db 'Reads the official baseline, writes the dataset and the observation'
+
+  // -------------------------------------------- Relationships: containers
+
+  archive.api -> archive.db 'Reads with the read-only role'
+  archive.api -> archive.redis 'Reads and stores cached responses'
+  archive.archiver -> archive.db 'Replaces official tables in one transaction with the owner role'
+  archive.archiver -> archive.redis 'Publishes the new dataset version'
+
+  // -------------------------------------------- Relationships: components
+
+  archive.api.queryCache -> archive.api.graphql 'Passes cache misses'
+  archive.api.queryCache -> archive.redis 'Reads the dataset version, reads and stores responses'
+  archive.api.graphql -> archive.api.apiDbAccess 'Builds queries'
+  archive.api.apiDbAccess -> archive.db 'Runs SELECT queries'
+
+  archive.archiver.archiveJob -> archive.archiver.sourceSupport 'Hashes the source files'
+  archive.archiver.archiveJob -> archive.archiver.importers 'Runs in registration order'
+  archive.archiver.archiveJob -> archive.archiver.archiverDbAccess 'Migrates, records runs, owns the transaction'
+  archive.archiver.archiveJob -> archive.redis 'Publishes the dataset version'
+  archive.archiver.importers -> archive.archiver.sourceSupport 'Reads JSON, queues rows'
+  archive.archiver.importers -> archive.archiver.archiverDbAccess 'Writes rows in batches'
+  archive.archiver.sourceSupport -> sptServer 'Reads files'
+  archive.archiver.archiverDbAccess -> archive.db 'Runs DDL and DML'
+
+  archive.modRunner.exporterMod -> archive.modRunner.baselineCache 'Gives the export of the target run'
+  archive.modRunner.bundlePatch -> archive.modRunner.exporterMod 'Keeps the start-up short enough to run 699 times'
+  archive.modRunner.baselineCache -> archive.db 'Compares the export with the stored content hash'
+}
