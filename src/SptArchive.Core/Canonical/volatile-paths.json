@@ -1,0 +1,15 @@
+{
+  "comment": "Paths whose value a run of one release does not hold constant (ADR-0028). A value at one of these paths becomes the token #volatile before a comparison or a hash. Each entry has a measured example from the two baseline exports of SPT 4.1.6, which differ in 13 files; a path that no entry covers stays a difference, so a new volatile field shows up as a warning in the first run. The generated ids of an assort are not listed here: they are renumbered by position (decision 3), not replaced by a token.",
+  "entries": [
+    {
+      "file": "traders/*/base.json",
+      "path": "$.nextResupply",
+      "evidence": "10 of 12 traders: 1792518932 in one run, 1792473833 in the next. The restock clock."
+    },
+    {
+      "file": "locations/*/base.json",
+      "path": "$.BossLocationSpawn[*].BossChance",
+      "evidence": "lighthouse and woods: 0 in one run, 35 in the next. The boss event rotates per boot."
+    }
+  ]
+}

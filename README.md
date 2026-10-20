@@ -8,12 +8,13 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 95 tests. Two migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 117 tests. Three migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
 > The Api served the archive read-only. A container run exports every table of the server database
 > (642 MB for 4.1.6, seventeen real mods, see `docs/runbooks/mod-export.md`), but no importer reads a
-> run yet. No Gherkin scenario
+> run yet, though the canonical form a run is compared and hashed by exists and is tested
+> against two real baselines (ADR-0028). No Gherkin scenario
 > runs as a test yet and the Api has no server version argument (see [Known gaps](#known-gaps)).
 
 ## Documentation

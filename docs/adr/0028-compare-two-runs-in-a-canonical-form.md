@@ -38,6 +38,28 @@ One canonical form is the only input to a comparison, a diff and a hash.
    - `traders/*/base.json` → `$.suits[*]._id`, `$.suits[*].tid` if a run shows them volatile
    - `traders/*/assort.json` → the generated ids (below)
    - `locations/*/base.json` → `$.BossLocationSpawn[*].BossChance`
+### The measured list (2026-10-20)
+
+The two baseline exports of SPT 4.1.6 have 13 files that differ on disk. Their values differ at
+exactly four places, counted over the whole export:
+
+| Path | Differences | Cause |
+| --- | ---: | --- |
+| `traders/*/assort.json` → `$.items[*]._id` | 5,090 | a new id per boot |
+| `traders/*/assort.json` → `$.items[*].parentId` | 1,813 | a reference to one of those ids |
+| `traders/*/base.json` → `$.nextResupply` | 10 | the restock clock |
+| `locations/*/base.json` → `$.BossLocationSpawn[*].BossChance` | 2 | the boss event rotates |
+
+The keys of `barter_scheme` and `loyal_level_items` are those same generated ids, so decision 3
+covers them and they need no entry.
+
+`$.suits[*]._id` and `$.suits[*].tid` **did not move** in either run, so the list does not carry
+them: an entry that hides a real change is worse than noise. If a later release moves them, the
+first run reports the path and the entry is added.
+
+The list lives in `src/SptArchive.Core/Canonical/volatile-paths.json`, with the evidence of each
+entry beside it. `CanonicalFormTests` holds the 13 files as its fixture.
+
 3. The generated ids of an assort are renumbered, not deleted. Each id becomes `item[<n>]` by
    the position of the item in `items`, and every reference to the old id in the same document
    (`barter_scheme` keys, `loyal_level_items` keys, `parentId`) becomes the same token. The
@@ -152,7 +174,7 @@ Feature: A comparison reads a canonical form
 
 ## Action Items
 
-- [ ] TD-39: write the canonical form, with the volatile path list and its test.
+- [x] TD-39: write the canonical form, with the volatile path list and its test.
 - [ ] Keep the two baseline exports of 4.1.6 as the fixture of that test.
 - [ ] TD-29: diff and hash through the canonical form.
 - [ ] Re-run two baselines after each release change and add a path when a new field moves.

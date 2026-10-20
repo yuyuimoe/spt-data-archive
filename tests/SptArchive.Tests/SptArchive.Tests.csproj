@@ -25,4 +25,9 @@
     <ProjectReference Include="../../src/SptArchive.Archiver/SptArchive.Archiver.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The two baseline exports of SPT 4.1.6, cut to the 13 files that differ between them (ADR-0028). -->
+    <Content Include="fixtures/**/*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

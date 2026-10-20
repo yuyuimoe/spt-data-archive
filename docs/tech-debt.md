@@ -14,11 +14,34 @@ This file lists known debt in the scaffold. Each item has a score. A higher scor
 
 A low effort gives a high priority. The scores are estimates from the assistant. The driver can change them.
 
+## What a TD is
+
+A TD is one known gap, written as one row. It is not a wish and not a plan: it states something the
+code, the data or the process does not do today, with the evidence that shows it. A TD is the unit
+of "we know this is wrong and have not fixed it", so that the knowledge survives the session that
+found it.
+
+| Field | Meaning |
+| --- | --- |
+| ID | `TD-nn`. Permanent: never reused and never renumbered, so a commit message, an ADR or a run log can name it years later. |
+| Type | Where the gap is: **Architecture** (a decision or a boundary), **Code** (a defect or a missing piece), **Data** (the archived content), **Test** (nothing proves it), **Infrastructure** (build, deploy, backup). |
+| Item | What is wrong **now**, with the evidence: the file, the run, the number, the error. Written so that a reader who was not in the session understands it. |
+| Impact, Risk, Effort | 1 to 5, from the two tables above. Priority = (Impact + Risk) × (6 − Effort), so effort counts double: a cheap fix of a real problem comes first. |
+| Why it matters | The consequence in one sentence: what breaks, or which question the archive cannot answer. |
+
+Status is the position of the row, not a column: a row in **Register** is open, a row in
+**Resolved items** is closed and says what closed it. An item moves down in the same change that
+fixes it, and the change says what was run to prove it — a resolved item with no evidence is a
+claim, not a result.
+
+The assistant writes and scores the rows; the driver may re-score, reorder, split or reject them,
+and decides when a slice takes one. A gap that is found and not fixed in the same change becomes a
+row. A gap that blocks the current slice is not a row: it is the slice.
+
 ## Register
 
 | ID | Type | Item | Impact | Risk | Effort | Priority | Why it matters |
 |----|------|------|:------:|:----:|:------:|:--------:|----------------|
-| TD-39 | Architecture | Nothing canonicalizes a run before it compares or hashes it (ADR-0028). Two baseline runs of 4.1.6 differ in 13 files: `nextResupply` (clock), `assort.items[*]._id` (a new id per boot) and `BossLocationSpawn[*].BossChance` (the boss event rotates). | 4 | 4 | 2 | 32 | Without it every dataset differs from the run before it, and the noise is stored as a mod change. |
 | TD-36 | Architecture | A run whose mod fails validation produces no export at all. The server loads no mod when one mod is rejected, so the exporter does not run either, and the container serves until the runner stops it. `run_mod.sh` stops early and says so, and a successful run now states its loaded mods in `run/loaded.json` (ADR-0029), but a rejected run still has no such file and is not recorded as `not_loaded` or `dependency_unresolved` (ADR-0021). | 3 | 3 | 1 | 30 | A dependency mistake looks like a broken pipeline and not a fact about the mod. |
 | TD-37 | Data | Arena Map Port 0.2.3 needs a real Escape from Tarkov: Arena installation. Without it the log says "The 3 Arena maps stay unregistered" and the export has no `arena_airpit`, `arena_bay5` or `arena_equator` (ADR-0023). | 3 | 2 | 2 | 20 | A map mod is archived as a client-only facet while its maps exist on the author's disk. |
 | TD-38 | Data | Mod dependencies are deeper than a Forge page says. Icebreaker 1.1.3 needs `com.wtt.contentbackport` and then `com.morebotsapi.tacticaltoaster`, which its page names in prose and not as a dependency (ADR-0021). | 3 | 3 | 3 | 18 | The catalog must resolve a chain, or a run stops after two downloads. |
@@ -28,7 +51,7 @@ A low effort gives a high priority. The scores are estimates from the assistant.
 | TD-22 | Architecture | No run asserts that every mod dataset is pointed at by an observation (ADR-0018). | 2 | 3 | 1 | 25 | An orphan dataset is a bug. Silence hides it. |
 | TD-05 | Infrastructure | The Api has no rate limit of its own. The edge proxy is only planned. | 3 | 4 | 2 | 28 | A public API gets scraped. |
 | TD-26 | Code | The Archiver cannot read the server version from an installation. A run fails unless `Archive__SptVersion` is set by hand. | 3 | 4 | 2 | 28 | A wrong or missing version labels the data wrongly, or stops the run. |
-| TD-29 | Architecture | Nothing reads a run directory. The exporter writes the layout of `SPT_Data/database` (ADR-0027) plus `run/` (ADR-0029), and the Archiver still reads an install, so a mod run cannot become a dataset (ADR-0020). The importer must canonicalize before it diffs and hashes (ADR-0028), and it must read `run/loaded.json`, `run/files/`, `run/pre-boot.json` and `run/origin.json` into `mod_files`, `dependency_set` and `config_origin`. | 4 | 4 | 3 | 24 | The mod half of the archive has no way in. The run model works and stores nothing. |
+| TD-29 | Nothing reads a run directory. The exporter writes the layout of `SPT_Data/database` (ADR-0027) plus `run/` (ADR-0029), and the Archiver still reads an install, so a mod run cannot become a dataset (ADR-0020). The canonical form it needs now exists (TD-39); the importer does not. It must read `run/loaded.json`, `run/files/`, `run/pre-boot.json` and `run/origin.json` into `mod_files`, `dependency_set` and `config_origin`, and turn the canonical difference against a baseline export of the same release into `mod_templates`, `mod_item_changes` and the `mod_*` rows. | 4 | 4 | 3 | 24 | The mod half of the archive has no way in. The run model works and stores nothing. |
 | TD-40 | Code | The exporter now writes the manifest and the configuration text (ADR-0029, migration `AddModFiles`), but nothing imports a run yet, so no `mod_files` row exists. Nine of seventeen run mods ship a configuration file, and two of them decide the rows: ECOTI reads `trader.priceUsd`, `loot.weightFraction` and a `deny` list of eight template ids, and Lots of Loot Redux ships `AllowLootOverlay: false` beside 7.5x loot multipliers. | 3 | 3 | 2 | 24 | A dataset cannot be reproduced or explained until TD-29 reads the run. |
 | TD-28 | Architecture | A patch mod that is archived without the mod it patches changes nothing. MassivesoftWeapons 1.1.2 (mod 3127) added 0 items and logged no error, because the items come from the base mod (mod 2588, SPT 4.0.13) which was not in the dependency set (ADR-0021). | 3 | 3 | 3 | 18 | A silent zero looks like a working run with an empty result, and the Forge does not declare the base mod as a dependency. |
 | TD-31 | Architecture | Nothing stores the artifact hash of the target mod version. The Forge serves different content under one version number (TD-30), so a version alone cannot say which build a dataset came from (ADR-0021). | 3 | 3 | 1 | 30 | Two builds of one version look identical in the archive. |
@@ -51,6 +74,7 @@ A low effort gives a high priority. The scores are estimates from the assistant.
 
 | ID | Item | Resolved by |
 |----|------|-------------|
+| TD-39 | Nothing canonicalized a run before it compared or hashed it (ADR-0028). | `SptArchive.Core.Canonical.CanonicalForm` sorts keys, keeps array order, replaces the two measured volatile paths with `#volatile` from `volatile-paths.json`, and renumbers the 5,090 generated assort ids to `item[<n>]` with the 1,813 `parentId` references and the `barter_scheme` and `loyal_level_items` keys that follow them. `CanonicalFormTests` (22 tests) holds the two baseline exports of 4.1.6 as its fixture: 13 files differ on disk, 0 differ after canonicalization, and a `$.suits[0]._id` difference that no entry covers is still reported. What remains is that the run importer calls it (TD-29). |
 | TD-32 | The exporter serializes three of the twelve `*Table` types. | ADR-0024 and ADR-0027: the exporter now dumps all ten table classes of 4.1.6 in the layout of `SPT_Data/database`, and its source is in `src/SptArchive.Exporter`. The first export is 642 MB: 4,673 items, 558 quests, 31,549 translations, 12 traders, 57 bot types, 19 locations with their overlays, and the six hideout parts. A run with Factory Classic and Map Variants changed exactly the two Factory maps (7 files each) plus one boss chance on Lighthouse and Woods, which is the noise of ADR-0028. |
 | TD-27 | The exporter does not dump bot tables. | ADR-0027: `bots/base.json`, `bots/core.json` and one file per bot type leave the container (57 types for 4.1.6). |
 | TD-41 | `ModObservationOutcome` lacked `no_server_data` and `loaded_but_disabled`. | Migration `AddModFiles` and `ModObservationOutcome`: both values are in the enum and in `ck_mod_data_observations_outcome`. `SchemaTests` inserts each value and proves that an invented one is rejected. |
@@ -96,8 +120,8 @@ Phase 0 must run after ADR-0014, because the first migration carries the version
 - TD-23: The dependency source is decided. Choose the catalog itself before the mod slice starts.
 - TD-20: Verify the load order and the patch on one real mod, before 699 containers exist.
 - TD-25: Check the parent of an added item, once the first mod with an added item is archived.
-- TD-29: Read a run directory into `mod_datasets`, `mod_data_observations`, `mod_templates` and `mod_item_changes`.
-- TD-39: Canonicalize a run before it diffs or hashes, so a boot is not a change (ADR-0028).
+- TD-29: Read a run directory into `mod_datasets`, `mod_data_observations`, `mod_templates` and `mod_item_changes`,
+  through the canonical form that TD-39 delivered.
 - TD-36: Record a rejected mod as `not_loaded` or `dependency_unresolved`, not as a missing export.
 - TD-28: Record that a loaded mod produced no data, instead of storing a dataset equal to the baseline.
 

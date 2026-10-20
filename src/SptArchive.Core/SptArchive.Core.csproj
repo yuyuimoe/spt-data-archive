@@ -14,4 +14,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The volatile path list of ADR-0028 is data: a run reads it, a release change edits it. -->
+    <EmbeddedResource Include="Canonical\volatile-paths.json" LogicalName="SptArchive.Core.Canonical.volatile-paths.json" />
+  </ItemGroup>
+
 </Project>
