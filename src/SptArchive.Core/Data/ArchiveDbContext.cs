@@ -84,9 +84,20 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             // ADR-0033: a run states its work and its result.
             e.Property(x => x.Result).HasColumnType("jsonb");
             e.HasIndex(x => new { x.TargetModGuid, x.StartedAt });
-            e.ToTable(t => t.HasCheckConstraint(
-                "ck_archive_runs_kind",
-                "kind IN ('official', 'mod', 'probe')"));
+
+            // ADR-0036: the sweep looks for runs that went silent, and only those. The partial index
+            // keeps it the size of the runs that are open now, not the size of the history.
+            e.HasIndex(x => x.HeartbeatAt)
+                .HasDatabaseName("ix_archive_runs_lease")
+                .HasFilter("status = 'running'");
+
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("ck_archive_runs_kind", "kind IN ('official', 'mod', 'probe')");
+                t.HasCheckConstraint(
+                    "ck_archive_runs_status",
+                    "status IN ('running', 'succeeded', 'failed', 'interrupted')");
+            });
         });
 
         // ---- Official data: one row set per server release (ADR-0014) ------------------------------

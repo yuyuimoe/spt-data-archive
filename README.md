@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 230 tests. Six migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 236 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -16,7 +16,8 @@ and serves them fast.
 > (642 MB for 4.1.6, nineteen real mod runs, see `docs/runbooks/mod-export.md`), and the Archiver now reads a
 > run directory against the baseline of its release into a dataset: ECOTI 9 added items and 18 added offers in
 > 27 templates; WTT-Armory 2,434 templates with 1,294 added and 461 changed items; Gunwright a dataset with no
-> row, because its whole contribution is two HTTP routes (ADR-0028, ADR-0029, ADR-0031). No Gherkin scenario
+> row, because its whole contribution is two HTTP routes (ADR-0028, ADR-0029, ADR-0031). Several imports may
+> run at the same time against one archive (ADR-0036). No Gherkin scenario
 > runs as a test yet and the Api has no server version argument (see [Known gaps](#known-gaps)).
 
 ## Documentation
@@ -173,7 +174,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 230 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 236 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are

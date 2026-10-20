@@ -18,11 +18,24 @@ public class ArchiveRun
     public const string Succeeded = "succeeded";
     public const string Failed = "failed";
 
+    /// <summary>
+    /// The process of the run stopped without recording a result, and its lease ran out (ADR-0036).
+    /// Another Archiver closed the row, because a killed process reaches no <c>catch</c> block.
+    /// </summary>
+    public const string Interrupted = "interrupted";
+
     public Guid Id { get; set; } = Guid.CreateVersion7();
 
     public DateTimeOffset StartedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? FinishedAt { get; set; }
+
+    /// <summary>
+    /// The last time the process of the run said it was alive (ADR-0036). A run that goes silent for
+    /// longer than the lease is over, and the next Archiver closes it as <see cref="Interrupted"/>.
+    /// The column is what makes a sweep safe while other runs are importing: a live run keeps writing it.
+    /// </summary>
+    public DateTimeOffset? HeartbeatAt { get; set; }
 
     /// <summary>SHA-256 over the relative path and content hash of every source file.</summary>
     public required string SourceHash { get; set; }

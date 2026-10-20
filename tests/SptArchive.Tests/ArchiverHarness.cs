@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Hosting;
+using SptArchive.Archiver.Runs;
 using SptArchive.Core.Data;
 
 namespace SptArchive.Tests;
@@ -49,5 +51,68 @@ internal sealed class NullLifetime : IHostApplicationLifetime
 
     public void StopApplication()
     {
+    }
+}
+
+/// <summary>
+/// The two export directories that one mod run needs (ADR-0013, ADR-0029): a baseline of the release, and
+/// the run itself, which adds one item. Every test that runs the real <see cref="ArchiveJob"/> builds them.
+/// </summary>
+internal static class RunTree
+{
+    public const string NodeId = "aaaaaaaaaaaaaaaaaaaaaaaa";
+    public const string ItemId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    public const string AddedId = "dddddddddddddddddddddddd";
+
+    public static string Baseline(string root) => Path.Combine(root, "baseline");
+
+    public static string Run(string root) => Path.Combine(root, "run");
+
+    public static void Write(
+        string root,
+        string modGuid,
+        string baselineRelease,
+        string runRelease,
+        object? target = null,
+        string addedItemId = AddedId)
+    {
+        var baseline = Baseline(root);
+        var run = Run(root);
+
+        string Items(string added) =>
+            "{\"" + NodeId + "\":{\"_id\":\"" + NodeId + "\",\"_name\":\"Node A\",\"_parent\":\"\",\"_type\":\"Node\",\"_props\":{}},"
+            + "\"" + ItemId + "\":{\"_id\":\"" + ItemId + "\",\"_name\":\"Item B\",\"_parent\":\"" + NodeId + "\",\"_type\":\"Item\",\"_props\":{\"Weight\":1.5}}"
+            + added + "}";
+
+        var addedItem =
+            ",\"" + addedItemId + "\":{\"_id\":\"" + addedItemId + "\",\"_name\":\"Item D\",\"_parent\":\"" + NodeId + "\",\"_type\":\"Item\",\"_props\":{\"Weight\":3}}";
+
+        File(baseline, "templates/items.json", Items(string.Empty));
+        File(baseline, "templates/customization.json", "{}");
+        File(baseline, "templates/quests.json", "{}");
+        File(run, "templates/items.json", Items(addedItem));
+        File(run, "templates/customization.json", "{}");
+        File(run, "templates/quests.json", "{}");
+
+        var exporter = new { directory = "SptArchive.Exporter", modGuid = RunDirectory.ToolModGuid, name = "Exporter", author = "x", version = "1.4.0", sptVersion = ">=4.1.0" };
+        var mod = new { directory = "Thermal", modGuid, name = "Thermal", author = "x", version = "3.4.0", sptVersion = ">=4.1.0" };
+
+        File(baseline, "run/loaded.json", JsonSerializer.Serialize(new object[] { exporter }));
+        File(baseline, "run/release.json", JsonSerializer.Serialize(new { sptVersion = baselineRelease }));
+        File(run, "run/loaded.json", JsonSerializer.Serialize(new object[] { exporter, mod }));
+        File(run, "run/release.json", JsonSerializer.Serialize(new { sptVersion = runRelease }));
+        File(run, "run/files/Thermal.json", JsonSerializer.Serialize(new[] { new { path = "Thermal.dll", size = 10, sha256 = new string('a', 64), kind = "assembly" } }));
+
+        if (target is not null)
+        {
+            File(run, "run/target.json", JsonSerializer.Serialize(target));
+        }
+    }
+
+    public static void File(string root, string path, string content)
+    {
+        var full = Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        System.IO.File.WriteAllText(full, content);
     }
 }

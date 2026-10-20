@@ -91,14 +91,16 @@ public sealed class ArchiveJob(
             await db.Database.MigrateAsync(cancellationToken);
         }
 
+        // ADR-0036: a run whose process was killed still says it is running. Its lease is the only thing
+        // that tells it apart from a run that is importing right now, so this reads the heartbeat and not
+        // the start time. Several imports may be open at once, and each one keeps its row alive.
+        await StaleRuns.CloseAsync(db, logger, cancellationToken);
+
         var sourceHash = await SourceHasher.ComputeAsync(_options.DatabasePath, cancellationToken);
 
         // The same files of a different release are a different dataset, so the release is part of the check.
-        if (!_options.Force && await db.ArchiveRuns.AnyAsync(
-                run => run.Status == ArchiveRun.Succeeded
-                    && run.SourceHash == sourceHash
-                    && run.SptVersion == sptVersion,
-                cancellationToken))
+        if (!_options.Force
+            && await HasSuccessfulRunAsync(db, sourceHash, sptVersion, cancellationToken))
         {
             logger.LogInformation(
                 "The source files of {SptVersion} are unchanged since the last successful run; nothing to do (use Archive:Force=true to override)",
@@ -117,6 +119,8 @@ public sealed class ArchiveJob(
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
 
+        await using var heartbeat = await RunHeartbeat.StartAsync(dbFactory, archiveRun.Id, logger, cancellationToken);
+
         var imported = new List<string>();
 
         try
@@ -124,6 +128,24 @@ public sealed class ArchiveJob(
             // One transaction for the whole run: readers keep seeing the previous dataset until it commits,
             // and a failure half way through leaves the archive exactly as it was.
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+            // ADR-0036: one official import of a release at a time, and no mod run of that release at the
+            // same time. Two Archivers that start from the same files are the case this exists for.
+            await RunLocks.ReleaseExclusiveAsync(db, sptVersion, cancellationToken);
+
+            if (!_options.Force
+                && await HasSuccessfulRunAsync(db, sourceHash, sptVersion, cancellationToken))
+            {
+                // The run that waited finds the work of the run that held the lock, and writes nothing.
+                await transaction.RollbackAsync(cancellationToken);
+                await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.UnchangedOfficial());
+
+                logger.LogInformation(
+                    "Another run imported the files of {SptVersion} while this one waited; this run changed nothing",
+                    sptVersion);
+
+                return;
+            }
 
             // The release row commits with the data it describes, so a failed run leaves no empty release.
             await SptVersionRegistry.EnsureAsync(db, sptVersion, cancellationToken);
@@ -141,6 +163,11 @@ public sealed class ArchiveJob(
                 imported.Add(importer.Name);
             }
 
+            // The success commits with the data (ADR-0036). A run that is marked after the commit leaves a
+            // window in which the rows are in the archive and the history still says running, and the next
+            // run to take the lock reads that window and imports the same files again.
+            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.ForOfficial(imported));
+
             await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -149,7 +176,6 @@ public sealed class ArchiveJob(
             throw;
         }
 
-        await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.ForOfficial(imported));
         await AnnounceNewDatasetAsync(archiveRun.Id);
 
         logger.LogInformation("Archive run {RunId} finished", archiveRun.Id);
@@ -170,6 +196,9 @@ public sealed class ArchiveJob(
             await db.Database.MigrateAsync(cancellationToken);
         }
 
+        // Before this run writes a row of its own, close the runs whose process died (ADR-0036).
+        await StaleRuns.CloseAsync(db, logger, cancellationToken);
+
         // The run states what is known so far. The plan fills in the rest, or the failure says why it could not.
         var archiveRun = new ArchiveRun
         {
@@ -181,6 +210,8 @@ public sealed class ArchiveJob(
         db.ArchiveRuns.Add(archiveRun);
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
+
+        await using var heartbeat = await RunHeartbeat.StartAsync(dbFactory, archiveRun.Id, logger, cancellationToken);
 
         var stage = RunResult.Stage.Prepare;
 
@@ -216,6 +247,11 @@ public sealed class ArchiveJob(
                 report = await runImporter.ApplyAsync(db, plan, archiveRun.Id, cancellationToken);
 
                 stage = RunResult.Stage.Commit;
+
+                // The success commits with the rows it describes (ADR-0036), so the history and the data
+                // never disagree. A run that fails to commit is marked failed below, on top of this.
+                await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.ForRun(plan, report));
+
                 await transaction.CommitAsync(cancellationToken);
             }
 
@@ -227,7 +263,6 @@ public sealed class ArchiveJob(
                 report.LocaleCount,
                 report.FileCount);
 
-            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.ForRun(plan, report));
             await AnnounceNewDatasetAsync(archiveRun.Id);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -252,6 +287,18 @@ public sealed class ArchiveJob(
                 .SetProperty(run => run.Purpose,
                     plan.Purpose ?? $"Import of the run of {plan.Target.ModGuid} {plan.Target.Version} on {plan.Release}"));
     }
+
+    /// <summary>True when a run that finished holds the same files of the same release (ADR-0033).</summary>
+    private static Task<bool> HasSuccessfulRunAsync(
+        ArchiveDbContext db,
+        string sourceHash,
+        string sptVersion,
+        CancellationToken cancellationToken) =>
+        db.ArchiveRuns.AnyAsync(
+            run => run.Status == ArchiveRun.Succeeded
+                && run.SourceHash == sourceHash
+                && run.SptVersion == sptVersion,
+            cancellationToken);
 
     /// <summary>Reads and checks <see cref="ArchiveOptions.SptVersion"/>.</summary>
     private string RequireSptVersion()

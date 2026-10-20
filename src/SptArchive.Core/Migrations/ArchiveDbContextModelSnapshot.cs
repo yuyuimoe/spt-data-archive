@@ -45,6 +45,10 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finished_at");
 
+                    b.Property<DateTimeOffset?>("HeartbeatAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("heartbeat_at");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasColumnType("text")
@@ -87,6 +91,10 @@ namespace SptArchive.Core.Migrations
                     b.HasKey("Id")
                         .HasName("pk_archive_runs");
 
+                    b.HasIndex("HeartbeatAt")
+                        .HasDatabaseName("ix_archive_runs_lease")
+                        .HasFilter("status = 'running'");
+
                     b.HasIndex("SourceHash", "SptVersion")
                         .HasDatabaseName("ix_archive_runs_source_hash_spt_version");
 
@@ -96,6 +104,8 @@ namespace SptArchive.Core.Migrations
                     b.ToTable("archive_runs", null, t =>
                         {
                             t.HasCheckConstraint("ck_archive_runs_kind", "kind IN ('official', 'mod', 'probe')");
+
+                            t.HasCheckConstraint("ck_archive_runs_status", "status IN ('running', 'succeeded', 'failed', 'interrupted')");
                         });
                 });
 

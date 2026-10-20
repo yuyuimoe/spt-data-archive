@@ -41,6 +41,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0033](0033-record-every-run-and-why-it-happened.md) | Record every run and why it happened | Accepted |
 | [0034](0034-name-an-object-by-what-it-is.md) | Name an object by what it is | Accepted |
 | [0035](0035-take-official-data-from-a-mod-free-installation.md) | Take official data from an installation that loaded no mod | Accepted |
+| [0036](0036-let-several-imports-run-at-the-same-time.md) | Let several imports run at the same time | Proposed |
 
 ## Status meanings
 

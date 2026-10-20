@@ -207,6 +207,12 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
     {
         var target = plan.Target;
 
+        // ADR-0036: what this run writes is shared with every other run of the same mod and exclusive
+        // against an official import of the release. Taken first, because the checks below read rows that
+        // another run may be writing.
+        await RunLocks.ReleaseSharedAsync(db, plan.Release, cancellationToken);
+        await RunLocks.ModExclusiveAsync(db, target.ModGuid, cancellationToken);
+
         await EnsureOfficialReleaseAsync(db, plan.Release, cancellationToken);
         await SptVersionRegistry.EnsureAsync(db, plan.Release, cancellationToken);
 

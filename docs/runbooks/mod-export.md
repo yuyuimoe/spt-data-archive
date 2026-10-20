@@ -225,7 +225,14 @@ What it writes, measured on 2026-10-20 with exporter 1.4.0 on SPT 4.1.6:
 |-----|-----------|-----------:|---------------:|------:|-------:|---------|
 | `ECOTI` | 27 (9 items, 18 offers) | 0 | 459 | 46 | 12,129 | new |
 | `WTT-Armory` | 1,337 (833 + 461 items, 37 quests, 6 traders) | 733 | 45,402 | 110 | 6,818 | new |
+| `Ledger` | 74 (45 quests, 29 offers) | 0 | 8,279 | 3 | 12,176 | new |
+| `AllTheClothes` | 339 (104 clothes and 235 offers) | 0 | 687 | 10 | 12,206 | new |
+| `MapVariants` | 0 | 0 | 0 | 2 | 12,102 | new, behaviour mod |
 | `Gunwright` | 0 | 0 | 0 | 4 | none | before ADR-0034 |
+
+The last four came from two pairs of Archiver processes that ran at the same time on 2026-10-20:
+`Ledger` beside a run that failed, and `AllTheClothes` beside `MapVariants`. Each pair wrote its own
+rows, and the archive held one dataset for each mod.
 
 An assort file is read as offers, not as a document (ADR-0032, decision 4). Every offer of every
 trader is named by its trader, the item it sells and what the player pays with, so the run and its
@@ -263,6 +270,48 @@ component of a mod that has no `mod_*` table — a location, a bot type, a price
 *warned about* by name and its canonical hash enters the content hash, so two datasets that differ
 only there stay apart (TD-45). A second import of the same run exits immediately; `Archive__Force=true`
 imports it again.
+
+## Import several runs at the same time
+
+Two Archiver processes may write one archive at the same time (ADR-0036). Export first, then start
+one process per run. Nothing has to be sequenced by hand.
+
+```bash
+export Archive__BaselinePath=/home/yui/work/sptmods/exports/baseline
+export ConnectionStrings__Archive="Host=127.0.0.1;Port=5432;Database=archive;Username=archive_owner;Password=..."
+cd /home/yui/Documents/repos/csharp/tushonkinator
+
+Archive__RunPath=/home/yui/work/sptmods/exports/Ledger \
+Archive__RunModGuid=com.zantetsukenar3.ledger \
+  dotnet run --project src/SptArchive.Archiver --no-build > /tmp/ledger.log 2>&1 &
+
+Archive__RunPath=/home/yui/work/sptmods/exports/AllTheClothes \
+Archive__RunModGuid=com.rairaitheraichu.alltheclothes \
+  dotnet run --project src/SptArchive.Archiver --no-build > /tmp/clothes.log 2>&1 &
+
+wait
+```
+
+Keep each `export` on its own line. A line such as `export V=1 && job1 & job2 &` starts the export
+inside the first background job only. The second job then reads the password of `appsettings.json`
+and fails with `28P01`. That mistake cost one run on 2026-10-20. Its row says `failed`, which is the
+archive doing its job.
+
+What the archive does with two writers:
+
+- A run holds a lease. It writes `archive_runs.heartbeat_at` every 10 seconds on its own connection,
+  so a long import still looks alive.
+- A run that says nothing for 120 seconds is over. The next Archiver to start closes it as
+  `interrupted` with the reason, and the history stops showing a run that will never end.
+- An official import holds the lock of its release, and a mod run holds it shared. The official
+  import of a release therefore never half-replaces the rows that a mod run describes.
+- Two runs of one mod wait for each other. The one that waits finds the dataset and records
+  `unchanged`, or reuses it and writes no row. Neither dies on a constraint.
+- Two runs of one export store one dataset, two `succeeded` runs and one observation. The history
+  keeps both runs, so it says which process did the work.
+
+The one thing that is not free: every import reads two exports of several hundred megabytes. Four at
+once need the RAM and the disk of four.
 
 ## Routes
 

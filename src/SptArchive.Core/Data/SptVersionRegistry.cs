@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SptArchive.Core.Entities;
 
 namespace SptArchive.Core.Data;
@@ -30,6 +31,24 @@ public static class SptVersionRegistry
         }
 
         db.SptVersions.Add(new SptVersion { Version = version, VersionParts = parts });
-        await db.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Two imports of one new release at the same time (ADR-0036): the other one registered it
+            // between the check above and this insert, and its row is the release.
+            db.ChangeTracker.Clear();
+
+            if (await db.SptVersions.AnyAsync(row => row.Version == version, cancellationToken))
+            {
+                return;
+            }
+
+            throw;
+        }
     }
 }

@@ -47,6 +47,19 @@ public static class RunResult
     public static string Unchanged(RunImportPlan plan) =>
         JsonSerializer.Serialize(new { outcome = "unchanged", contentHash = plan.ContentHash });
 
+    /// <summary>
+    /// The result of an official import that found the work done by a run that started at the same time
+    /// (ADR-0036). The files are the same, so the archive needs one row set, not two.
+    /// </summary>
+    public static string UnchangedOfficial() => JsonSerializer.Serialize(new { outcome = "unchanged" });
+
+    /// <summary>
+    /// The result of a run whose process stopped without recording one (ADR-0036). The stage is unknown,
+    /// because the process never got to say where it was.
+    /// </summary>
+    public static string Interrupted(string error) =>
+        JsonSerializer.Serialize(new { outcome = "interrupted", error });
+
     /// <summary>The result of an official import.</summary>
     public static string ForOfficial(IEnumerable<string> importers) =>
         JsonSerializer.Serialize(new { outcome = "imported", importers = importers.ToArray() });

@@ -20,8 +20,6 @@ namespace SptArchive.Tests;
 /// </summary>
 public sealed class RunRecordTests : IAsyncLifetime
 {
-    private const string NodeId = "aaaaaaaaaaaaaaaaaaaaaaaa";
-    private const string ItemId = "bbbbbbbbbbbbbbbbbbbbbbbb";
     private const string AddedId = "dddddddddddddddddddddddd";
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "sptarchive-record-" + Guid.NewGuid().ToString("N"));
@@ -277,44 +275,9 @@ public sealed class RunRecordTests : IAsyncLifetime
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    private void Tree(string baselineRelease, string runRelease, object? target = null, string addedItemId = AddedId)
-    {
-        string Items(string added) =>
-            "{\"" + NodeId + "\":{\"_id\":\"" + NodeId + "\",\"_name\":\"Node A\",\"_parent\":\"\",\"_type\":\"Node\",\"_props\":{}},"
-            + "\"" + ItemId + "\":{\"_id\":\"" + ItemId + "\",\"_name\":\"Item B\",\"_parent\":\"" + NodeId + "\",\"_type\":\"Item\",\"_props\":{\"Weight\":1.5}}"
-            + added + "}";
-
-        var addedItem =
-            ",\"" + addedItemId + "\":{\"_id\":\"" + addedItemId + "\",\"_name\":\"Item D\",\"_parent\":\"" + NodeId + "\",\"_type\":\"Item\",\"_props\":{\"Weight\":3}}";
-
-        Write(Baseline, "templates/items.json", Items(string.Empty));
-        Write(Baseline, "templates/customization.json", "{}");
-        Write(Baseline, "templates/quests.json", "{}");
-        Write(Run, "templates/items.json", Items(addedItem));
-        Write(Run, "templates/customization.json", "{}");
-        Write(Run, "templates/quests.json", "{}");
-
-        var exporter = new { directory = "SptArchive.Exporter", modGuid = RunDirectory.ToolModGuid, name = "Exporter", author = "x", version = "1.4.0", sptVersion = ">=4.1.0" };
-        var mod = new { directory = "Thermal", modGuid = _modGuid, name = "Thermal", author = "x", version = "3.4.0", sptVersion = ">=4.1.0" };
-
-        Write(Baseline, "run/loaded.json", JsonSerializer.Serialize(new object[] { exporter }));
-        Write(Baseline, "run/release.json", JsonSerializer.Serialize(new { sptVersion = baselineRelease }));
-        Write(Run, "run/loaded.json", JsonSerializer.Serialize(new object[] { exporter, mod }));
-        Write(Run, "run/release.json", JsonSerializer.Serialize(new { sptVersion = runRelease }));
-        Write(Run, "run/files/Thermal.json", JsonSerializer.Serialize(new[] { new { path = "Thermal.dll", size = 10, sha256 = new string('a', 64), kind = "assembly" } }));
-
-        if (target is not null)
-        {
-            Write(Run, "run/target.json", JsonSerializer.Serialize(target));
-        }
-    }
-
-    private static void Write(string root, string path, string content)
-    {
-        var full = Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, content);
-    }
+    /// <summary>The two export directories of one mod run (ADR-0029), shared with the concurrency tests.</summary>
+    private void Tree(string baselineRelease, string runRelease, object? target = null, string addedItemId = AddedId) =>
+        RunTree.Write(_root, _modGuid, baselineRelease, runRelease, target, addedItemId);
 
     private sealed class OwnerFactory : IDbContextFactory<ArchiveDbContext>
     {
