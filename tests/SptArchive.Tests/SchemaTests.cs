@@ -58,6 +58,7 @@ public sealed class SchemaTests
     [InlineData("mod_trader_assort_items")]
     [InlineData("mod_trader_quest_assorts")]
     [InlineData("mod_files")]
+    [InlineData("mod_id_maps")]
     public async Task Every_mod_table_is_keyed_by_its_dataset(string table)
     {
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);

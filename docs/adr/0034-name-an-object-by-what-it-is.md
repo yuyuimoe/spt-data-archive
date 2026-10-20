@@ -1,6 +1,6 @@
 # ADR-0034: Name an object by what it is
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 
@@ -166,13 +166,14 @@ Feature: Name a mod object without the id the run gave it
 
 ## Action Items
 
-1. [ ] Add `ContentUlid` to `SptArchive.Core/Canonical`, with the seed rules of decision 2 and 3.
-2. [ ] Add the addressing pass to `RunDiff`: a pinned id keeps its id, a new object gets a content ULID, a tie adds the content hash, a remaining tie adds the ordinal.
-3. [ ] Add `mod_id_map` and write one row per raw id of a dataset from `RunImporter`.
-4. [ ] Replace the positional renumbering of `CanonicalForm` with the address sort (amends ADR-0028 decision 3).
-5. [ ] Render ids as addresses in `mod_change_paths` and in the offer key of ADR-0032.
-6. [ ] Warn when an added id carries a mint time after the start of the run (decision 9).
-7. [ ] Update the fixtures and the tests that assert a raw id; recount the test total in the docs.
+1. [x] Add `ContentUlid` to `SptArchive.Core/Canonical`, with the seed rules of decision 2 and 3. Done: `src/SptArchive.Core/Canonical/ContentUlid.cs`, `ContentUlidTests` pins three vectors against a second implementation and refuses a timed id.
+2. [x] Add the addressing pass to `RunDiff`: a pinned id keeps its id, a new object gets a content ULID, a tie adds the content hash, a remaining tie adds the ordinal. Done: `Addressing` holds the entries and the warnings. The rows are keyed by the address, and the hash covers the canonical form, so the minted id never enters it (`RunDiffTests`).
+3. [x] Add `mod_id_map` and write one row per raw id of a dataset from `RunImporter`. Done: migration `20261020203542_AddModIdMap`; the map of `ECOTI` holds 5,980 rows (4,682 items: 4,673 pinned and 9 derived) and the map of `WTT-Armory` 6,818.
+4. [ ] Replace the positional renumbering of `CanonicalForm` with the address sort (amends ADR-0028 decision 3). Open: it needs the address of an offer, which is decision 4 of ADR-0032; both are one slice.
+5. [ ] Render ids as addresses in `mod_change_paths` and in the offer key of ADR-0032. Half done: the old and new values of a change are read from the canonical form. The 733 paths of `WTT-Armory` therefore name the 833 added items by address. `mod_change_paths` itself arrives with ADR-0032.
+6. [ ] Warn when an added id carries a mint time after the start of the run (decision 9). Open: the archive holds no start of a run yet, which ADR-0033 adds; a mint time alone cannot tell a boot from an author.
+7. [x] Update the fixtures and the tests that assert a raw id; recount the test total in the docs. Done: 181 tests.
+8. [ ] Name a location and a bot type by its file name, as decision 3 says, when their rows arrive (TD-45). Today the addressing covers items, quests, customizations and traders.
 
 ## Links
 

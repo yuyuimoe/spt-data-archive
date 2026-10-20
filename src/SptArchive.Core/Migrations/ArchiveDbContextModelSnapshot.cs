@@ -556,6 +556,44 @@ namespace SptArchive.Core.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SptArchive.Core.Entities.ModIdMap", b =>
+                {
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("Kind")
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("RawId")
+                        .HasColumnType("text")
+                        .HasColumnName("raw_id");
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("address");
+
+                    b.Property<bool>("Pinned")
+                        .HasColumnType("boolean")
+                        .HasColumnName("pinned");
+
+                    b.HasKey("DatasetId", "Kind", "RawId")
+                        .HasName("pk_mod_id_maps");
+
+                    b.HasIndex("DatasetId", "Address")
+                        .HasDatabaseName("ix_mod_id_maps_dataset_id_address");
+
+                    b.HasIndex("Kind", "RawId")
+                        .HasDatabaseName("ix_mod_id_maps_kind_raw_id");
+
+                    b.ToTable("mod_id_maps", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mod_id_map_kind", "kind IN ('item', 'customization', 'quest', 'trader')");
+                        });
+                });
+
             modelBuilder.Entity("SptArchive.Core.Entities.ModItem", b =>
                 {
                     b.Property<Guid>("DatasetId")
@@ -1228,6 +1266,18 @@ namespace SptArchive.Core.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_mod_files_mod_datasets_dataset_id");
+
+                    b.Navigation("Dataset");
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModIdMap", b =>
+                {
+                    b.HasOne("SptArchive.Core.Entities.ModDataset", "Dataset")
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mod_id_maps_mod_datasets_dataset_id");
 
                     b.Navigation("Dataset");
                 });

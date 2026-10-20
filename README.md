@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 161 tests. Three migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 181 tests. Four migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
 > The Api served the archive read-only. A container run exports every table of the server database
@@ -172,7 +172,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 161 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 181 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are

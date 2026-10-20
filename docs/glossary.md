@@ -18,6 +18,7 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Address** | The name the archive gives an object (ADR-0034). It is the id of the baseline when the baseline holds the object. Otherwise it is a content ULID, because the run made the object. |
 | **Content ULID** | A 26-character id that the archive derives from a seed: the kind of the object and its identity fields (ADR-0034). The time half is zero, so a boot that makes new instance ids does not change it. |
 | **Pinned** | An object that the baseline of a release holds, so its own id is its address (ADR-0034). Every official row is pinned. |
+| **Id map** | The rows of a dataset that pair the id a run gave an object with its address (ADR-0034). The map is a lookup and is not part of the content hash. |
 | **Unstored change** | A file that the run changed and that no `mod_*` table holds: a trader's assort, a location, a bot type, a price table. Its canonical hash enters the content hash, so two datasets that differ only there stay apart, and the import names it in the log (TD-45). |
 | **Added template** | A template id that the baseline does not have and the target export does. Its path rows have no old value. |
 | **Modified template** | A template id that the baseline and the target export both have, with different content. |

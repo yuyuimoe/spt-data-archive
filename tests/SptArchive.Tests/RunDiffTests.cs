@@ -113,18 +113,51 @@ public sealed class RunDiffTests : IDisposable
     {
         var diff = Diff(run: new()
         {
-            ["templates/items.json"] = Items(weight: 1.5, extra: """
-                ,"dddddddddddddddddddddddd":{"_id":"dddddddddddddddddddddddd","_name":"Item D","_parent":"aaaaaaaaaaaaaaaaaaaaaaaa","_type":"Item","_props":{"Weight":3}}
-                """),
+            ["templates/items.json"] = Items(weight: 1.5, extra: AddedItem("dddddddddddddddddddddddd", "Item D")),
         });
 
         var template = Assert.Single(diff.Templates);
-        Assert.Equal(("item", "dddddddddddddddddddddddd", "added"), (template.Kind, template.TemplateId, template.Op));
+
+        // The row is keyed by the address of the item: its name, not the id this run minted (ADR-0034).
+        Assert.Equal(
+            ("item", ContentUlid.Create("item", "Item D"), "added"),
+            (template.Kind, template.TemplateId, template.Op));
+        Assert.Equal("dddddddddddddddddddddddd", template.RawId);
         Assert.Equal(NodeId, template.ParentId);
 
         // The object is the row. Path rows would repeat it, and an addition has no old value to state.
         Assert.Empty(template.Changes);
         Assert.Contains("\"Item D\"", template.NewJson);
+
+        // The hash covers the canonical form, so it holds no id that a boot minted.
+        Assert.DoesNotContain("dddddddddddddddddddddddd", template.CanonicalJson);
+    }
+
+    [Fact]
+    public void A_run_that_mints_a_new_id_names_the_same_object_the_same_way()
+    {
+        // ECOTI's nine items had ids that were in no file of the mod and that appeared close to the
+        // run (TD-48). Two runs of that content differ in the id and in nothing else.
+        var one = Diff(run: new()
+        {
+            ["templates/items.json"] = Items(weight: 1.5, extra: AddedItem("dddddddddddddddddddddddd", "Cotton clip")),
+        });
+
+        var two = Diff(run: new()
+        {
+            ["templates/items.json"] = Items(weight: 1.5, extra: AddedItem("6ad5775e327076f93b3b36bf", "Cotton clip")),
+        });
+
+        var first = Assert.Single(one.Templates);
+        var second = Assert.Single(two.Templates);
+
+        Assert.Equal(first.TemplateId, second.TemplateId);
+        Assert.NotEqual(first.RawId, second.RawId);
+        Assert.Equal(DatasetHash.Compute(one, Files), DatasetHash.Compute(two, Files));
+
+        // The id of the run is kept as a lookup and never as the name of the object.
+        Assert.Contains(one.IdMap, entry => entry.RawId == "dddddddddddddddddddddddd" && entry.Address == first.TemplateId);
+        Assert.Contains(one.IdMap, entry => entry.RawId == ItemId && entry.Pinned);
     }
 
     [Fact]
@@ -298,6 +331,12 @@ public sealed class RunDiffTests : IDisposable
             + extra
             + "\n}";
     }
+
+    /// <summary>An item that the run adds under the node of the baseline, with the id the run gives it.</summary>
+    private static string AddedItem(string id, string name, double weight = 3) =>
+        ",\"" + id + "\":{\"_id\":\"" + id + "\",\"_name\":\"" + name
+        + "\",\"_parent\":\"aaaaaaaaaaaaaaaaaaaaaaaa\",\"_type\":\"Item\",\"_props\":{\"Weight\":"
+        + weight.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}}";
 
     private static string Assort(string instanceId, string templateId) =>
         "{\"items\":[{\"_id\":\"" + instanceId + "\",\"_tpl\":\"" + templateId + "\",\"parentId\":\"hideout\"}],"

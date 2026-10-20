@@ -53,6 +53,9 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
     // The files a dataset loaded: the manifest of every mod, and the text of its configuration (ADR-0029)
     public DbSet<ModFile> ModFiles => Set<ModFile>();
 
+    // The id that a run gave an object and the address the archive derived for it (ADR-0034)
+    public DbSet<ModIdMap> ModIdMaps => Set<ModIdMap>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // ---- Server releases and runs -------------------------------------------------------------
@@ -200,6 +203,21 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
         });
 
         // ---- What a dataset changes (ADR-0017) -----------------------------------------------------
+        b.Entity<ModIdMap>(e =>
+        {
+            // One row per id of one dataset; the id is unique inside its kind, so the kind is part of the key.
+            e.HasKey(x => new { x.DatasetId, x.Kind, x.RawId });
+            e.HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
+
+            // "Which object is this id" is a lookup by the id; "which ids does this address name" by the address.
+            e.HasIndex(x => new { x.Kind, x.RawId });
+            e.HasIndex(x => new { x.DatasetId, x.Address });
+
+            e.ToTable(t => t.HasCheckConstraint(
+                "ck_mod_id_map_kind",
+                "kind IN ('item', 'customization', 'quest', 'trader')"));
+        });
+
         b.Entity<ModTemplate>(e =>
         {
             e.HasKey(x => new { x.DatasetId, x.Kind, x.TemplateId });

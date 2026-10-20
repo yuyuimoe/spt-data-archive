@@ -176,11 +176,25 @@ each) before the transaction opens, so a broken export fails before anything is 
 
 What it writes, measured on 2026-10-20 with exporter 1.4.0 on SPT 4.1.6:
 
-| Run | Templates | Item paths | Locale entries | Files | Dataset |
-|-----|-----------|-----------:|---------------:|------:|---------|
-| `ECOTI` | 11 (9 items added, 2 traders changed) | 0 | 459 | 46 | `5fbbcd38f0f2` |
-| `WTT-Armory` | 1,337 (833 + 461 items, 37 quests, 6 traders) | 733 | 45,402 | 110 | new |
-| `Gunwright` | 0 | 0 | 0 | 4 | new |
+| Run | Templates | Item paths | Locale entries | Files | Id map | Dataset |
+|-----|-----------|-----------:|---------------:|------:|-------:|---------|
+| `ECOTI` | 11 (9 items added, 2 traders changed) | 0 | 459 | 46 | 5,980 | new |
+| `WTT-Armory` | 1,337 (833 + 461 items, 37 quests, 6 traders) | 733 | 45,402 | 110 | 6,818 | new |
+| `Gunwright` | 0 | 0 | 0 | 4 | none | before ADR-0034 |
+
+A row of the map is one id of the run and the address the archive derived for it (ADR-0034). Every
+object of the baseline is pinned, so its address is its own id; an added item is named by a content
+ULID, and the map is the way back from the id the run minted. The map is written once, with the
+dataset, so the `Gunwright` dataset of the first import has none: its content did not change, and a
+re-import reuses the dataset and writes no row.
+
+```sql
+select raw_id, address from mod_id_maps where dataset_id = '...' and not pinned;
+```
+
+`Addressing` writes a warning and an ordinal when two objects hold one name and one content (ADR-0034
+decision 4); the runs above produced none. An added object whose id no file of the mod holds — the
+ECOTI items — is named by its `_name`, so a boot that mints a new id keeps one dataset.
 
 `Gunwright` is the case to read twice: it changes no table at all and its whole contribution is two
 HTTP routes, so it stores a dataset with no row. That is the model of ADR-0028, not a failure. A

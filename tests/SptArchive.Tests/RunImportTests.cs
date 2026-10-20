@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SptArchive.Archiver;
 using SptArchive.Archiver.Runs;
+using SptArchive.Core.Canonical;
 using SptArchive.Core.Entities;
 
 namespace SptArchive.Tests;
@@ -81,11 +82,24 @@ public sealed class RunImportTests : IDisposable
             .OrderBy(row => row.TemplateId)
             .ToListAsync(cancellationToken);
         Assert.Equal(4, templates.Count);
-        Assert.Equal(ModTemplateOperation.Added, templates.Single(row => row.TemplateId == "dddddddddddddddddddddddd").Op);
-        Assert.Equal(NodeId, templates.Single(row => row.TemplateId == "dddddddddddddddddddddddd").ParentId);
+
+        // A template the run made is keyed by its address; an official one keeps its own id (ADR-0034).
+        var addedAddress = ContentUlid.Create("item", "Item D");
+        var addedQuestAddress = ContentUlid.Create("quest", "Q2");
+
+        Assert.Equal(ModTemplateOperation.Added, templates.Single(row => row.TemplateId == addedAddress).Op);
+        Assert.Equal(NodeId, templates.Single(row => row.TemplateId == addedAddress).ParentId);
         Assert.Equal(ModTemplateOperation.Modified, templates.Single(row => row.TemplateId == ItemId).Op);
-        Assert.Equal(ModTemplateOperation.Added, templates.Single(row => row.TemplateId == AddedQuestId).Op);
+        Assert.Equal(ModTemplateOperation.Added, templates.Single(row => row.TemplateId == addedQuestAddress).Op);
         Assert.Equal(ModTemplateOperation.Modified, templates.Single(row => row.TemplateId == TraderId).Op);
+
+        // The id the run gave is kept as a lookup, and never as the name of a row (ADR-0034).
+        var map = await scope.Db.ModIdMaps
+            .Where(row => datasetIds.Contains(row.DatasetId))
+            .ToListAsync(cancellationToken);
+        Assert.Contains(map, row => row.RawId == "dddddddddddddddddddddddd" && row.Address == addedAddress);
+        Assert.Contains(map, row => row.RawId == AddedQuestId && row.Address == addedQuestAddress);
+        Assert.Contains(map, row => row.RawId == ItemId && row.Pinned);
 
         // A changed official item keeps its paths, and the old value is the baseline's (ADR-0017).
         var change = await scope.Db.ModItemChanges.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
@@ -93,12 +107,12 @@ public sealed class RunImportTests : IDisposable
         Assert.Equal(("/_props/Weight", ModItemChangeOperation.Set, "1.5", "2"), (change.Path, change.Op, change.OldValue, change.NewValue));
 
         var added = await scope.Db.ModItems.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
-        Assert.Equal("dddddddddddddddddddddddd", added.Id);
+        Assert.Equal(addedAddress, added.Id);
         Assert.Equal(3d, added.Weight);
         Assert.Equal(dataset.Id, added.DatasetId);
 
         var quest = await scope.Db.ModQuests.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
-        Assert.Equal(AddedQuestId, quest.Id);
+        Assert.Equal(addedQuestAddress, quest.Id);
         Assert.Equal("Q2", quest.QuestName);
 
         var locale = await scope.Db.ModLocaleEntries.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
@@ -170,7 +184,7 @@ public sealed class RunImportTests : IDisposable
         Assert.False(second.IsNewDataset);
 
         var datasetIds = await TestDatasetsAsync(scope, cancellationToken);
-        Assert.Equal(1, datasetIds.Length);
+        Assert.Single(datasetIds);
         Assert.Equal(1, await scope.Db.ModDataObservations.CountAsync(row => datasetIds.Contains(row.DatasetId!.Value), cancellationToken));
         Assert.Equal(1, await scope.Db.ModItems.CountAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken));
         Assert.Equal(2, await scope.Db.ModFiles.CountAsync(file => datasetIds.Contains(file.DatasetId), cancellationToken));

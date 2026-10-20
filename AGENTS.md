@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Three migrations exist and are applied, and 161 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). Four migrations exist and are applied, and 181 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 161 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 181 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,18 +94,20 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, three migrations are applied, and 161 tests pass (TD-01, TD-02, TD-04, TD-07,
+- **Done:** the solution builds, four migrations are applied, and 181 tests pass (TD-01, TD-02, TD-04, TD-07,
   TD-29, TD-39, TD-40).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
-  `mod_datasets`, `mod_data_observations`, `mod_templates`, `mod_item_changes`, `mod_files` and the `mod_*` rows
-  (TD-29).
-- **Next slice:** the Api server version argument (TD-21). Then the Gherkin scenarios with Reqnroll (TD-06),
-  the store rows for an assort, a location and a bot type (TD-45), and the baseline cache (ADR-0013).
+  `mod_datasets`, `mod_data_observations`, `mod_templates`, `mod_item_changes`, `mod_files`, `mod_id_maps` and the
+  `mod_*` rows (TD-29). Every row is keyed by the address the archive derived for the object, and the id map
+  keeps the id the run gave it (ADR-0034).
+- **Next slice:** the offer address and the assort rows (ADR-0032, ADR-0034 decision 8). Then the Api server
+  version argument (TD-21), the Gherkin scenarios with Reqnroll (TD-06), the store rows for a location and a bot
+  type (TD-45), and the baseline cache (ADR-0013).
 - **Open decisions:** ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are
   Proposed. ADR-0005 and ADR-0010 are
-  superseded; ADR-0001 to 0004, 0006 to 0009 and 0011 to 0029, and ADR-0031, are Accepted.
+  superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0034 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
   and the importer exist and ran on nineteen real mod runs (`docs/runbooks/mod-export.md`), including a curated
   run of one mod (ADR-0029).

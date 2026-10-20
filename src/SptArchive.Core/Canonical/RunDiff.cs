@@ -34,27 +34,31 @@ public static class RunDiff
         var run = Index(runPath);
         var baseline = Index(baselinePath);
 
+        // Every object of the run gets one name, so a run that mints a new id on every boot still
+        // names the same content the same way (ADR-0034).
+        var addressing = Addressing.Build(runPath, baselinePath);
+
         var templates = new List<TemplateContribution>();
         var locales = new List<LocaleContribution>();
         var hashes = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var unstored = new SortedDictionary<string, string>(StringComparer.Ordinal);
 
-        CollectTemplateTable(run, baseline, ItemsTable, ModTemplateKind.Item, templates, hashes);
-        CollectTemplateTable(run, baseline, QuestsTable, ModTemplateKind.Quest, templates, hashes);
-        CollectTemplateTable(run, baseline, CustomizationsTable, ModTemplateKind.Customization, templates, hashes);
-        CollectTraders(run, baseline, templates, hashes);
-        CollectLocales(run, baseline, locales, hashes);
+        CollectTemplateTable(run, baseline, ItemsTable, ModTemplateKind.Item, addressing, templates, hashes);
+        CollectTemplateTable(run, baseline, QuestsTable, ModTemplateKind.Quest, addressing, templates, hashes);
+        CollectTemplateTable(run, baseline, CustomizationsTable, ModTemplateKind.Customization, addressing, templates, hashes);
+        CollectTraders(run, baseline, addressing, templates, hashes);
+        CollectLocales(run, baseline, addressing, locales, hashes);
 
         // A file that changed and that no row type holds. Its canonical hash enters the dataset hash,
         // so two runs that differ only here are two datasets and not one (ADR-0029).
         foreach (var path in run.Keys.Union(baseline.Keys, StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal))
         {
-            if (IsStored(path) || !Differs(run, baseline, path))
+            if (IsStored(path) || !Differs(run, baseline, path, addressing))
             {
                 continue;
             }
 
-            unstored[path] = run.TryGetValue(path, out var file) ? CanonicalHash(path, file) : string.Empty;
+            unstored[path] = run.TryGetValue(path, out var file) ? CanonicalHash(path, file, addressing) : string.Empty;
         }
 
         var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
@@ -75,7 +79,9 @@ public static class RunDiff
                 .ToArray(),
             unstored,
             hashes,
-            counts);
+            counts,
+            addressing.Entries,
+            addressing.Warnings);
     }
 
     /// <summary>A stable order, so the same content always writes the same rows in the same order.</summary>
@@ -137,17 +143,18 @@ public static class RunDiff
             && Path.GetFileName(path) is "base.json" or "dialogue.json" or "suits.json" or "services.json";
     }
 
-    private static string CanonicalHash(string path, string file)
+    private static string CanonicalHash(string path, string file, Addressing addressing)
     {
         using var document = Parse(file);
-        return CanonicalForm.Hash(path, document.RootElement);
+        return CanonicalForm.Hash(path, document.RootElement, addressing.TokensFor(path));
     }
 
     /// <summary>True when the two copies of one file differ by content, not by a value no run holds constant.</summary>
     private static bool Differs(
         SortedDictionary<string, string> run,
         SortedDictionary<string, string> baseline,
-        string path)
+        string path,
+        Addressing addressing)
     {
         var inRun = run.TryGetValue(path, out var runFile);
         var inBaseline = baseline.TryGetValue(path, out var baselineFile);
@@ -165,7 +172,11 @@ public static class RunDiff
         using var runDocument = Parse(runFile!);
         using var baselineDocument = Parse(baselineFile!);
 
-        return CanonicalForm.Compare(path, baselineDocument.RootElement, runDocument.RootElement).Count > 0;
+        return CanonicalForm.Compare(
+            path,
+            baselineDocument.RootElement,
+            runDocument.RootElement,
+            addressing.TokensFor(path)).Count > 0;
     }
 
     private static bool SameBytes(string left, string right)
@@ -187,6 +198,7 @@ public static class RunDiff
         SortedDictionary<string, string> baseline,
         string tablePath,
         string kind,
+        Addressing addressing,
         List<TemplateContribution> templates,
         IDictionary<string, string> hashes)
     {
@@ -198,11 +210,13 @@ public static class RunDiff
             return;
         }
 
+        var tokens = addressing.TokensFor(tablePath);
+
         // An unchanged file cannot contribute a row; its hash is still worth storing.
         if (hasRun && hasBaseline && SameBytes(runFile!, baselineFile!))
         {
             using var unchanged = Parse(runFile!);
-            hashes[tablePath] = CanonicalForm.Hash(tablePath, unchanged.RootElement);
+            hashes[tablePath] = CanonicalForm.Hash(tablePath, unchanged.RootElement, tokens);
             return;
         }
 
@@ -212,37 +226,54 @@ public static class RunDiff
         var runRoot = runDocument.RootElement;
         var baselineRoot = baselineDocument.RootElement;
 
-        hashes[tablePath] = CanonicalForm.Hash(tablePath, runRoot);
+        hashes[tablePath] = CanonicalForm.Hash(tablePath, runRoot, tokens);
 
-        var ids = runRoot.EnumerateObject().Select(property => property.Name)
-            .Union(baselineRoot.EnumerateObject().Select(property => property.Name), StringComparer.Ordinal)
-            .OrderBy(id => id, StringComparer.Ordinal);
+        // The rows are keyed by the address of the object, so a run that names it by another id
+        // still names the same object (ADR-0034, decision 1).
+        var runByAddress = ByAddress(runRoot, addressing);
+        var baselineByAddress = ByAddress(baselineRoot, addressing);
 
-        foreach (var id in ids)
+        var addresses = runByAddress.Keys
+            .Union(baselineByAddress.Keys, StringComparer.Ordinal)
+            .OrderBy(address => address, StringComparer.Ordinal);
+
+        foreach (var address in addresses)
         {
-            var inRun = runRoot.TryGetProperty(id, out var runTemplate);
-            var inBaseline = baselineRoot.TryGetProperty(id, out var baselineTemplate);
+            var inRun = runByAddress.TryGetValue(address, out var runEntry);
+            var inBaseline = baselineByAddress.TryGetValue(address, out var baselineEntry);
 
             if (inRun && !inBaseline)
             {
                 // An addition states its parent, so a reader can place it in the item tree.
+                var parent = kind == ModTemplateKind.Item ? Scalar(runEntry.Value, "_parent") : null;
+
                 templates.Add(new TemplateContribution(
                     kind,
-                    id,
+                    address,
+                    runEntry.RawId,
                     ModTemplateOperation.Added,
-                    kind == ModTemplateKind.Item ? Scalar(runTemplate, "_parent") : null,
-                    runTemplate.GetRawText(),
+                    parent is null ? null : addressing.NameOf(parent),
+                    runEntry.Value.GetRawText(),
+                    CanonicalText(tablePath, runEntry.Value, tokens),
                     []));
                 continue;
             }
 
             if (!inRun && inBaseline)
             {
-                templates.Add(new TemplateContribution(kind, id, ModTemplateOperation.Removed, null, null, []));
+                templates.Add(new TemplateContribution(
+                    kind,
+                    address,
+                    baselineEntry.RawId,
+                    ModTemplateOperation.Removed,
+                    null,
+                    null,
+                    null,
+                    []));
                 continue;
             }
 
-            var differences = CanonicalForm.Compare(tablePath, baselineTemplate, runTemplate);
+            var differences = CanonicalForm.Compare(tablePath, baselineEntry.Value, runEntry.Value, tokens);
 
             if (differences.Count == 0)
             {
@@ -255,12 +286,33 @@ public static class RunDiff
 
             templates.Add(new TemplateContribution(
                 kind,
-                id,
+                address,
+                runEntry.RawId,
                 ModTemplateOperation.Modified,
                 null,
-                isItem ? null : runTemplate.GetRawText(),
-                isItem ? ReadChanges(baselineTemplate, runTemplate, differences) : []));
+                isItem ? null : runEntry.Value.GetRawText(),
+                isItem ? null : CanonicalText(tablePath, runEntry.Value, tokens),
+                isItem ? ReadChanges(tablePath, baselineEntry.Value, runEntry.Value, differences, tokens) : []));
         }
+    }
+
+    /// <summary>The objects of a table by their address, with the id the run gave each one.</summary>
+    private static Dictionary<string, (string RawId, JsonElement Value)> ByAddress(JsonElement table, Addressing addressing)
+    {
+        var byAddress = new Dictionary<string, (string, JsonElement)>(table.GetPropertyCount(), StringComparer.Ordinal);
+
+        foreach (var property in table.EnumerateObject())
+        {
+            byAddress[addressing.Address(property.Name)] = (property.Name, property.Value);
+        }
+
+        return byAddress;
+    }
+
+    private static string CanonicalText(string relativePath, JsonElement value, IdTokens tokens)
+    {
+        using var document = CanonicalForm.CanonicalDocument(relativePath, value, tokens);
+        return document.RootElement.GetRawText();
     }
 
     /// <summary>
@@ -270,6 +322,7 @@ public static class RunDiff
     private static void CollectTraders(
         SortedDictionary<string, string> run,
         SortedDictionary<string, string> baseline,
+        Addressing addressing,
         List<TemplateContribution> templates,
         IDictionary<string, string> hashes)
     {
@@ -285,11 +338,11 @@ public static class RunDiff
 
             if (runFiles.Count > 0)
             {
-                HashTraders(runFiles, hashes);
+                HashTraders(runFiles, addressing, hashes);
             }
 
             var changed = runFiles.Keys.Union(baselineFiles.Keys, StringComparer.Ordinal)
-                .Any(path => Differs(run, baseline, path));
+                .Any(path => Differs(run, baseline, path, addressing));
 
             if (!changed)
             {
@@ -304,15 +357,25 @@ public static class RunDiff
 
             // The trader as the run leaves it, so the row explains the change however deep it sits.
             var basePath = prefix + "base.json";
-            string? newJson = null;
+            string? sourceJson = null;
+            string? canonicalJson = null;
 
             if (op != ModTemplateOperation.Removed && run.TryGetValue(basePath, out var baseFile))
             {
                 using var document = Parse(baseFile);
-                newJson = document.RootElement.GetRawText();
+                sourceJson = document.RootElement.GetRawText();
+                canonicalJson = CanonicalText(basePath, document.RootElement, addressing.TokensFor(basePath));
             }
 
-            templates.Add(new TemplateContribution(ModTemplateKind.Trader, traderId, op, null, newJson, []));
+            templates.Add(new TemplateContribution(
+                ModTemplateKind.Trader,
+                addressing.Address(traderId),
+                traderId,
+                op,
+                null,
+                sourceJson,
+                canonicalJson,
+                []));
         }
     }
 
@@ -320,6 +383,7 @@ public static class RunDiff
     private static void CollectLocales(
         SortedDictionary<string, string> run,
         SortedDictionary<string, string> baseline,
+        Addressing addressing,
         List<LocaleContribution> locales,
         IDictionary<string, string> hashes)
     {
@@ -343,10 +407,12 @@ public static class RunDiff
                 continue;
             }
 
+            var tokens = addressing.TokensFor(path);
+
             if (hasBaseline && SameBytes(runFile!, baselineFile!))
             {
                 using var unchanged = Parse(runFile!);
-                hashes[path] = CanonicalForm.Hash(path, unchanged.RootElement);
+                hashes[path] = CanonicalForm.Hash(path, unchanged.RootElement, tokens);
                 continue;
             }
 
@@ -356,7 +422,7 @@ public static class RunDiff
             var runRoot = runDocument.RootElement;
             var baselineRoot = baselineDocument.RootElement;
 
-            hashes[path] = CanonicalForm.Hash(path, runRoot);
+            hashes[path] = CanonicalForm.Hash(path, runRoot, tokens);
 
             foreach (var property in runRoot.EnumerateObject())
             {
@@ -385,12 +451,15 @@ public static class RunDiff
         }
     }
 
-    private static void HashTraders(SortedDictionary<string, string> files, IDictionary<string, string> hashes)
+    private static void HashTraders(
+        SortedDictionary<string, string> files,
+        Addressing addressing,
+        IDictionary<string, string> hashes)
     {
         foreach (var (path, file) in files)
         {
             using var document = Parse(file);
-            hashes[path] = CanonicalForm.Hash(path, document.RootElement);
+            hashes[path] = CanonicalForm.Hash(path, document.RootElement, addressing.TokensFor(path));
         }
     }
 
@@ -409,20 +478,26 @@ public static class RunDiff
 
     /// <summary>
     /// Turns the paths of <see cref="CanonicalForm.Compare"/> into rows: the pointer in RFC 6901 form,
-    /// the operation, and the value from each side.
+    /// the operation, and the value from each side in canonical form, so a value names an object by its
+    /// address (ADR-0034, decision 6).
     /// </summary>
     private static IReadOnlyList<PathContribution> ReadChanges(
+        string relativePath,
         JsonElement baseline,
         JsonElement run,
-        IReadOnlyList<string> differences)
+        IReadOnlyList<string> differences,
+        IdTokens tokens)
     {
+        using var baselineCanonical = CanonicalForm.CanonicalDocument(relativePath, baseline, tokens);
+        using var runCanonical = CanonicalForm.CanonicalDocument(relativePath, run, tokens);
+
         var changes = new List<PathContribution>(differences.Count);
 
         foreach (var jsonPath in differences)
         {
             var pointer = ToPointer(jsonPath);
-            TryResolve(baseline, pointer, out var oldValue);
-            var hasNew = TryResolve(run, pointer, out var newValue);
+            TryResolve(baselineCanonical.RootElement, pointer, out var oldValue);
+            var hasNew = TryResolve(runCanonical.RootElement, pointer, out var newValue);
 
             changes.Add(new PathContribution(
                 pointer,

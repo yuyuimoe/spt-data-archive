@@ -39,7 +39,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0031](0031-record-the-http-surface-a-run-exposes.md) | Record the HTTP surface a run exposes | Accepted |
 | [0032](0032-record-every-changed-value-as-a-row.md) | Record every changed value as a row | Accepted |
 | [0033](0033-record-every-run-and-why-it-happened.md) | Record every run and why it happened | Accepted |
-| [0034](0034-name-an-object-by-what-it-is.md) | Name an object by what it is | Proposed |
+| [0034](0034-name-an-object-by-what-it-is.md) | Name an object by what it is | Accepted |
 
 ## Status meanings
 

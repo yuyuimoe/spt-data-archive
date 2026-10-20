@@ -27,37 +27,62 @@ public static class CanonicalForm
     public static ImmutableArray<VolatilePath> VolatilePaths => Registered.Value;
 
     /// <summary>Writes the canonical bytes of one value, with the rules that apply to this file.</summary>
-    public static byte[] Canonicalize(string relativePath, JsonElement value)
-    {
-        var rules = Rules.For(relativePath, value);
-
-        var buffer = new ArrayBufferWriter<byte>(Math.Max(64, value.GetRawText().Length));
-        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false, SkipValidation = true });
-
-        var path = new PathCursor();
-        Write(writer, value, path, rules);
-        writer.Flush();
-
-        return buffer.WrittenSpan.ToArray();
-    }
+    /// <param name="relativePath">The path of the file inside the export, which selects the rules.</param>
+    /// <param name="value">The value to write.</param>
+    /// <param name="ids">
+    /// How to write a raw id (ADR-0034). Without it, the generated ids of an assort are renumbered by
+    /// position and every other id stays as the run wrote it.
+    /// </param>
+    public static byte[] Canonicalize(string relativePath, JsonElement value, IdTokens? ids = null) =>
+        WriteCanonical(relativePath, value, ids, rootIsTemplate: false);
 
     /// <summary>The SHA-256 of the canonical bytes, lowercase hex. This is a dataset hash (ADR-0013), not a file hash.</summary>
-    public static string Hash(string relativePath, JsonElement value) =>
-        Convert.ToHexString(SHA256.HashData(Canonicalize(relativePath, value))).ToLowerInvariant();
+    public static string Hash(string relativePath, JsonElement value, IdTokens? ids = null) =>
+        Convert.ToHexString(SHA256.HashData(Canonicalize(relativePath, value, ids))).ToLowerInvariant();
+
+    /// <summary>
+    /// The canonical form of one object of a file, as a document to read a value from (ADR-0034,
+    /// decision 6). A path that <see cref="Compare"/> reports is a path of this form, so the value the
+    /// archive stores for a change is the value at that path here.
+    /// </summary>
+    public static JsonDocument CanonicalDocument(string relativePath, JsonElement value, IdTokens? ids = null) =>
+        JsonDocument.Parse(WriteCanonical(relativePath, value, ids, rootIsTemplate: true));
 
     /// <summary>
     /// Lists the paths that differ between two values of the same file after canonicalization.
     /// A path on the volatile list never differs, because both sides hold the token. Whatever this
     /// returns is content: a mod change, or a field whose volatility no entry covers yet.
     /// </summary>
-    public static IReadOnlyList<string> Compare(string relativePath, JsonElement left, JsonElement right)
+    public static IReadOnlyList<string> Compare(string relativePath, JsonElement left, JsonElement right, IdTokens? ids = null)
     {
         var differences = new List<string>();
 
         // Each side is read with its own rules: the generated ids differ between the two runs, and
         // an id only becomes the token of its position when it is looked up in its own document.
-        Compare(left, right, new PathCursor(), Rules.For(relativePath, left), Rules.For(relativePath, right), differences);
+        Compare(
+            left,
+            right,
+            new PathCursor(),
+            Rules.For(relativePath, left, ids, rootIsTemplate: true),
+            Rules.For(relativePath, right, ids, rootIsTemplate: true),
+            differences);
         return differences;
+    }
+
+    /// <summary>
+    /// The bytes of a value, with the rules of its file. <paramref name="rootIsTemplate"/> says that the
+    /// value is one object of a table, so no table key sits above it (ADR-0034, decision 5).
+    /// </summary>
+    private static byte[] WriteCanonical(string relativePath, JsonElement value, IdTokens? ids, bool rootIsTemplate)
+    {
+        var rules = Rules.For(relativePath, value, ids, rootIsTemplate);
+        var buffer = new ArrayBufferWriter<byte>(Math.Max(64, value.GetRawText().Length));
+        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false, SkipValidation = true });
+
+        Write(writer, value, new PathCursor(), rules);
+        writer.Flush();
+
+        return buffer.WrittenSpan.ToArray();
     }
 
     private static void Write(Utf8JsonWriter writer, JsonElement element, PathCursor path, Rules rules)
@@ -198,27 +223,59 @@ public static class CanonicalForm
     private static IEnumerable<JsonProperty> Sorted(JsonElement element) =>
         element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal);
 
-    /// <summary>The rules that apply to one file: its volatile paths, and its id renumbering.</summary>
+    /// <summary>The rules that apply to one file: its volatile paths, and the names of its ids.</summary>
     private sealed class Rules
     {
-        private static readonly Rules None = new([], null);
+        private static readonly Rules None = new([], null, null, [], []);
 
         private readonly ImmutableArray<string[]> _volatile;
         private readonly Dictionary<string, string>? _ids;
+        private readonly IdTokens? _tokens;
+        private readonly ImmutableArray<string[]> _selfPaths;
+        private readonly ImmutableArray<string[]> _namePaths;
 
-        private Rules(ImmutableArray<string[]> volatilePaths, Dictionary<string, string>? ids)
+        private Rules(
+            ImmutableArray<string[]> volatilePaths,
+            Dictionary<string, string>? ids,
+            IdTokens? tokens,
+            ImmutableArray<string[]> selfPaths,
+            ImmutableArray<string[]> namePaths)
         {
             _volatile = volatilePaths;
             _ids = ids;
+            _tokens = tokens;
+            _selfPaths = selfPaths;
+            _namePaths = namePaths;
         }
 
-        public static Rules For(string relativePath, JsonElement root)
+        public static Rules For(string relativePath, JsonElement root, IdTokens? tokens = null, bool rootIsTemplate = false)
         {
             var volatilePaths = VolatilePath.Matching(relativePath);
             var ids = AssortIds.Read(relativePath, root);
 
-            return volatilePaths.IsDefaultOrEmpty && ids is null ? None : new Rules(volatilePaths, ids);
+            if (tokens is null && volatilePaths.IsDefaultOrEmpty && ids is null)
+            {
+                return None;
+            }
+
+            // A table of templates repeats the own id of the object inside it: at the object level
+            // the id sits one step down, and inside the whole table two (ADR-0034, decision 5).
+            var isTable = tokens is not null && CanonicalFiles.IsTemplateTable(relativePath);
+
+            return new Rules(
+                volatilePaths is { IsDefault: true } ? [] : volatilePaths,
+                ids,
+                tokens,
+                isTable ? (rootIsTemplate ? SelfPathsAtRoot : SelfPaths) : [],
+                isTable && !rootIsTemplate ? NamePaths : []);
         }
+
+        private static readonly ImmutableArray<string[]> SelfPaths = [["_id"], ["*", "_id"]];
+
+        /// <summary>One object seen on its own: the own id sits at the root, and nothing sits above it.</summary>
+        private static readonly ImmutableArray<string[]> SelfPathsAtRoot = [["_id"]];
+
+        private static readonly ImmutableArray<string[]> NamePaths = [["*"]];
 
         public bool IsVolatile(PathCursor path)
         {
@@ -234,27 +291,33 @@ public static class CanonicalForm
         }
 
         /// <summary>
-        /// Renumbers the generated ids of an assort: an item keeps the token of its position, and the
-        /// keys and references that point at it follow (ADR-0028, decision 3).
+        /// Renumbers the generated ids of an assort (ADR-0028, decision 3) and names the ids of a
+        /// template by their address (ADR-0034, decision 5).
         /// </summary>
         public string? MapValue(PathCursor path, string value)
         {
-            if (_ids is null || !path.IsItemIdOrParent)
+            if (_ids is not null && path.IsItemIdOrParent)
+            {
+                return _ids.GetValueOrDefault(value);
+            }
+
+            if (_tokens is null)
             {
                 return null;
             }
 
-            return _ids.GetValueOrDefault(value);
+            return path.MatchesAny(_selfPaths) ? _tokens.OwnIdToken : _tokens.Token(value);
         }
 
+        /// <summary>A key that is an id: the key of a table of templates, or of an assort map.</summary>
         public string MapName(PathCursor path, string name)
         {
-            if (_ids is null || !path.IsAssortKey)
+            if (_ids is not null && path.IsAssortKey)
             {
-                return name;
+                return _ids.GetValueOrDefault(name, name);
             }
 
-            return _ids.GetValueOrDefault(name, name);
+            return _tokens is not null && path.MatchesAny(_namePaths) ? _tokens.Map(name) : name;
         }
     }
 
@@ -319,6 +382,19 @@ public static class CanonicalForm
             }
 
             return true;
+        }
+
+        public bool MatchesAny(ImmutableArray<string[]> patterns)
+        {
+            foreach (var pattern in patterns)
+            {
+                if (Matches(pattern))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>"items[3]._id" reads better in a log than a list of segments.</summary>

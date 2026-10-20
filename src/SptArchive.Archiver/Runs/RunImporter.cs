@@ -170,6 +170,11 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
                 path);
         }
 
+        foreach (var warning in plan.Contribution.Warnings)
+        {
+            logger.LogWarning("Addressing: {Warning}", warning);
+        }
+
         return new RunImportReport(
             dataset.Id,
             isNew,
@@ -309,6 +314,35 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
 
         await WriteLocalesAsync(db, datasetId, plan, cancellationToken);
         await WriteFilesAsync(db, datasetId, plan, cancellationToken);
+        await WriteIdMapAsync(db, datasetId, plan, cancellationToken);
+    }
+
+    /// <summary>
+    /// The way back from an id of the run to the address the archive named (ADR-0034, decision 7). The
+    /// map is written once, with the dataset: a later run of the same content shares the dataset and keeps
+    /// the map of the run that made it.
+    /// </summary>
+    private async Task WriteIdMapAsync(
+        ArchiveDbContext db,
+        Guid datasetId,
+        RunImportPlan plan,
+        CancellationToken cancellationToken)
+    {
+        if (plan.Contribution.IdMap.Count == 0)
+        {
+            return;
+        }
+
+        await AddAllAsync(db, plan.Contribution.IdMap.Select(entry => new ModIdMap
+        {
+            DatasetId = datasetId,
+            Kind = entry.Kind,
+            RawId = entry.RawId,
+            Address = entry.Address,
+            Pinned = entry.Pinned,
+        }), cancellationToken);
+
+        logger.LogInformation("Id map: {Count}", plan.Contribution.IdMap.Count);
     }
 
     private async Task WriteLocalesAsync(
@@ -419,7 +453,9 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
     private static TraderValues ReadTrader(RunImportPlan plan, TemplateContribution template)
     {
         using var document = JsonDocument.Parse(template.NewJson!);
-        var directory = Path.Combine(plan.Run.ExportPath, "traders", template.TemplateId);
+
+        // The directory is named by the id of the run; the row is named by the address (ADR-0034).
+        var directory = Path.Combine(plan.Run.ExportPath, "traders", template.RawId);
 
         return TemplateMapper.ReadTrader(
             template.TemplateId,

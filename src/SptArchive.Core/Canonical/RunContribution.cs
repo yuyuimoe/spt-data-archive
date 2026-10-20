@@ -19,7 +19,9 @@ public sealed record RunContribution(
     IReadOnlyList<LocaleContribution> Locales,
     IReadOnlyDictionary<string, string> UnstoredChanges,
     IReadOnlyDictionary<string, string> TableHashes,
-    IReadOnlyDictionary<string, int> RowCounts)
+    IReadOnlyDictionary<string, int> RowCounts,
+    IReadOnlyList<Addressing.AddressEntry> IdMap,
+    IReadOnlyList<string> Warnings)
 {
     /// <summary>No template and no locale differs from the baseline.</summary>
     public bool IsEmpty => Templates.Count == 0 && Locales.Count == 0 && UnstoredChanges.Count == 0;
@@ -32,12 +34,18 @@ public sealed record RunContribution(
 /// One template under a dataset: an item, a quest, a customization or a trader, with the operation
 /// and, for an addition, the object as the run left it (ADR-0017).
 /// </summary>
+/// <param name="TemplateId">The address of the object (ADR-0034) and the key of every row about it.</param>
+/// <param name="RawId">The id the run gave the object, which the archive keeps as a lookup only.</param>
+/// <param name="NewJson">The object as the run wrote it, for storage (ADR-0002).</param>
+/// <param name="CanonicalJson">The object in canonical form, which is what the content hash covers (ADR-0029).</param>
 public sealed record TemplateContribution(
     string Kind,
     string TemplateId,
+    string RawId,
     string Op,
     string? ParentId,
     string? NewJson,
+    string? CanonicalJson,
     IReadOnlyList<PathContribution> Changes);
 
 /// <summary>
@@ -93,7 +101,7 @@ public static class DatasetHash
                     writer.WriteString("parent", template.ParentId);
                 }
 
-                writer.WriteString("row", template.NewJson ?? string.Empty);
+                writer.WriteString("row", template.CanonicalJson ?? template.NewJson ?? string.Empty);
 
                 writer.WriteStartArray("paths");
                 foreach (var change in template.Changes)
