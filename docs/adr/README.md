@@ -17,7 +17,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0009](0009-run-to-completion-archiver.md) | Run the Archiver as a job that replaces the official data in one transaction | Accepted |
 | [0010](0010-archive-scope-latest-or-versioned.md) | Decide whether the archive keeps one dataset or many server versions | Superseded by ADR-0014 |
 | [0011](0011-backups-with-pg-dump.md) | Back up with pg_dump after each successful run | Accepted |
-| [0012](0012-reqnroll-for-gherkin.md) | Run the Gherkin specs with Reqnroll | Proposed |
+| [0012](0012-reqnroll-for-gherkin.md) | Run the Gherkin specs with Reqnroll | Accepted |
 | [0013](0013-mod-ingestion-by-isolated-run.md) | Ingest mod data by running one mod in an isolated server container | Accepted |
 | [0014](0014-keep-every-archived-spt-release.md) | Keep every archived server release under one version key | Accepted |
 | [0015](0015-suppress-bundles-with-a-patch-mod.md) | Suppress bundle loading with a HarmonyX patch mod | Accepted |
@@ -35,13 +35,13 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0027](0027-archive-a-run-as-a-database-directory.md) | Archive a run as a database directory | Accepted |
 | [0028](0028-compare-two-runs-in-a-canonical-form.md) | Compare two runs in a canonical form | Accepted |
 | [0029](0029-archive-mod-files-and-config.md) | Archive the files a mod ships, and its configuration | Accepted |
-| [0030](0030-run-export-and-import-with-one-tool.md) | Run, export and import with one .NET tool | Proposed |
+| [0030](0030-run-export-and-import-with-one-tool.md) | Run, export and import with one .NET tool | Accepted |
 | [0031](0031-record-the-http-surface-a-run-exposes.md) | Record the HTTP surface a run exposes | Accepted |
 | [0032](0032-record-every-changed-value-as-a-row.md) | Record every changed value as a row | Accepted |
 | [0033](0033-record-every-run-and-why-it-happened.md) | Record every run and why it happened | Accepted |
 | [0034](0034-name-an-object-by-what-it-is.md) | Name an object by what it is | Accepted |
 | [0035](0035-take-official-data-from-a-mod-free-installation.md) | Take official data from an installation that loaded no mod | Accepted |
-| [0036](0036-let-several-imports-run-at-the-same-time.md) | Let several imports run at the same time | Proposed |
+| [0036](0036-let-several-imports-run-at-the-same-time.md) | Let several imports run at the same time | Accepted |
 
 ## Status meanings
 

@@ -1,6 +1,6 @@
 # ADR-0036: Let several imports run at the same time
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 

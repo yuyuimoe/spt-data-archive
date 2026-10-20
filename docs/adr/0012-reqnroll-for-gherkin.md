@@ -1,8 +1,8 @@
 # ADR-0012: Run the Gherkin specs with Reqnroll
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-19
-**Deciders:** Yui must confirm
+**Deciders:** Yui
 
 ## Context
 

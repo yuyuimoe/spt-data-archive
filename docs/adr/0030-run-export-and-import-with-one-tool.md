@@ -1,6 +1,6 @@
 # ADR-0030: Run, export and import with one .NET tool
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0013, ADR-0014, ADR-0020, ADR-0021, ADR-0027, ADR-0028, ADR-0029

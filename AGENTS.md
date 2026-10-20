@@ -107,9 +107,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   lease, and a transaction-scoped advisory lock covers what it writes (ADR-0036).
 - **Next slice:** the paths of a modified quest, trader and customization (ADR-0032 action item 3). Then the Api
   server version argument (TD-21), the Gherkin scenarios with Reqnroll (TD-06), the rows of a location and a bot
-  type (TD-45) and the baseline cache. ADR-0036 is Proposed and waits for Yui.
-- **Open decisions:** ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export and import) and
-  ADR-0036 (several imports at the same time) are Proposed. ADR-0005 and ADR-0010 are
+  type (TD-45) and the baseline cache. ADR-0036 is Accepted: several imports may run at the same time.
+- **Open decisions:** none. ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export and
+  import) and ADR-0036 (several imports at the same time) are Accepted. ADR-0005 and ADR-0010 are
   superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0035 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
   and the importer exist and ran on nineteen real mod runs (`docs/runbooks/mod-export.md`), including a curated
