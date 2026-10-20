@@ -171,7 +171,7 @@ public sealed class RunDiffTests : IDisposable
     }
 
     [Fact]
-    public void A_changed_quest_carries_its_object_because_no_path_table_holds_quests()
+    public void A_changed_quest_keeps_its_object_and_states_its_path()
     {
         var diff = Diff(run: new()
         {
@@ -183,7 +183,67 @@ public sealed class RunDiffTests : IDisposable
         var template = Assert.Single(diff.Templates);
         Assert.Equal(("quest", "modified"), (template.Kind, template.Op));
         Assert.Contains("Q1 renamed", template.NewJson);
-        Assert.Empty(template.Changes);
+
+        // ADR-0032, decision 3: the object stays (ADR-0002) and the changed value is a path too.
+        var change = Assert.Single(template.Changes);
+        Assert.Equal("/QuestName", change.Path);
+        Assert.Equal((ModChangePathOperation.Set, "\"Q1\"", "\"Q1 renamed\""), (change.Op, change.OldValue, change.NewValue));
+    }
+
+    [Fact]
+    public void A_changed_trader_field_is_one_path_under_the_trader()
+    {
+        var diff = Diff(run: new()
+        {
+            ["traders/" + TraderId + "/base.json"] = """{"_id":"579dc571d53a0658a154fbec","name":"Peacekeeper","nextResupply":1792518932,"currency":"EUR"}""",
+        });
+
+        var template = Assert.Single(diff.Templates, row => row.Kind == ModTemplateKind.Trader);
+        Assert.Equal(ModTemplateOperation.Modified, template.Op);
+        Assert.NotNull(template.NewJson);
+
+        var change = Assert.Single(template.Changes);
+        Assert.Equal("/currency", change.Path);
+        Assert.Equal((ModChangePathOperation.Set, "\"USD\"", "\"EUR\""), (change.Op, change.OldValue, change.NewValue));
+    }
+
+    [Fact]
+    public void A_longer_array_names_only_the_added_indexes()
+    {
+        // ADR-0032, decision 2 (TD-46): a filter that grows from 1 to 3 entries is two paths, not one.
+        var baseline = new Dictionary<string, string>
+        {
+            ["templates/customization.json"] = """{"dddddddddddddddddddddddd":{"_id":"dddddddddddddddddddddddd","_name":"Hat","_props":{"Side":["Usec"]}}}""",
+        };
+        var run = new Dictionary<string, string>
+        {
+            ["templates/customization.json"] = """{"dddddddddddddddddddddddd":{"_id":"dddddddddddddddddddddddd","_name":"Hat","_props":{"Side":["Usec","Bear","Savage"]}}}""",
+        };
+
+        var changes = Assert.Single(Diff(run, baseline).Templates).Changes;
+        Assert.Equal(["/_props/Side/1", "/_props/Side/2"], changes.Select(change => change.Path));
+        Assert.All(changes, change => Assert.Equal((ModChangePathOperation.Set, null), (change.Op, change.OldValue)));
+    }
+
+    [Fact]
+    public void A_changed_customization_names_each_changed_value()
+    {
+        var baseline = new Dictionary<string, string>
+        {
+            ["templates/customization.json"] = """{"dddddddddddddddddddddddd":{"_id":"dddddddddddddddddddddddd","_name":"Hat","_props":{"Side":["Usec","Bear"]}}}""",
+        };
+        var run = new Dictionary<string, string>
+        {
+            ["templates/customization.json"] = """{"dddddddddddddddddddddddd":{"_id":"dddddddddddddddddddddddd","_name":"Hat","_props":{"Side":["Usec"]}}}""",
+        };
+
+        var template = Assert.Single(Diff(run, baseline).Templates);
+        Assert.Equal(ModTemplateKind.Customization, template.Kind);
+        Assert.NotNull(template.NewJson);
+
+        var change = Assert.Single(template.Changes);
+        Assert.Equal("/_props/Side/1", change.Path);
+        Assert.Equal(ModChangePathOperation.Remove, change.Op);
     }
 
     [Fact]

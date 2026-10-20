@@ -200,9 +200,13 @@ public static class CanonicalForm
                 path.Pop();
             }
 
-            if (leftCount != rightCount)
+            // An index that only one side holds is a path of its own: an added index reads as a set,
+            // a missing one as a remove (ADR-0032, decision 2).
+            for (var index = Math.Min(leftCount, rightCount); index < Math.Max(leftCount, rightCount); index++)
             {
+                path.PushIndex(index);
                 differences.Add(path.ToJsonPath());
+                path.Pop();
             }
 
             return;

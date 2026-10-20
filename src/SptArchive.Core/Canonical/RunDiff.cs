@@ -289,8 +289,8 @@ public static class RunDiff
                 continue;
             }
 
-            // An item keeps its paths, because the archive stores no row for an item the mod changed.
-            // A quest or customization stores its own object instead: no path table holds those kinds.
+            // An item keeps no row of its own: its paths are the archive of the change. A quest or a
+            // customization keeps its object as well (ADR-0002, ADR-0032 decision 3).
             var isItem = string.Equals(kind, ModTemplateKind.Item, StringComparison.Ordinal);
 
             templates.Add(new TemplateContribution(
@@ -301,7 +301,7 @@ public static class RunDiff
                 null,
                 isItem ? null : runEntry.Value.GetRawText(),
                 isItem ? null : CanonicalText(tablePath, runEntry.Value, tokens),
-                isItem ? ReadChanges(tablePath, baselineEntry.Value, runEntry.Value, differences, tokens) : []));
+                ReadChanges(tablePath, baselineEntry.Value, runEntry.Value, differences, tokens)));
         }
     }
 
@@ -370,12 +370,23 @@ public static class RunDiff
             var basePath = prefix + "base.json";
             string? sourceJson = null;
             string? canonicalJson = null;
+            IReadOnlyList<PathContribution> changes = [];
 
             if (op != ModTemplateOperation.Removed && run.TryGetValue(basePath, out var baseFile))
             {
                 using var document = Parse(baseFile);
                 sourceJson = document.RootElement.GetRawText();
-                canonicalJson = CanonicalText(basePath, document.RootElement, addressing.TokensFor(basePath));
+                var tokens = addressing.TokensFor(basePath);
+                canonicalJson = CanonicalText(basePath, document.RootElement, tokens);
+
+                // The paths of a trader are the changed values of its base.json (ADR-0032, decision 3).
+                // The other files of the directory keep their canonical hash.
+                if (op == ModTemplateOperation.Modified && baseline.TryGetValue(basePath, out var baselineBase))
+                {
+                    using var baselineDocument = Parse(baselineBase);
+                    var differences = CanonicalForm.Compare(basePath, baselineDocument.RootElement, document.RootElement, tokens);
+                    changes = ReadChanges(basePath, baselineDocument.RootElement, document.RootElement, differences, tokens);
+                }
             }
 
             templates.Add(new TemplateContribution(
@@ -386,7 +397,7 @@ public static class RunDiff
                 null,
                 sourceJson,
                 canonicalJson,
-                []));
+                changes));
         }
     }
 
