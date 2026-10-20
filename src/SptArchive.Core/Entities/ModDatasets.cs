@@ -34,6 +34,12 @@ public class ModDataset
     public string? ConfigOriginReason { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// The run whose content created this dataset (ADR-0033, decision 4). A later run with the same content
+    /// does not change it. Null for a dataset made before the run record existed.
+    /// </summary>
+    public Guid? CreatedByRunId { get; set; }
 }
 
 /// <summary>The origin of the configuration that a dataset was produced with (ADR-0029).</summary>
@@ -80,8 +86,14 @@ public class ModDataObservation
     /// <summary>Hash of <see cref="DependencySet"/>. The baseline cache is keyed by it and the server release.</summary>
     public string? DependencySetHash { get; set; }
 
-    /// <summary>The run that made the attempt, when a run made it.</summary>
-    public Guid? ArchiveRunId { get; set; }
+    /// <summary>The run that made the attempt. Every attempt names its run (ADR-0033, decision 6).</summary>
+    public Guid ArchiveRunId { get; set; }
+
+    /// <summary>
+    /// True when the run did not state its own target, so the archive took the mod from configuration
+    /// and could not check it (ADR-0033, decision 3). A run from before <c>run/target.json</c> is such a run.
+    /// </summary>
+    public bool TargetUnverified { get; set; }
 
     public DateTimeOffset ObservedAt { get; set; } = DateTimeOffset.UtcNow;
 }

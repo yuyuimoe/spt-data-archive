@@ -29,6 +29,14 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("BaselineHash")
+                        .HasColumnType("text")
+                        .HasColumnName("baseline_hash");
+
+                    b.Property<string>("BaselineRelease")
+                        .HasColumnType("text")
+                        .HasColumnName("baseline_release");
+
                     b.Property<string>("Error")
                         .HasColumnType("text")
                         .HasColumnName("error");
@@ -36,6 +44,19 @@ namespace SptArchive.Core.Migrations
                     b.Property<DateTimeOffset?>("FinishedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finished_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Purpose")
+                        .HasColumnType("text")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result");
 
                     b.Property<string>("SourceHash")
                         .IsRequired()
@@ -55,13 +76,27 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("text")
                         .HasColumnName("status");
 
+                    b.Property<string>("TargetModGuid")
+                        .HasColumnType("text")
+                        .HasColumnName("target_mod_guid");
+
+                    b.Property<string>("TargetVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("target_version");
+
                     b.HasKey("Id")
                         .HasName("pk_archive_runs");
 
                     b.HasIndex("SourceHash", "SptVersion")
                         .HasDatabaseName("ix_archive_runs_source_hash_spt_version");
 
-                    b.ToTable("archive_runs", (string)null);
+                    b.HasIndex("TargetModGuid", "StartedAt")
+                        .HasDatabaseName("ix_archive_runs_target_mod_guid_started_at");
+
+                    b.ToTable("archive_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_archive_runs_kind", "kind IN ('official', 'mod', 'probe')");
+                        });
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.Customization", b =>
@@ -434,7 +469,7 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid?>("ArchiveRunId")
+                    b.Property<Guid>("ArchiveRunId")
                         .HasColumnType("uuid")
                         .HasColumnName("archive_run_id");
 
@@ -473,8 +508,15 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("text")
                         .HasColumnName("spt_version");
 
+                    b.Property<bool>("TargetUnverified")
+                        .HasColumnType("boolean")
+                        .HasColumnName("target_unverified");
+
                     b.HasKey("Id")
                         .HasName("pk_mod_data_observations");
+
+                    b.HasIndex("ArchiveRunId")
+                        .HasDatabaseName("ix_mod_data_observations_archive_run_id");
 
                     b.HasIndex("DatasetId")
                         .HasDatabaseName("ix_mod_data_observations_dataset_id");
@@ -519,6 +561,10 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<Guid?>("CreatedByRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_run_id");
+
                     b.Property<string>("ModGuid")
                         .IsRequired()
                         .HasColumnType("text")
@@ -536,6 +582,9 @@ namespace SptArchive.Core.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_mod_datasets");
+
+                    b.HasIndex("CreatedByRunId")
+                        .HasDatabaseName("ix_mod_datasets_created_by_run_id");
 
                     b.HasIndex("ModGuid", "ContentHash")
                         .IsUnique()
@@ -1245,6 +1294,13 @@ namespace SptArchive.Core.Migrations
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModDataObservation", b =>
                 {
+                    b.HasOne("SptArchive.Core.Entities.ArchiveRun", null)
+                        .WithMany()
+                        .HasForeignKey("ArchiveRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_mod_data_observations_archive_runs_archive_run_id");
+
                     b.HasOne("SptArchive.Core.Entities.ModDataset", "Dataset")
                         .WithMany()
                         .HasForeignKey("DatasetId")
@@ -1268,6 +1324,15 @@ namespace SptArchive.Core.Migrations
                     b.Navigation("Dataset");
 
                     b.Navigation("Mod");
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModDataset", b =>
+                {
+                    b.HasOne("SptArchive.Core.Entities.ArchiveRun", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_mod_datasets_archive_runs_created_by_run_id");
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModFile", b =>

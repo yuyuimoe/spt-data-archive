@@ -217,5 +217,52 @@ public sealed class RunDirectoryTests
         Assert.True(checkedFiles >= 5, $"only {checkedFiles} stored configuration files were checked");
     }
 
+    [Fact]
+    public void A_run_from_before_the_target_file_states_no_target()
+    {
+        // ADR-0033, decision 3: the real runs of 4.1.6 were made before run/target.json existed.
+        Assert.Null(Read("ECOTI").DeclaredTarget);
+    }
+
+    [Fact]
+    public void A_run_states_its_target_in_the_target_file()
+    {
+        var copy = Path.Combine(Path.GetTempPath(), "sptarchive-target-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            CopyDirectory(Path.Combine(Root, "ECOTI"), copy);
+            File.WriteAllText(
+                Path.Combine(copy, "run", "target.json"),
+                """{"modGuid":"com.lennoxp90.coti.server","version":"3.4.0","reason":"Thermal imager"}""");
+
+            var target = RunDirectory.Read(copy).DeclaredTarget;
+
+            Assert.NotNull(target);
+            Assert.Equal("com.lennoxp90.coti.server", target.ModGuid);
+            Assert.Equal("3.4.0", target.Version);
+            Assert.Equal("Thermal imager", target.Reason);
+        }
+        finally
+        {
+            Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    private static void CopyDirectory(string from, string to)
+    {
+        foreach (var directory in Directory.GetDirectories(from, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(directory.Replace(from, to));
+        }
+
+        Directory.CreateDirectory(to);
+
+        foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+        {
+            File.Copy(file, file.Replace(from, to));
+        }
+    }
+
     private static RunDirectory Read(string name) => RunDirectory.Read(Path.Combine(Root, name));
 }

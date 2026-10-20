@@ -89,10 +89,18 @@ public sealed class ArchiveJob(
             return;
         }
 
-        var archiveRun = new ArchiveRun { SourceHash = sourceHash, SptVersion = sptVersion };
+        var archiveRun = new ArchiveRun
+        {
+            SourceHash = sourceHash,
+            SptVersion = sptVersion,
+            Kind = ArchiveRunKind.Official,
+            Purpose = $"Import of the official database of {sptVersion}",
+        };
         db.ArchiveRuns.Add(archiveRun);
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
+
+        var imported = new List<string>();
 
         try
         {
@@ -113,36 +121,30 @@ public sealed class ArchiveJob(
                 await importer.ImportAsync(context, cancellationToken);
 
                 logger.LogInformation("Imported {Importer} in {Elapsed}", importer.Name, stopwatch.Elapsed);
+                imported.Add(importer.Name);
             }
 
             await transaction.CommitAsync(cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Failed, exception.Message);
+            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Failed, exception.Message, RunResult.Failure(RunResult.Stage.Import, exception.Message));
             throw;
         }
 
-        await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null);
+        await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.ForOfficial(imported));
         await AnnounceNewDatasetAsync(archiveRun.Id);
 
         logger.LogInformation("Archive run {RunId} finished", archiveRun.Id);
     }
 
     /// <summary>
-    /// Imports the export of one mod run (TD-29). The comparison with the baseline happens before the
-    /// transaction opens, because it reads two exports and the transaction should stay short.
+    /// Imports the export of one mod run (TD-29). The run row is written first, so a run that fails while
+    /// it reads the export still leaves a record (ADR-0033). The comparison with the baseline happens
+    /// before the transaction opens, because it reads two exports and the transaction should stay short.
     /// </summary>
     private async Task ImportRunAsync(CancellationToken cancellationToken)
     {
-        var plan = runImporter.Prepare();
-
-        logger.LogInformation(
-            "Importing the run of {ModGuid} {Version} on {Release}",
-            plan.Target.ModGuid,
-            plan.Target.Version,
-            plan.Release);
-
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(30));
 
@@ -151,47 +153,87 @@ public sealed class ArchiveJob(
             await db.Database.MigrateAsync(cancellationToken);
         }
 
-        if (!_options.Force && await runImporter.IsCurrentAsync(db, plan, cancellationToken))
+        // The run states what is known so far. The plan fills in the rest, or the failure says why it could not.
+        var archiveRun = new ArchiveRun
         {
-            logger.LogInformation(
-                "The run of {ModGuid} {Version} on {Release} is already archived with this content; nothing to do (use Archive:Force=true to override)",
-                plan.Target.ModGuid,
-                plan.Target.Version,
-                plan.Release);
-            return;
-        }
-
-        var archiveRun = new ArchiveRun { SourceHash = plan.ContentHash, SptVersion = plan.Release };
+            SourceHash = string.Empty,
+            Kind = ArchiveRunKind.Mod,
+            TargetModGuid = string.IsNullOrWhiteSpace(_options.RunModGuid) ? null : _options.RunModGuid.Trim(),
+            Purpose = $"Import of the run at '{_options.RunPath}'",
+        };
         db.ArchiveRuns.Add(archiveRun);
         await db.SaveChangesAsync(cancellationToken);
         db.ChangeTracker.Clear();
 
-        RunImportReport report;
+        var stage = RunResult.Stage.Prepare;
 
         try
         {
-            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var plan = runImporter.Prepare(archiveRun.StartedAt);
 
-            report = await runImporter.ApplyAsync(db, plan, archiveRun.Id, cancellationToken);
+            await DescribeRunAsync(db, archiveRun.Id, plan);
 
-            await transaction.CommitAsync(cancellationToken);
+            logger.LogInformation(
+                "Importing the run of {ModGuid} {Version} on {Release}",
+                plan.Target.ModGuid,
+                plan.Target.Version,
+                plan.Release);
+
+            if (!_options.Force && await runImporter.IsCurrentAsync(db, plan, cancellationToken))
+            {
+                logger.LogInformation(
+                    "The run of {ModGuid} {Version} on {Release} is already archived with this content; nothing to do (use Archive:Force=true to override)",
+                    plan.Target.ModGuid,
+                    plan.Target.Version,
+                    plan.Release);
+
+                await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.Unchanged(plan));
+                return;
+            }
+
+            stage = RunResult.Stage.Apply;
+            RunImportReport report;
+
+            await using (var transaction = await db.Database.BeginTransactionAsync(cancellationToken))
+            {
+                report = await runImporter.ApplyAsync(db, plan, archiveRun.Id, cancellationToken);
+
+                stage = RunResult.Stage.Commit;
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            logger.LogInformation(
+                "Dataset {DatasetId} ({State}): {Templates} templates, {Locales} locale entries, {Files} files",
+                report.DatasetId,
+                report.IsNewDataset ? "new" : "already known",
+                report.TemplateCount,
+                report.LocaleCount,
+                report.FileCount);
+
+            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null, RunResult.ForRun(plan, report));
+            await AnnounceNewDatasetAsync(archiveRun.Id);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Failed, exception.Message);
+            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Failed, exception.Message, RunResult.Failure(stage, exception.Message));
             throw;
         }
+    }
 
-        logger.LogInformation(
-            "Dataset {DatasetId} ({State}): {Templates} templates, {Locales} locale entries, {Files} files",
-            report.DatasetId,
-            report.IsNewDataset ? "new" : "already known",
-            report.TemplateCount,
-            report.LocaleCount,
-            report.FileCount);
-
-        await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null);
-        await AnnounceNewDatasetAsync(archiveRun.Id);
+    /// <summary>Copies what the plan knows about the run onto its row, as soon as the plan exists.</summary>
+    private async Task DescribeRunAsync(ArchiveDbContext db, Guid runId, RunImportPlan plan)
+    {
+        await db.ArchiveRuns
+            .Where(run => run.Id == runId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(run => run.SourceHash, plan.ContentHash)
+                .SetProperty(run => run.SptVersion, plan.Release)
+                .SetProperty(run => run.TargetModGuid, plan.Target.ModGuid)
+                .SetProperty(run => run.TargetVersion, plan.Target.Version)
+                .SetProperty(run => run.BaselineRelease, plan.BaselineRelease)
+                .SetProperty(run => run.BaselineHash, plan.BaselineHash)
+                .SetProperty(run => run.Purpose,
+                    plan.Purpose ?? $"Import of the run of {plan.Target.ModGuid} {plan.Target.Version} on {plan.Release}"));
     }
 
     /// <summary>Reads and checks <see cref="ArchiveOptions.SptVersion"/>.</summary>
@@ -210,7 +252,7 @@ public sealed class ArchiveJob(
     }
 
     // Bookkeeping must not depend on the (rolled back) import transaction, and must not hide the original error.
-    private async Task MarkRunAsync(ArchiveDbContext db, Guid runId, string status, string? error)
+    private async Task MarkRunAsync(ArchiveDbContext db, Guid runId, string status, string? error, string? result)
     {
         try
         {
@@ -219,6 +261,7 @@ public sealed class ArchiveJob(
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(run => run.Status, status)
                     .SetProperty(run => run.Error, error)
+                    .SetProperty(run => run.Result, result)
                     .SetProperty(run => run.FinishedAt, DateTimeOffset.UtcNow));
         }
         catch (Exception exception)

@@ -37,4 +37,46 @@ public class ArchiveRun
     public string Status { get; set; } = Running;
 
     public string? Error { get; set; }
+
+    /// <summary>What the run is: an official import, a mod run or a probe (ADR-0033).</summary>
+    public string Kind { get; set; } = ArchiveRunKind.Official;
+
+    /// <summary>One line that says why the run happened. A mod run and a probe state one.</summary>
+    public string? Purpose { get; set; }
+
+    /// <summary>The GUID of the mod the run is about. Null for an official import.</summary>
+    public string? TargetModGuid { get; set; }
+
+    /// <summary>The version of the mod the run is about. Null for an official import.</summary>
+    public string? TargetVersion { get; set; }
+
+    /// <summary>The server release of the baseline that the run was compared against.</summary>
+    public string? BaselineRelease { get; set; }
+
+    /// <summary>
+    /// The hash of the dependency set of the baseline (ADR-0013): the half of the baseline cache key that
+    /// names what the baseline loaded. The baseline path is not stored, because a path is not an identity.
+    /// </summary>
+    public string? BaselineHash { get; set; }
+
+    /// <summary>
+    /// What came out of the run, as jsonb (ADR-0033): counts and warnings. A failed run states its
+    /// error and the stage that failed. Rows hold the same values; the copy exists for the run that has no dataset.
+    /// </summary>
+    public string? Result { get; set; }
+}
+
+/// <summary>The kinds of run (ADR-0033, decision 1).</summary>
+public static class ArchiveRunKind
+{
+    /// <summary>An import of the official database of one release.</summary>
+    public const string Official = "official";
+
+    /// <summary>An import of the export of one mod run.</summary>
+    public const string Mod = "mod";
+
+    /// <summary>A check of one mod version against a new release (ADR-0016). It writes no data rows.</summary>
+    public const string Probe = "probe";
+
+    public static readonly string[] All = [Official, Mod, Probe];
 }

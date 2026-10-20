@@ -80,6 +80,13 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
         {
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.SourceHash, x.SptVersion });
+
+            // ADR-0033: a run states its work and its result.
+            e.Property(x => x.Result).HasColumnType("jsonb");
+            e.HasIndex(x => new { x.TargetModGuid, x.StartedAt });
+            e.ToTable(t => t.HasCheckConstraint(
+                "ck_archive_runs_kind",
+                "kind IN ('official', 'mod', 'probe')"));
         });
 
         // ---- Official data: one row set per server release (ADR-0014) ------------------------------
@@ -155,6 +162,9 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.Property(x => x.TableHashes).HasColumnType("jsonb");
             e.Property(x => x.RowCounts).HasColumnType("jsonb");
 
+            // Runs are never deleted (ADR-0033, decision 7), so the link restricts.
+            e.HasOne<ArchiveRun>().WithMany().HasForeignKey(x => x.CreatedByRunId).OnDelete(DeleteBehavior.Restrict);
+
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_datasets_config_origin",
                 "config_origin IN ('shipped', 'curated')"));
@@ -167,6 +177,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.HasOne(x => x.Mod).WithMany().HasForeignKey(x => x.ModId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<SptVersion>().WithMany().HasForeignKey(x => x.SptVersion).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<ArchiveRun>().WithMany().HasForeignKey(x => x.ArchiveRunId).OnDelete(DeleteBehavior.Restrict);
 
             // An archive observation and a probe observation are different facts about the same pair.
             e.HasIndex(x => new { x.ModId, x.SptVersion, x.Kind }).IsUnique();

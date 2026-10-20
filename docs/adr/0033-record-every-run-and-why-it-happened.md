@@ -147,10 +147,10 @@ Feature: Keep a record of every run and why it happened
 
 ## Action Items
 
-1. [ ] Migration: `archive_runs` gains `kind`, `purpose`, `target_mod_guid`, `target_version`, `baseline_release`, `baseline_hash` and `result`; `mod_datasets` gains `created_by_run_id`.
-2. [ ] The Archiver writes the run row before the work starts and fills the result in the same transaction as the rows.
-3. [ ] The importer reads `run/target.json`, refuses a mismatch and marks an observation unverified when the file is absent.
-4. [ ] The runner writes `run/target.json` (TD-42; ADR-0030 takes it over).
+1. [x] Migration `AddRunRecord`: `archive_runs` gains `kind`, `purpose`, `target_mod_guid`, `target_version`, `baseline_release`, `baseline_hash` and `result`; `mod_datasets` gains `created_by_run_id`; `mod_data_observations.archive_run_id` is required and gains `target_unverified`.
+2. [x] The Archiver writes the run row before the work starts. It sets the status and the result after the transaction ends, in both the success path and the failure path (`RunRecordTests`). The result is not inside the import transaction, because a failed import rolls that transaction back and the failure must still be recorded. A mod run records itself before it reads the export; an official import records itself after the config checks and the skip test.
+3. [x] The importer reads `run/target.json`, refuses a mismatch and marks an observation unverified when the file is absent. Reader side only, tested with fixtures.
+4. [ ] The runner writes `run/target.json` (TD-42; ADR-0030 takes it over). Open: nothing writes the file yet.
 5. [ ] A `runs` verb or an Api field lists the history.
 6. [ ] Decide whether the 16 unimported run directories of the export campaign are re-imported to appear in the history.
 

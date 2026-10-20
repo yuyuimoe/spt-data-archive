@@ -278,7 +278,11 @@ public sealed class RunImportTests : IDisposable
         var importer = Importer(modGuid: DependencyGuid);
         var plan = importer.Prepare();
 
-        var report = await importer.ApplyAsync(scope.Db, plan, Guid.CreateVersion7(), cancellationToken);
+        var archiveRun = new ArchiveRun { SourceHash = plan.ContentHash, Kind = ArchiveRunKind.Mod };
+        scope.Db.ArchiveRuns.Add(archiveRun);
+        await scope.Db.SaveChangesAsync(cancellationToken);
+
+        var report = await importer.ApplyAsync(scope.Db, plan, archiveRun.Id, cancellationToken);
 
         var dataset = await scope.Db.ModDatasets.SingleAsync(row => row.ModGuid == DependencyGuid, cancellationToken);
         Assert.Equal(DependencyGuid, dataset.ModGuid);

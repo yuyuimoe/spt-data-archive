@@ -184,6 +184,16 @@ public sealed class SchemaTests
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState);
     }
 
+    /// <summary>An observation names its run (ADR-0033), so a test that inserts one needs a run first.</summary>
+    private static async Task<Guid> InsertRunAsync(TestScope scope)
+    {
+        var runId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into archive_runs (id, started_at, source_hash, status, kind) values ($1, now(), 'test', 'running', 'mod')",
+            runId);
+        return runId;
+    }
+
     [Fact]
     public async Task An_observation_outcome_must_be_one_of_the_known_values()
     {
@@ -196,13 +206,14 @@ public sealed class SchemaTests
         await scope.ExecuteAsync(
             "insert into mods (id, mod_guid, name, version, archived_at) values ($1, 'com.example.a', 'Example', '1.0.0', now())",
             modId);
+        var runId = await InsertRunAsync(scope);
 
         var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
             """
-            insert into mod_data_observations (id, mod_id, spt_version, outcome, kind, observed_at)
-            values ($1, $2, '9.9.9', 'fine', 'archive', now())
+            insert into mod_data_observations (id, mod_id, spt_version, outcome, kind, observed_at, archive_run_id)
+            values ($1, $2, '9.9.9', 'fine', 'archive', now(), $3)
             """,
-            Guid.CreateVersion7(), modId));
+            Guid.CreateVersion7(), modId, runId));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
     }
@@ -222,13 +233,14 @@ public sealed class SchemaTests
         await scope.ExecuteAsync(
             "insert into mods (id, mod_guid, name, version, archived_at) values ($1, 'com.example.b', 'Example', '1.0.0', now())",
             modId);
+        var runId = await InsertRunAsync(scope);
 
         await scope.ExecuteAsync(
             """
-            insert into mod_data_observations (id, mod_id, spt_version, outcome, kind, observed_at)
-            values ($1, $2, '9.9.9', $3, 'archive', now())
+            insert into mod_data_observations (id, mod_id, spt_version, outcome, kind, observed_at, archive_run_id)
+            values ($1, $2, '9.9.9', $3, 'archive', now(), $4)
             """,
-            Guid.CreateVersion7(), modId, outcome);
+            Guid.CreateVersion7(), modId, outcome, runId);
     }
 
     [Fact]

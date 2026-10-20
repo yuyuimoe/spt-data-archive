@@ -25,18 +25,12 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
     /// Reads the run, its baseline and the difference between them, and decides the content hash.
     /// It touches no database, so a broken export fails before any transaction opens.
     /// </summary>
-    public RunImportPlan Prepare()
+    /// <param name="runStarted">When the archive run began. An id minted after it earns a warning (ADR-0034, decision 9).</param>
+    public RunImportPlan Prepare(DateTimeOffset? runStarted = null)
     {
         if (string.IsNullOrWhiteSpace(_options.RunPath))
         {
             throw new InvalidOperationException("Archive:RunPath is not set, so there is no run to import.");
-        }
-
-        if (string.IsNullOrWhiteSpace(_options.RunModGuid))
-        {
-            throw new InvalidOperationException(
-                "Archive:RunModGuid is not set. A run holds the target and its dependencies, and the archive " +
-                "never guesses which one it is: a dependency is never the target (ADR-0021).");
         }
 
         if (string.IsNullOrWhiteSpace(_options.BaselinePath))
@@ -54,7 +48,10 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
                 $"'{run.RunPath}' states no release. Only an export of exporter 1.3.0 or later records it, and " +
                 "a dataset is observed on a release (ADR-0014). Export the run again.");
 
-        var target = run.Target(_options.RunModGuid);
+        // The run states its own target when it can (ADR-0033). Archive:RunModGuid then only checks it.
+        var declared = run.DeclaredTarget;
+        var targetGuid = ResolveTarget(run, declared);
+        var target = run.Target(targetGuid);
 
         if (target.IsTool)
         {
@@ -104,6 +101,15 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
 
         var dependencySet = RunDirectory.DependencySetJson(run.Mods);
 
+        var mintWarnings = runStarted is null
+            ? []
+            : MintTime.Warnings(contribution.IdMap, runStarted.Value);
+
+        foreach (var warning in mintWarnings)
+        {
+            logger.LogWarning("Addressing: {Warning}", warning);
+        }
+
         return new RunImportPlan(
             run,
             target,
@@ -112,7 +118,41 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             contentHash,
             dependencySet,
             RunDirectory.HashDependencySet(dependencySet),
-            files);
+            files)
+        {
+            TargetVerified = declared is not null,
+            Purpose = declared?.Reason,
+            BaselineRelease = baseline.Run.ServerRelease,
+            BaselineHash = RunDirectory.HashDependencySet(RunDirectory.DependencySetJson(baseline.Run.Mods)),
+            MintWarnings = mintWarnings,
+        };
+    }
+
+    /// <summary>
+    /// The GUID of the target: the one <c>run/target.json</c> states, checked against the configured one
+    /// when both exist. A run without the file needs the configured GUID, and the archive marks it unverified.
+    /// </summary>
+    private string ResolveTarget(RunDirectory run, RunTarget? declared)
+    {
+        var configured = string.IsNullOrWhiteSpace(_options.RunModGuid) ? null : _options.RunModGuid.Trim();
+
+        if (declared is null)
+        {
+            return configured ?? throw new InvalidOperationException(
+                "Archive:RunModGuid is not set. A run holds the target and its dependencies, and the archive " +
+                "never guesses which one it is: a dependency is never the target (ADR-0021). This run has no " +
+                "run/target.json, so it cannot state its own target.");
+        }
+
+        if (configured is not null
+            && !string.Equals(configured, declared.ModGuid, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The run states that it was made for '{declared.ModGuid}' ({run.RunPath}/target.json), and " +
+                $"Archive:RunModGuid names '{configured}'. The import stops: one of the two is wrong (ADR-0033).");
+        }
+
+        return declared.ModGuid;
     }
 
     /// <summary>True when this run is already archived: same dataset, same release.</summary>
@@ -143,7 +183,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
         await SptVersionRegistry.EnsureAsync(db, plan.Release, cancellationToken);
 
         var mod = await EnsureModAsync(db, target, cancellationToken);
-        var (dataset, isNew) = await EnsureDatasetAsync(db, plan, cancellationToken);
+        var (dataset, isNew) = await EnsureDatasetAsync(db, plan, archiveRunId, cancellationToken);
 
         if (isNew)
         {
@@ -214,6 +254,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
     private async Task<(ModDataset Dataset, bool IsNew)> EnsureDatasetAsync(
         ArchiveDbContext db,
         RunImportPlan plan,
+        Guid archiveRunId,
         CancellationToken cancellationToken)
     {
         // Two versions with the same content are one dataset (ADR-0013). A dataset is append-only, so
@@ -235,6 +276,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             RowCounts = JsonSerializer.Serialize(plan.Contribution.RowCounts),
             ConfigOrigin = plan.Run.Origin.ConfigOrigin,
             ConfigOriginReason = plan.Run.Origin.Reason,
+            CreatedByRunId = archiveRunId,
         };
 
         db.ModDatasets.Add(dataset);
@@ -505,6 +547,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
         observation.DependencySet = plan.DependencySet;
         observation.DependencySetHash = plan.DependencySetHash;
         observation.ArchiveRunId = archiveRunId;
+        observation.TargetUnverified = !plan.TargetVerified;
         observation.ObservedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync(cancellationToken);
@@ -575,7 +618,23 @@ public sealed record RunImportPlan(
     string ContentHash,
     string DependencySet,
     string DependencySetHash,
-    IReadOnlyList<ModFile> Files);
+    IReadOnlyList<ModFile> Files)
+{
+    /// <summary>False when the run stated no target of its own (ADR-0033, decision 3).</summary>
+    public bool TargetVerified { get; init; } = true;
+
+    /// <summary>The reason <c>run/target.json</c> gives, when the run has one.</summary>
+    public string? Purpose { get; init; }
+
+    /// <summary>The release the baseline states. Null for a baseline of an exporter older than 1.3.0.</summary>
+    public string? BaselineRelease { get; init; }
+
+    /// <summary>The hash of the dependency set that the baseline loaded.</summary>
+    public string? BaselineHash { get; init; }
+
+    /// <summary>Ids that the run minted while it ran (ADR-0034, decision 9).</summary>
+    public IReadOnlyList<string> MintWarnings { get; init; } = [];
+}
 
 /// <summary>What one run import wrote, for the log and for the caller.</summary>
 public sealed record RunImportReport(

@@ -30,7 +30,8 @@ public sealed class RunDirectory
         IReadOnlyList<LoadedMod> mods,
         IReadOnlyDictionary<string, PreBootFile> preBoot,
         RunOrigin origin,
-        string? serverRelease)
+        string? serverRelease,
+        RunTarget? declaredTarget)
     {
         ExportPath = exportPath;
         RunPath = runPath;
@@ -38,6 +39,7 @@ public sealed class RunDirectory
         _preBoot = preBoot;
         Origin = origin;
         ServerRelease = serverRelease;
+        DeclaredTarget = declaredTarget;
     }
 
     /// <summary>The directory that holds the tables of the run: the layout of <c>SPT_Data/database</c>.</summary>
@@ -57,6 +59,12 @@ public sealed class RunDirectory
     /// (exporter 1.3.0). Null when the export came from an older exporter, which stated no release.
     /// </summary>
     public string? ServerRelease { get; }
+
+    /// <summary>
+    /// The mod the run says it was made for, from <c>run/target.json</c> (ADR-0033, decision 3). Null for a
+    /// run from before that file existed: the target then comes from configuration and nothing proves it.
+    /// </summary>
+    public RunTarget? DeclaredTarget { get; }
 
     public static RunDirectory Read(string exportPath)
     {
@@ -99,7 +107,7 @@ public sealed class RunDirectory
                 .ToDictionary(file => file.Path, StringComparer.Ordinal)
             : new Dictionary<string, PreBootFile>(StringComparer.Ordinal);
 
-        return new RunDirectory(exportPath, runPath, mods, preBoot, ReadOrigin(runPath), ReadRelease(runPath));
+        return new RunDirectory(exportPath, runPath, mods, preBoot, ReadOrigin(runPath), ReadRelease(runPath), ReadTarget(runPath));
     }
 
     /// <summary>The mod this run is about, by its GUID. The exporter and the dependencies are not it.</summary>
@@ -235,6 +243,24 @@ public sealed class RunDirectory
         return string.IsNullOrWhiteSpace(release) ? null : release;
     }
 
+    private static RunTarget? ReadTarget(string runPath)
+    {
+        var path = Path.Combine(runPath, "target.json");
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+        var root = document.RootElement;
+
+        return new RunTarget(
+            Required(root, "modGuid"),
+            Required(root, "version"),
+            Optional(root, "reason"));
+    }
+
     private static RunOrigin ReadOrigin(string runPath)
     {
         var path = Path.Combine(runPath, "origin.json");
@@ -324,3 +350,6 @@ public sealed record PreBootFile(string Path, long Size, string Sha256);
 
 /// <summary>Whether a person changed the configuration of the run, and the reason they gave.</summary>
 public sealed record RunOrigin(string ConfigOrigin, string? Reason);
+
+/// <summary>The mod that a run states it was made for, and why (<c>run/target.json</c>, ADR-0033).</summary>
+public sealed record RunTarget(string ModGuid, string Version, string? Reason);
