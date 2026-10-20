@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). The first migration exists and is applied, and 117 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). The first migration exists and is applied, and 125 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 117 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 125 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,7 +94,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, three migrations are applied, and 117 tests pass (TD-01, TD-02, TD-04, TD-07, TD-39).
+- **Done:** the solution builds, three migrations are applied, and 125 tests pass (TD-01, TD-02, TD-04, TD-07, TD-39).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file and the text of every configuration file (ADR-0029). The schema
   holds `mod_files` and `mod_datasets.config_origin` for it.

@@ -1,0 +1,4 @@
+{
+ "configOrigin": "curated",
+ "reason": "The loot overlay is the feature of the mod; the shipped preset has General.AllowLootOverlay = false, so the mod is inert as shipped (driver, 2026-10-20; ADR-0029 decision 7)."
+}

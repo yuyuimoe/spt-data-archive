@@ -1,0 +1,62 @@
+[
+ {
+  "path": "LotsOfLootRedux/LICENSE.md",
+  "size": 1090,
+  "sha256": "d19a8d67c7b15f4cf9d65bd271942cee65f95738f3156147b1be811c231b9cb0"
+ },
+ {
+  "path": "LotsOfLootRedux/LotsofLoot.dll",
+  "size": 278016,
+  "sha256": "f5ff4cd8f4dd3f040d6868742df46950b0217517c420d9198a8c4104616f45bd"
+ },
+ {
+  "path": "LotsOfLootRedux/Presets/default.json",
+  "size": 5294,
+  "sha256": "cc9c900dc159b32be295e6857ab3554817a3c48599e7edb9879f8d6625d84154"
+ },
+ {
+  "path": "LotsOfLootRedux/config.json",
+  "size": 57,
+  "sha256": "bd41febd31a9f49fc3edca4cb68da1882f76fbc5c022dc4eb85c3abdc1e823a0"
+ },
+ {
+  "path": "MassivesoftCore/MassivesoftCore.deps.json",
+  "size": 9452,
+  "sha256": "d0bc85124252f956545850b81aa15814d2267db3f8f42ff3f94c96cc6fa492d1"
+ },
+ {
+  "path": "MassivesoftCore/MassivesoftCore.dll",
+  "size": 58880,
+  "sha256": "589a76c13dc7da90f25e01145260f0796a8c1c307534b8cf17533f127a10bc57"
+ },
+ {
+  "path": "MassivesoftCore/MassivesoftCore.pdb",
+  "size": 36660,
+  "sha256": "53e42e0eaed2160ff767bed9739f3070616172d70369316ec1fcc5a57dabe5bc"
+ },
+ {
+  "path": "MassivesoftCore/MassivesoftCore.staticwebassets.endpoints.json",
+  "size": 51,
+  "sha256": "eb6525c892afda953a2560f151f9c5e5bc6e79ef6741d886488ac450262c91e3"
+ },
+ {
+  "path": "SptArchive.Exporter/SptArchive.Exporter.dll",
+  "size": 40448,
+  "sha256": "141a491ea3b71a67ed264d5a578985aaac7a01d95e39030de9afa8d4f27e9193"
+ },
+ {
+  "path": "WTT-ServerCommonLib/WTT-ServerCommonLib.dll",
+  "size": 304640,
+  "sha256": "dc765a67977c97315ce776d1042980894520fa02dde35c67dbe80de8cf4b15e8"
+ },
+ {
+  "path": "WTT-ServerCommonLib/config.jsonc",
+  "size": 45,
+  "sha256": "62cf530372501bf54903af0fa1fffed7932333228c1c19d13caf9bfd6291158b"
+ },
+ {
+  "path": "WTT-ServerCommonLib/db/CustomLocales/en.json",
+  "size": 215,
+  "sha256": "22bba18943bc37bb518c2f330720acab5c4b0fb8ec5850711530e9795e6d61aa"
+ }
+]
