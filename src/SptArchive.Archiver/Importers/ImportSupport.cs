@@ -55,7 +55,7 @@ public sealed class ImportContext(ArchiveDbContext db, string databasePath, stri
     }
 }
 
-internal static class SourceFiles
+public static class SourceFiles
 {
     private static readonly JsonDocumentOptions LenientJson = new()
     {

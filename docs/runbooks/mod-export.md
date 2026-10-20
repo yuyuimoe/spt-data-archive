@@ -143,3 +143,31 @@ Image `localhost/spt-server:4.1.6`, dependency set `WTT-ServerCommonLib 3.0.6` +
 | Ledger 1.1.0 | 0 | 0 | +45 | +1, 36 offers |
 | MassivesoftWeapons 1.1.2 (patch alone) | 0 | 0 | 0 | 0 |
 | MassivesoftWeapons base 1.1.2 (4.0.13 build) | not loaded: missing `AbstractModMetadata` | | | |
+
+## Keep the data, drop the assets
+
+An artifact is mostly assets. WTT - Content Backport 2.0.5 is 6.1 GB compressed; its `db` tree, its
+server `.dll` and its `BepInEx/config` are **127 MB**. Unpack only what the server reads:
+
+```bash
+7z x -o2512 2512.bin \
+  "SPT_Runtime/user/mods/WTT-ContentBackport/db/*" \
+  "SPT_Runtime/user/mods/WTT-ContentBackport/*.dll" \
+  "SPT_Runtime/user/mods/WTT-ContentBackport/*.json*" \
+  "BepInEx/config/*"
+```
+
+Then delete the rest of the unpacked tree and the archive:
+
+```bash
+find <unpacked> -type f \( -name '*.bundle' -o -name '*.png' -o -name '*.obj' -o -name '*.jpg' \
+  -o -name '*.dds' -o -name '*.wav' -o -name '*.ogg' -o -name '*.fbx' \) -delete
+```
+
+Measured on 2026-10-19: eleven mods took 14.7 GB and take 54 MB after the cleanup. The exports stay
+(1.1 GB for ten runs). A cleaned artifact is enough to classify a mod (ADR-0023), to read its `db`
+fragments, and to run it: a bundle that is gone only removes what ADR-0020 already records as out of
+reach (TD-28).
+
+Re-download takes about an hour for the five large mods, so keep `db`, `.dll` and config, and expect
+to fetch bundles again if a run needs them.
