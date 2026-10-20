@@ -37,6 +37,8 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0029](0029-archive-mod-files-and-config.md) | Archive the files a mod ships, and its configuration | Accepted |
 | [0030](0030-run-export-and-import-with-one-tool.md) | Run, export and import with one .NET tool | Proposed |
 | [0031](0031-record-the-http-surface-a-run-exposes.md) | Record the HTTP surface a run exposes | Accepted |
+| [0032](0032-record-every-changed-value-as-a-row.md) | Record every changed value as a row | Proposed |
+| [0033](0033-record-every-run-and-why-it-happened.md) | Record every run and why it happened | Proposed |
 
 ## Status meanings
 
