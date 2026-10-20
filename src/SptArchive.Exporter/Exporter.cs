@@ -24,7 +24,7 @@ public sealed class ExporterMetadata : IModMetadata
     public string Name { get; init; } = "SPT Archive Exporter";
     public string Author { get; init; } = "SPT Data Archive";
     public List<string>? Contributors { get; init; }
-    public Version Version { get; init; } = new("1.3.1");
+    public Version Version { get; init; } = new("1.4.0");
     public Range SptVersion { get; init; } = new(">=4.1.0 <5.0.0");
     public bool HasPrepatcher { get; init; } = false;
     public List<string>? Incompatibilities { get; init; }
@@ -52,7 +52,9 @@ public sealed class Exporter(
     MatchTable match,
     ServerTable server,
     SettingsTable settings,
-    IReadOnlyList<SptMod> loadedMods
+    IReadOnlyList<SptMod> loadedMods,
+    IEnumerable<StaticRouter> staticRouters,
+    IEnumerable<DynamicRouter> dynamicRoutes
 ) : IOnLoad
 {
     /// <summary>A configuration file larger than this is named in the manifest and not copied (ADR-0029).</summary>
@@ -106,6 +108,7 @@ public sealed class Exporter(
         await WriteAsync("match.json", match, cancellationToken);
 
         await DumpReleaseAsync(cancellationToken);
+        await DumpRoutesAsync(cancellationToken);
         await DumpRunAsync(cancellationToken);
 
         Console.WriteLine($"[exporter] wrote export to {_root}");
@@ -298,6 +301,102 @@ public sealed class Exporter(
     ///     each mod directory records every file with its size and hash, and the text of every
     ///     configuration file is copied as it is on disk.
     /// </summary>
+    /// <summary>
+    ///     Every HTTP route that the process answers, with the assembly that registered it, so the
+    ///     routes of a mod are known without guessing from the files it ships (ADR-0031). <c>HttpRouter</c> keeps
+    ///     its route table in a protected field that nothing exposes, so the field is read by
+    ///     reflection. A missing field is a warning, not a failure: the rest of the export is still
+    ///     worth having.
+    /// </summary>
+    private async Task DumpRoutesAsync(CancellationToken cancellationToken)
+    {
+        var routes = new List<RouteRow>();
+        var unreadable = new List<string>();
+        var order = 0;
+
+        foreach (var (router, dynamic) in staticRouters.Select(r => (router: (Router)r, dynamic: false))
+            .Concat(dynamicRoutes.Select(r => (router: (Router)r, dynamic: true))))
+        {
+            var index = order++;
+            var urls = ReadHandledRoutes(router, dynamic);
+            if (urls is null)
+            {
+                unreadable.Add(router.GetType().FullName ?? router.GetType().Name);
+                continue;
+            }
+
+            foreach (var url in urls)
+            {
+                routes.Add(
+                    new RouteRow(
+                        url,
+                        dynamic ? "dynamic" : "static",
+                        index,
+                        router.GetType().FullName,
+                        router.GetType().Assembly.GetName().Name,
+                        ModGuidOf(router.GetType().Assembly)
+                    )
+                );
+            }
+        }
+
+        if (unreadable.Count > 0)
+        {
+            Console.WriteLine($"[exporter] route table not readable on {unreadable.Count} router(s): {string.Join(", ", unreadable)}");
+        }
+
+        var ordered = routes.OrderBy(route => route.url, StringComparer.Ordinal)
+            .ThenBy(route => route.method, StringComparer.Ordinal)
+            .ToList();
+
+        await WriteAsync("run/routes.json", ordered, cancellationToken);
+
+        // A URL that two routers answer is an override: HttpRouter runs every match and keeps the
+        // last answer, so the later router replaces the earlier one.
+        foreach (var clash in ordered.GroupBy(route => route.url).Where(group => group.Count() > 1))
+        {
+            Console.WriteLine(
+                $"[exporter] route {clash.Key} is answered by {string.Join(" and ", clash.Select(route => route.assembly))}"
+            );
+        }
+    }
+
+    /// <summary>One row of <c>run/routes.json</c>.</summary>
+    /// <remarks>
+    ///     <paramref name="order" /> is the position of the router in the dispatcher enumeration.
+    ///     <c>HttpRouter</c> runs every router that matches a URL and keeps the last answer, so the
+    ///     highest order wins when two routers answer one URL.
+    /// </remarks>
+    private sealed record RouteRow(string url, string method, int order, string? router, string? assembly, string? mod);
+
+    /// <summary>
+    ///     Reads one router's route list. <c>Router.CanHandle</c> is public and fills the list on the
+    ///     first call, so an empty URL is enough to make the field readable.
+    /// </summary>
+    private static IReadOnlyList<string>? ReadHandledRoutes(Router router, bool dynamic)
+    {
+        router.CanHandle(string.Empty, dynamic);
+
+        var field = typeof(Router).GetField("handledRoutes", BindingFlags.Instance | BindingFlags.NonPublic);
+        return field?.GetValue(router) is IEnumerable<HandledRoute> handled
+            ? handled.Select(route => route.route).ToList()
+            : null;
+    }
+
+    /// <summary>The mod that owns an assembly, or null for the server itself and its dependencies.</summary>
+    private string? ModGuidOf(Assembly assembly)
+    {
+        foreach (var mod in loadedMods)
+        {
+            if (mod.Assemblies.Contains(assembly))
+            {
+                return mod.ModMetadata.ModGuid;
+            }
+        }
+
+        return null;
+    }
+
     private async Task DumpRunAsync(CancellationToken cancellationToken)
     {
         var loaded = loadedMods

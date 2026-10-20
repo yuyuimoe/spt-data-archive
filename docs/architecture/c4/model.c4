@@ -85,7 +85,7 @@ model {
 
       exporterMod = component 'Exporter Mod' {
         technology 'C# server mod, IOnLoad at PostLoad + 1'
-        description 'Reads every table, including the lazy loads, and writes the final in-memory database as a directory in the layout of SPT_Data/database, plus run/: the mods that loaded, the manifest of every file with its hash, and the text of every configuration file. Then it stops the host (ADR-0020, ADR-0027, ADR-0029).'
+        description 'Reads every table, including the lazy loads, and writes the final in-memory database as a directory in the layout of SPT_Data/database, plus run/: the mods that loaded, the manifest of every file with its hash, the text of every configuration file, and every HTTP route with the mod that owns it. Then it stops the host (ADR-0020, ADR-0027, ADR-0029, ADR-0031).'
       }
 
       bundlePatch = component 'Container start-up cut' {

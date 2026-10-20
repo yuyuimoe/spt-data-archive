@@ -57,6 +57,8 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Environment file** | The one `.env` at the repository root: the passwords, the installation path, the release, the image, and the directories of mods, exports and baselines. It is read by every tool and written by none; one run's choices are arguments, not entries (ADR-0030). |
 | **Runner** | The tool that makes a run: it copies the mod set into a fresh directory, writes the pre-boot manifest, starts the container, waits for the export, and imports the result. It replaced the shell script that made the first nineteen exports (ADR-0030). |
 | **Run directory** | The export of one container run: the ten table roots of the server database, and a `run` root that states which mods loaded and what each mod shipped (ADR-0027, ADR-0029). |
+| **Route** | One URL that the server answers, with the router that answers it (ADR-0031). A run records every route in `run/routes.json`. |
+| **Interception** | A route of a mod on a URL that the server also answers. The dispatcher runs every match and keeps the last answer, so the order decides whether the mod replaces the answer or prepares the request (ADR-0031). |
 | **Dependency set** | The pinned mod versions that a run loads beside the target mod. The catalog states it, and the mod metadata is the fallback. It is frozen on the observation. |
 | **Version range** | A semver expression that states which versions satisfy a requirement, for example ">=2.0.0 <2.5.0". The Archiver resolves one for a dependency set. The Api does not accept one (ADR-0019). |
 | **Baseline cache** | The stored baseline export, keyed by the dependency set hash and the server version. Two mods with one dependency set share it. |

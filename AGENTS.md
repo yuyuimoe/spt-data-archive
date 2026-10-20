@@ -101,14 +101,16 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Next slice:** read a run directory into `mod_datasets`, `mod_data_observations`, `mod_templates`,
   `mod_item_changes` and `mod_files` (TD-29) through the canonical form of ADR-0028 (TD-39). Then the Api
   server version argument (TD-21) and the Gherkin scenarios with Reqnroll (TD-06).
-- **Open decisions:** ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Proposed. ADR-0005 and ADR-0010 are
-  superseded; ADR-0001 to 0004, 0006 to 0009 and 0011 to 0029 are Accepted.
+- **Open decisions:** ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are
+  Proposed. ADR-0005 and ADR-0010 are
+  superseded; ADR-0001 to 0004, 0006 to 0009 and 0011 to 0029, and ADR-0031, are Accepted.
 - **Not built:** the Archiver importer that compares a run directory against its baseline and stores the
   contribution, the baseline cache, and the catalog (ADR-0013 action items). The container runner and the exporter exist and ran on nineteen real mod
   runs (`docs/runbooks/mod-export.md`), including a curated run of one mod (ADR-0029).
 - **Environment:** NuGet is reachable and the packages are pinned. `items.json` is in Git LFS upstream; run
   `git lfs pull` in the server repository before you import. An **installation** names no release, so an
   official import must state it (`Archive__SptVersion`, TD-26). A **run** names its own: exporter 1.3.0 writes
-  `run/release.json` from the server assembly, and `Archive:BaselinePath` (`Archive__BaselinePath`) points at
+  `run/release.json` from the server assembly and `run/routes.json` from the dispatcher (ADR-0031), and
+  `Archive:BaselinePath` (`Archive__BaselinePath`) points at
   the baseline export that the run is compared against. Build the exporter against the assemblies of the
   release it runs on: a build for 4.1.6 is refused by 4.1.5.

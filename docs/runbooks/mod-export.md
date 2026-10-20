@@ -125,6 +125,7 @@ Since exporter 1.2.0 the export also holds `run/` (ADR-0029); 1.3.0 adds `releas
 | `run/config/<directory>/<path>` | the text of every configuration file, copied as bytes, comments included |
 | `run/pre-boot.json` | written by `run_mod.sh` before the container starts: the same manifest of `user/mods`. A file whose two hashes differ was rewritten by a mod during its load. |
 | `run/origin.json` | written by `run_mod.sh` when `CURATED_REASON` is set: `shipped` or `curated`, with the reason (ADR-0029, decision 7) |
+| `run/routes.json` | since exporter 1.4.0: every HTTP route the process answers, with `url`, `method`, `order`, `router`, `assembly` and the `mod` GUID that owns the assembly (ADR-0031) |
 | `run/release.json` | since exporter 1.3.0: the release the run was made on, read from the server assembly (`4.1.6-RELEASE+T10NVR.0000000000` is `4.1.6`), with the informational version and the assembly name |
 
 A configuration file is one whose path has a segment `config`, `configs`, `presets` or `loader`, or
@@ -154,6 +155,29 @@ export Archive__BaselinePath=/home/yui/work/sptmods/exports/baseline
 The Archiver refuses a baseline whose `run/release.json` states another release, and says that a
 difference between two releases is not the work of a mod. A baseline exported before 1.3.0 states
 no release; it is used and the run reports that it verified nothing.
+
+## Routes
+
+`run/routes.json` answers "which endpoints does this mod add", and it needs no baseline:
+the owning assembly is the answer (ADR-0031). Two kinds exist.
+
+- **Adds.** The URL is new. `ECOTI` adds `/coti/hosts`, `MapVariants` adds
+  `/mapvariants/managed`, and the WTT library adds twelve, including `/files/image`.
+- **Intercepts.** The URL already belongs to the server. `Gunwright` answers
+  `/client/game/profile/items/moving`, `WTT-Armory` answers `/client/friend/list`.
+
+`HttpRouter` runs every router that matches and keeps the last answer, so `order` decides the
+winner. In the archived runs `WTT-Armory` comes after the core router (7, then 23) and replaces
+the answer; `Gunwright` and `MapVariants` come before it (0, then 15), so they see the request and
+the core answer stands.
+
+A run without a mod has 178 routes. A mod that answers nothing — `LotsOfLootRedux`,
+`AllTheClothes`, `Ledger`, `SVM`, `MassivesoftWeapons`, `FemalePMCVoice` — leaves the count
+unchanged, which is a measured fact about the mod and not an absence of evidence.
+
+Do not call these routes to get data. `/client/items` of a running server returned the same 4673
+items, with the same fields and the same key set, as `templates/items.json` of the same run; the
+mod routes answered `{}` or `[]` without a profile. The archive stores tables, not answers.
 
 ## Problems
 
