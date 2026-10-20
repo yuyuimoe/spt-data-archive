@@ -46,6 +46,23 @@ public sealed class BaselineExportTests
     }
 
     [Fact]
+    public void A_mod_run_pairs_with_the_baseline_of_its_release()
+    {
+        // The whole chain, on two real exports: the baseline and the mod run were both made on
+        // 4.1.6 with exporter 1.3.1, so the pairing verifies and the difference is the mod's work.
+        var baseline = BaselineExport.Read(Fixture("baseline"), "4.1.6");
+        var ecoti = RunDirectory.Read(Fixture("ECOTI"));
+
+        Assert.True(baseline.ReleaseVerified);
+        Assert.Equal(baseline.Run.ServerRelease, ecoti.ServerRelease);
+
+        // One tool and one dependency on both sides; the target mod is the only difference.
+        Assert.Equal(
+            baseline.Run.Mods.Where(mod => mod.IsTool || mod.ModGuid != "com.lennoxp90.coti.server").Count(),
+            ecoti.Mods.Where(mod => mod.IsTool || mod.ModGuid != "com.lennoxp90.coti.server").Count());
+    }
+
+    [Fact]
     public void A_path_that_is_not_a_directory_names_the_setting_to_correct()
     {
         var error = Assert.Throws<InvalidOperationException>(

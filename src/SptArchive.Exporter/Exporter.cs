@@ -24,7 +24,7 @@ public sealed class ExporterMetadata : IModMetadata
     public string Name { get; init; } = "SPT Archive Exporter";
     public string Author { get; init; } = "SPT Data Archive";
     public List<string>? Contributors { get; init; }
-    public Version Version { get; init; } = new("1.3.0");
+    public Version Version { get; init; } = new("1.3.1");
     public Range SptVersion { get; init; } = new(">=4.1.0 <5.0.0");
     public bool HasPrepatcher { get; init; } = false;
     public List<string>? Incompatibilities { get; init; }

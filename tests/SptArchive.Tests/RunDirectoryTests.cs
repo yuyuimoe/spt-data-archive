@@ -154,10 +154,22 @@ public sealed class RunDirectoryTests
     }
 
     [Fact]
+    public void A_mod_run_states_the_same_release_as_its_baseline()
+    {
+        // ECOTI was exported again with exporter 1.3.1, so the run carries release.json. A baseline
+        // of the same release is what makes the difference between them the work of the mod.
+        var baseline = Read("baseline");
+        var ecoti = Read("ECOTI");
+
+        Assert.Equal("4.1.6", ecoti.ServerRelease);
+        Assert.Equal(baseline.ServerRelease, ecoti.ServerRelease);
+    }
+
+    [Fact]
     public void A_run_of_an_older_exporter_states_no_release()
     {
         // Exported before exporter 1.3.0: the reader knows no release rather than assuming one.
-        var run = Read("ECOTI");
+        var run = Read("LotsOfLootRedux");
 
         Assert.Null(run.ServerRelease);
     }

@@ -245,7 +245,14 @@ Image `localhost/spt-server:4.1.6`, exporter 1.2.0, dependency set `WTT-ServerCo
 | baseline, no mod | 642 MB | 3 mods loaded, 8 files | the same 4,673 items as the install; pre-boot and post-boot hashes are equal, so no mod rewrote a file |
 | Lots of Loot Redux 4.2.2, shipped | 642 MB | 4 files, 2 configuration files | no table change. The manifest holds `Presets/default.json` with `AllowLootOverlay = false`, and it is stored as text, so the empty diff has its reason next to it |
 | Lots of Loot Redux 4.2.2, curated (`AllowLootOverlay = true`) | 642 MB | 4 files, 2 configuration files, `origin.json` says `curated` | still no table change, and the two manifests differ in exactly one file: `Presets/default.json` (5,294 → 5,293 bytes). The mod applies its multipliers when a raid is generated, so it is a behaviour mod and not a data mod (ADR-0028). Recording it as such is the point of the curated run. |
-| ECOTI 3.4.0 | 642 MB | 46 files, 3 configuration files | a config-driven dataset: **+9 items**, **+9 Peacekeeper assort rows**, **+27 English translations**, and changed `prices.json` and `handbook.json`. `config/config.json` decides them (`trader.priceUsd`, `loot.weightFraction`, `loot.enabled`) |
+| ECOTI 3.4.0 | 642 MB | 46 files, 2 configuration files | a config-driven dataset: **+9 items**, **+9 Peacekeeper assort rows**, **+27 English translations**, and changed `prices.json` and `handbook.json`. `config/config.json` decides them (`trader.priceUsd`, `loot.weightFraction`, `loot.enabled`) |
+
+Re-ran ECOTI with exporter 1.3.1 (same day, same contribution: +9 items, +9 assort rows, +27
+translations, so the exporter change moved no table). The run now names its release
+(`release.json` → `4.1.6`) and the manifest classifies **two** configuration files, not three:
+`wwwroot/vendor/GLTFLoader.js` used to count as configuration because its name contains "loader".
+A file under a web root is served to a browser, so the rule now checks the web root first
+(ADR-0029, amendment of 2026-10-20).
 
 ECOTI's own `config.json` has the same pre-boot and post-boot hash, so ECOTI 3.4.0 reads its
 configuration and does not rewrite it. Its server code contains a `File.WriteAllTextAsync` path, but

@@ -30,8 +30,11 @@ public static class ModFileKind
     /// <summary>
     /// Decision 2 of ADR-0029: a path with a segment <c>config</c>, <c>configs</c>, <c>presets</c> or
     /// <c>loader</c>; a name that contains <c>config</c>, <c>settings</c>, <c>preset</c>,
-    /// <c>option</c> or <c>loader</c>; or the extension <c>.jsonc</c>. The rule lives here and not in
-    /// the exporter, so the exporter and the reader agree on what a configuration file is.
+    /// <c>option</c> or <c>loader</c>; or the extension <c>.jsonc</c>. A file under a web root is never
+    /// a configuration file: the web root is served to a browser, so its files are assets even when a
+    /// name says "loader" (ECOTI ships three.js's <c>GLTFLoader.js</c> under <c>wwwroot/vendor</c>).
+    /// The rule lives here and not in the exporter, so the exporter and the reader agree on what a
+    /// configuration file is.
     /// </summary>
     public static bool IsConfigFile(string relativePath)
     {
@@ -46,6 +49,15 @@ public static class ModFileKind
         if (segments.Length == 0)
         {
             return false;
+        }
+
+        // Checked first: a served asset is not a file a person edits, whatever its name contains.
+        for (var i = 0; i < segments.Length - 1; i++)
+        {
+            if (segments[i].Equals("wwwroot", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
         }
 
         // Every segment but the last is a directory name. A file at the root of the mod has none,

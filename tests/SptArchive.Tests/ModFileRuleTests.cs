@@ -31,6 +31,8 @@ public sealed class ModFileRuleTests
     [InlineData("Mod.dll")]
     [InlineData("bundles.json")]
     [InlineData("readme.md")]
+    [InlineData("wwwroot/vendor/GLTFLoader.js")]
+    [InlineData("wwwroot/config/app.json")]
     public void Table_data_and_code_are_not_configuration(string path)
     {
         Assert.False(ModFileKind.IsConfigFile(path));
@@ -46,9 +48,23 @@ public sealed class ModFileRuleTests
     [InlineData("Presets/default.json", ModFileKind.Config)]
     [InlineData("maschine-ArenaMapPort.Server.dll", ModFileKind.Assembly)]
     [InlineData("mod/graphics/shader.nb", ModFileKind.Other)]
+    [InlineData("wwwroot/vendor/GLTFLoader.js", ModFileKind.Other)]
     public void A_file_is_classified_by_its_path(string path, string kind)
     {
         Assert.Equal(kind, ModFileKind.Classify(path));
+    }
+
+    [Fact]
+    public void A_served_asset_is_not_a_configuration_file_whatever_its_name_says()
+    {
+        // Found by re-running ECOTI (2026-10-20): its Web viewer ships three.js's GLTFLoader.js under
+        // wwwroot/vendor. The name rule said "loader", so a 114 KB browser asset was archived as the
+        // mod's configuration. The web root wins: a file there is served, not read by the mod.
+        Assert.Equal(ModFileKind.Other, ModFileKind.Classify("wwwroot/vendor/GLTFLoader.js"));
+        Assert.Equal(ModFileKind.Other, ModFileKind.Classify("wwwroot/vendor/OrbitControls.js"));
+
+        // Outside a web root the name rule still applies.
+        Assert.Equal(ModFileKind.Config, ModFileKind.Classify("loader/loader.json"));
     }
 
     [Fact]

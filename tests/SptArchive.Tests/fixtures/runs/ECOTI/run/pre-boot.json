@@ -251,8 +251,8 @@
  },
  {
   "path": "SptArchive.Exporter/SptArchive.Exporter.dll",
-  "size": 40448,
-  "sha256": "141a491ea3b71a67ed264d5a578985aaac7a01d95e39030de9afa8d4f27e9193"
+  "size": 42496,
+  "sha256": "b09b2055656da94e364efa0587d834418eac9c37e01d0b15df24f0b9a665dc01"
  },
  {
   "path": "WTT-ServerCommonLib/WTT-ServerCommonLib.dll",

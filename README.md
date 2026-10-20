@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 132 tests. Three migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 138 tests. Three migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
 > The Api served the archive read-only. A container run exports every table of the server database

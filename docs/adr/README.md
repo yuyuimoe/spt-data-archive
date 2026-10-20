@@ -35,6 +35,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0027](0027-archive-a-run-as-a-database-directory.md) | Archive a run as a database directory | Accepted |
 | [0028](0028-compare-two-runs-in-a-canonical-form.md) | Compare two runs in a canonical form | Accepted |
 | [0029](0029-archive-mod-files-and-config.md) | Archive the files a mod ships, and its configuration | Accepted |
+| [0030](0030-run-export-and-import-with-one-tool.md) | Run, export and import with one .NET tool | Proposed |
 
 ## Status meanings
 

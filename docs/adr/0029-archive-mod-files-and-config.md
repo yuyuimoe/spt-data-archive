@@ -171,6 +171,16 @@ would make every mod appear to change the game. A baseline from an exporter olde
 no release; it is used and the run says that it verified nothing, because the alternative is to
 refuse every export that already exists.
 
+### 2026-10-20: a served asset is not a configuration file
+
+Decision 2 says a file whose name contains `loader` is configuration. Re-running ECOTI found the
+limit of that rule: its Web viewer ships three.js's `GLTFLoader.js` (114 KB) under
+`wwwroot/vendor`, so a browser asset was archived as the mod's configuration text. The rule now
+checks the web root first: a file under `wwwroot/` is an asset, whatever its name contains, because
+a web root is served to a browser and not read by the mod. Exporter 1.3.1 carries the fix. The
+ECOTI run of the same day has two configuration files (`config/config.json`,
+`config/riser-sights.json`) and its manifest says `other` for the loader.
+
 ## Options Considered
 
 **A. Keep the preset as one jsonb document per dataset (ADR-0026, decision 1).** It stores one
