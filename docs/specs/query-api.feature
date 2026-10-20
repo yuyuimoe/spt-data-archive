@@ -180,10 +180,52 @@ Feature: Query the archive through a read-only GraphQL API
     And the response has no empty list
 
   @unverified
+  Scenario: A short version is not a release key
+    Given the archive holds the release "4.0.13"
+    When I query "items" with the version "4.0"
+    Then the response has an error that names "4.0"
+    And the error code is "SPT_VERSION_MALFORMED"
+
+  @unverified
+  Scenario: The two version errors carry fixed error codes
+    When I query "items" with the version "9.9.9"
+    Then the error code is "SPT_VERSION_UNKNOWN"
+    When I query "items" with the version "latest"
+    Then the error code is "SPT_VERSION_MALFORMED"
+
+  @unverified
+  Scenario: A client lists the archived releases
+    Given the archive holds the releases "4.0.12" and "4.0.13"
+    When I query "sptVersions"
+    Then the answer lists "4.0.13" before "4.0.12"
+
+  @unverified
   Scenario: One release does not answer for another release
     Given the archive holds the releases "4.0.12" and "4.0.13"
     When I query "items" for "4.0.12" and then for "4.0.13"
     Then both responses have the header "X-Cache" with the value "MISS"
+
+  # ----------------------------------------------------------------- Limits
+
+  @unverified
+  Scenario: A request body over 1 MB is refused
+    When I send a query body larger than 1,000,000 bytes
+    Then the response is not a successful answer
+
+  @unverified
+  Scenario: A query deeper than 10 levels is refused
+    When I send a query nested 11 levels deep
+    Then the response has an error and no data
+
+  @unverified
+  Scenario: A wide query over the cost limit is refused
+    When I send a query for twelve pages of 200 rows
+    Then the response has the error "HC0047"
+
+  @unverified
+  Scenario: The schema can be read
+    When I send an introspection query
+    Then the response has the type "Query"
 
   # ----------------------------------------------------------------- Health
 
@@ -201,7 +243,7 @@ Feature: Query the archive through a read-only GraphQL API
     Then the result has "A1" and "B1"
     And each row states whether it is official or from a mod
 
-  @backlog
+  @unverified
   Scenario: JSON properties are returned as JSON values
     Given the item "A1" has the property "Weight" 0.5 in its "props" column
     When I query "items" and select "props"

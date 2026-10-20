@@ -1,4 +1,3 @@
-using HotChocolate.Data;
 using Serilog;
 using SptArchive.Api.Caching;
 using SptArchive.Api.GraphQL;
@@ -42,21 +41,7 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(policy => policy
     .AllowAnyHeader()));
 
 // ---- GraphQL ----
-builder.Services
-    .AddGraphQLServer()
-    .RegisterDbContextFactory<ArchiveDbContext>()
-    .AddQueryType<Query>()
-    .AddProjections()
-    .AddFiltering()
-    .AddSorting()
-    .ModifyPagingOptions(o =>
-    {
-        o.DefaultPageSize = 50;
-        o.MaxPageSize = 200;
-        o.IncludeTotalCount = true;
-    })
-    .ModifyRequestOptions(o => o.ExecutionTimeout = TimeSpan.FromSeconds(10))
-    .AddMaxExecutionDepthRule(10);
+builder.Services.AddArchiveGraphQL();
 
 var app = builder.Build();
 

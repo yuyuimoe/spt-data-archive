@@ -101,6 +101,8 @@ public sealed class TestScope(NpgsqlConnection connection, NpgsqlTransaction tra
 
     public NpgsqlConnection Connection { get; } = connection;
 
+    public NpgsqlTransaction Transaction => transaction;
+
     public async Task<int> ExecuteAsync(string sql, params object?[] values)
     {
         await using var command = new NpgsqlCommand(sql, Connection, transaction);

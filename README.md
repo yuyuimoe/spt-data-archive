@@ -177,8 +177,6 @@ The API is then at `http://localhost:8080/graphql`. Example:
 - **No Gherkin runner yet.** 236 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
-- **The Api has no server version argument.** The schema holds one row set per release, and two releases are
-  imported (4.0.13 and 4.1.6), so an official query without a version mixes them (TD-21).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
   `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). The baseline cache
   and the catalog are still action items of ADR-0013, and a change to a map, a bot type or a price is hashed but

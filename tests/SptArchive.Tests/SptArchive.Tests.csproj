@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/SptArchive.Core/SptArchive.Core.csproj" />
     <ProjectReference Include="../../src/SptArchive.Archiver/SptArchive.Archiver.csproj" />
+    <ProjectReference Include="../../src/SptArchive.Api/SptArchive.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
