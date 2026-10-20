@@ -8,6 +8,7 @@
 | [adr/README.md](adr/README.md) | Every decision, its status and its reason |
 | [specs/README.md](specs/README.md) | What the system does, as Gherkin scenarios, and how to tag them |
 | [tech-debt.md](tech-debt.md) | Known problems, scores and the fix order |
+| [runbooks/mod-export.md](runbooks/mod-export.md) | How to export mod data from a server container |
 | [glossary.md](glossary.md) | The terms of the project |
 
 ## Reading order

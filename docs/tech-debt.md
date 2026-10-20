@@ -19,11 +19,14 @@ A low effort gives a high priority. The scores are estimates from the assistant.
 | ID | Type | Item | Impact | Risk | Effort | Priority | Why it matters |
 |----|------|------|:------:|:----:|:------:|:--------:|----------------|
 | TD-03 | Infrastructure | The backup script does not exist (ADR-0011). | 4 | 4 | 1 | 40 | The archive can be the only copy of mod data. |
-| TD-20 | Infrastructure | The exporter and the bundle patch depend on private server internals: the load-order slots, `SptServerStartupService` and `ProgramStatics` (ADR-0013, ADR-0015). | 4 | 4 | 2 | 32 | A release can move them. Then a run fails late, or loads bundles without saying so. |
+| TD-20 | Code | The exporter depends on three injected table types (`TemplateTable`, `TradersTable`, `LocaleTable`) and on `OnLoadOrder.PostLoad` (ADR-0020). The bundle patch of ADR-0015 is not used. | 3 | 3 | 2 | 24 | A release can rename a table. The exporter then fails to compile, which is the cheaper failure. |
 | TD-21 | Architecture | The Api has no server version argument (ADR-0014, ADR-0019). The schema now holds one row set per release, so every official query merges releases. | 4 | 4 | 2 | 32 | Every official field needs a default and a stated version, or two releases merge in one answer. |
 | TD-22 | Architecture | No run asserts that every mod dataset is pointed at by an observation (ADR-0018). | 2 | 3 | 1 | 25 | An orphan dataset is a bug. Silence hides it. |
 | TD-05 | Infrastructure | The Api has no rate limit of its own. The edge proxy is only planned. | 3 | 4 | 2 | 28 | A public API gets scraped. |
 | TD-26 | Code | The Archiver cannot read the server version from an installation. A run fails unless `Archive__SptVersion` is set by hand. | 3 | 4 | 2 | 28 | A wrong or missing version labels the data wrongly, or stops the run. |
+| TD-29 | Architecture | Nothing reads an export directory. The container writes `templates.json`, `traders.json` and `locales.json`, and the Archiver cannot load them (ADR-0020). | 4 | 4 | 3 | 24 | The mod half of the archive has no way in. The run model works and stores nothing. |
+| TD-27 | Architecture | The exporter does not dump bot tables. A mod that changes only bot behaviour exports the same bytes as the baseline (ADR-0020). | 3 | 3 | 2 | 24 | A voice mod then looks like it did nothing, and the archive cannot say what it changed. |
+| TD-28 | Architecture | A mod that builds its items from bundles produces no items when the run has no bundles. MassivesoftWeapons added 0 items and logged no error (ADR-0020). | 3 | 3 | 3 | 18 | A silent zero looks like a working run with an empty result. |
 | TD-06 | Test | 34 xUnit tests exist, but no Reqnroll binding (ADR-0012), so no Gherkin scenario runs as a test. All scenarios are still `@unverified`. | 4 | 3 | 3 | 21 | Specs and code can drift apart without a test. |
 | TD-09 | Infrastructure | No CI pipeline. | 3 | 3 | 2 | 24 | Nothing builds or checks the docs on each change. |
 | TD-10 | Architecture | The query cache is safe only for anonymous access (ADR-0008). | 1 | 3 | 1 | 20 | Adding authentication would leak cached answers across users. |
@@ -81,6 +84,9 @@ Phase 0 must run after ADR-0014, because the first migration carries the version
 - TD-23: The dependency source is decided. Choose the catalog itself before the mod slice starts.
 - TD-20: Verify the load order and the patch on one real mod, before 699 containers exist.
 - TD-25: Check the parent of an added item, once the first mod with an added item is archived.
+- TD-29: Read an export directory into `mod_datasets`, `mod_data_observations`, `mod_templates` and `mod_item_changes`.
+- TD-27: Dump the bot tables, so a voice mod records what it changed.
+- TD-28: Record that a loaded mod produced no data, instead of storing a dataset equal to the baseline.
 
 ### Phase 3: Prepare for the public
 

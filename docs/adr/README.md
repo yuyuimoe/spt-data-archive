@@ -25,6 +25,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0017](0017-record-a-template-operation.md) | Record one template operation for every item that a mod touches | Accepted |
 | [0018](0018-do-not-delete-mod-data-in-the-first-release.md) | Do not delete mod data in the first release | Accepted |
 | [0019](0019-reject-a-version-the-archive-does-not-hold.md) | Reject a server version that the archive does not hold | Accepted |
+| [0020](0020-export-mod-data-from-a-server-container.md) | Export mod data from a server container, without a Harmony patch | Proposed |
 
 ## Status meanings
 
