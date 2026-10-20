@@ -143,5 +143,24 @@ public sealed class RunDirectoryTests
         Assert.Contains("dependency is never the target", error.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void A_run_states_the_release_the_server_had()
+    {
+        // The exporter reads it from the server's own assembly, so the release is a fact of the run
+        // and not of the directory name (TD-26).
+        var run = Read("baseline");
+
+        Assert.Equal("4.1.6", run.ServerRelease);
+    }
+
+    [Fact]
+    public void A_run_of_an_older_exporter_states_no_release()
+    {
+        // Exported before exporter 1.3.0: the reader knows no release rather than assuming one.
+        var run = Read("ECOTI");
+
+        Assert.Null(run.ServerRelease);
+    }
+
     private static RunDirectory Read(string name) => RunDirectory.Read(Path.Combine(Root, name));
 }

@@ -24,7 +24,7 @@ public sealed class ExporterMetadata : IModMetadata
     public string Name { get; init; } = "SPT Archive Exporter";
     public string Author { get; init; } = "SPT Data Archive";
     public List<string>? Contributors { get; init; }
-    public Version Version { get; init; } = new("1.2.0");
+    public Version Version { get; init; } = new("1.3.0");
     public Range SptVersion { get; init; } = new(">=4.1.0 <5.0.0");
     public bool HasPrepatcher { get; init; } = false;
     public List<string>? Incompatibilities { get; init; }
@@ -105,6 +105,7 @@ public sealed class Exporter(
         await WriteAsync("settings.json", settings, cancellationToken);
         await WriteAsync("match.json", match, cancellationToken);
 
+        await DumpReleaseAsync(cancellationToken);
         await DumpRunAsync(cancellationToken);
 
         Console.WriteLine($"[exporter] wrote export to {_root}");
@@ -240,6 +241,55 @@ public sealed class Exporter(
         await WriteAsync("hideout/production.json", hideout.Production, cancellationToken);
         await WriteAsync("hideout/qte.json", hideout.Qte, cancellationToken);
         await WriteAsync("hideout/settings.json", hideout.Settings, cancellationToken);
+    }
+
+    /// <summary>
+    ///     <c>run/release.json</c>: the release that the run happened on. The Archiver cannot read it
+    ///     from the database files (TD-26), so the server states it from its own assembly. A baseline
+    ///     and a target of different releases then cannot be compared by accident: their difference
+    ///     would be the difference between the releases, not the work of the mod (ADR-0029).
+    /// </summary>
+    private async Task DumpReleaseAsync(CancellationToken cancellationToken)
+    {
+        var assembly = typeof(SptMod).Assembly;
+        var informational = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
+
+        var release = ReleaseOf(informational) ?? ReleaseOf(assembly.GetName().Version?.ToString());
+
+        if (release is null)
+        {
+            Console.WriteLine($"[exporter] the server assembly states no release ('{informational}')");
+        }
+
+        await WriteAsync(
+            "run/release.json",
+            new
+            {
+                sptVersion = release,
+                informationalVersion = informational,
+                assembly = assembly.GetName().Name,
+            },
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    ///     The release out of a version string such as "4.1.6-RELEASE+T10NVR.0000000000". Only the
+    ///     three leading numbers are the release; the rest names the build of it.
+    /// </summary>
+    private static string? ReleaseOf(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var rest = value.IndexOfAny(['-', '+']);
+        var candidate = rest < 0 ? value : value[..rest];
+
+        return Version.TryParse(candidate, out var version) ? version.ToString() : null;
     }
 
     /// <summary>

@@ -129,6 +129,48 @@ Two limits of the snapshot, written here so that no one reads them as a bug:
    manifest and not in the text. The manifest still names it with its hash, so a reader sees that
    it exists and a later run can copy it.
 
+## Amendments
+
+### 2026-10-20, driver: what `content_hash` covers
+
+Decision 4 says "the canonical table content". That was ambiguous: it can mean the rows the run
+changed or the whole table as the run left it. The driver settled it: the hash covers **the rows
+the dataset stores** — the difference between the run and its baseline, table by table — plus the
+configuration text and the manifest of the mod. `table_hashes` and `row_counts` describe that
+contribution too, and not the whole table.
+
+The consequence is the point of the rule. "Stale", "up to date" and "new" are questions about the
+contribution, so a dataset does not depend on the release it was observed on:
+
+| What changed between two runs of one mod | Result |
+| --- | --- |
+| The server release, nothing in the contribution | Same `content_hash`, so the same dataset; only a new observation (ADR-0013) |
+| The dependency set, nothing in the contribution | Same dataset; the observation's dependency set names which dependencies produced it |
+| One contributed row, or one byte of the configuration | A new dataset; both are kept and both name their own config origin (ADR-0018) |
+| Nothing at all, as in a behaviour mod | A dataset with zero rows and its configuration: the config is content (decision 6) |
+
+A dataset that reused itself across releases is what makes the archive usable: 699 mods on one
+release and the same 699 on the next is 699 datasets, not 1,398.
+
+### 2026-10-20: the run states its release, and the baseline must match it
+
+Exporter 1.3.0 writes `run/release.json`: the release, the informational version it read it from,
+and the assembly it asked. The server states the release from its own assembly
+(`4.1.6-RELEASE+T10NVR.0000000000` is release `4.1.6`), so the exporter needs no setting and no
+directory name for it.
+
+This narrows TD-26. The official import still states its release, because `SPT_Data/database` names
+none. A mod run does not have to: its export names its own.
+
+The Archiver then checks the pair. A mod run is compared against a **baseline**: the export of a run
+of the same release with the same dependencies and no target mod. The baseline is a fact about the
+host, not about the mod, so its path is configuration (`Archive:BaselinePath`, set by
+`Archive__BaselinePath`) and not a file inside the export. A baseline of another release is refused
+with both releases named, because the difference between two releases is not the work of a mod and
+would make every mod appear to change the game. A baseline from an exporter older than 1.3.0 states
+no release; it is used and the run says that it verified nothing, because the alternative is to
+refuse every export that already exists.
+
 ## Options Considered
 
 **A. Keep the preset as one jsonb document per dataset (ADR-0026, decision 1).** It stores one
@@ -249,6 +291,31 @@ Feature: Archive the files and the configuration of a mod
     And both datasets exist
     And the run records whether the overlay changed a table row
 
+  Scenario: A run states the release it was made on
+    Given a run of exporter 1.3.0 on server release 4.1.6
+    Then "run/release.json" states "4.1.6"
+    And it names the informational version that the release came from
+
+  Scenario: A baseline of another release is refused
+    Given a baseline made on release 4.1.5
+    And a mod run that states release 4.1.6
+    When the Archiver pairs them
+    Then the run fails and the error names "4.1.5" and "4.1.6"
+    And it says that a difference between two releases is not the work of a mod
+
+  Scenario: A baseline of an older exporter is used and verified nothing
+    Given a baseline exported before exporter 1.3.0
+    When the Archiver pairs it with a run of 4.1.6
+    Then the run uses the baseline
+    And the run states that the baseline named no release
+
+  Scenario: A dataset is shared when only the release changed
+    Given the mod "com.example.mod" has a dataset on 4.1.6
+    When the same version runs on 4.1.7 and contributes the same rows and config
+    Then the content hash is equal
+    And the observation of 4.1.7 points at the same dataset
+    And no new dataset exists
+
   Scenario: A configuration decides the rows that the mod makes
     Given a run with ECOTI 3.4.0 on 4.1.6 without mods other than the pinned set
     Then the run adds 9 items, 9 Peacekeeper assort rows and 27 English translations
@@ -268,6 +335,9 @@ Feature: Archive the files and the configuration of a mod
 - [ ] Add `modFiles` to the API and to the Gherkin of `query-api.feature`.
 - [ ] Read `run/pre-boot.json` and `run/origin.json` into `mod_files.shipped_sha256` and
       `mod_datasets.config_origin` (TD-29).
+- [x] Write `run/release.json` from the server's own assembly (exporter 1.3.0) and refuse a baseline
+      of another release (`Archive:BaselinePath`, TD-26).
+- [ ] Compare a run against its baseline, table by table, and store the contribution (TD-29).
 
 ## Links
 

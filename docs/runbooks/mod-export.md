@@ -49,6 +49,10 @@ cp src/SptArchive.Exporter/bin/Release/net10.0/SptArchive.Exporter.dll /tmp/mods
 
 The exporter must run in the container. It is not a mod in the catalog.
 
+Build it against the assemblies of the release it will run on. A build against one release is
+refused by another: the exporter built against 4.1.6 does not load on 4.1.5 ("was built for a
+different version of SPT"). Take `/tmp/sptapp` from the image of the release you are exporting.
+
 ## 3. Lay out the mod set
 
 One target mod version and its pinned dependencies, in `user/mods/<Name>/`.
@@ -112,7 +116,7 @@ podman unshare chown -R 0:0 /tmp/mods/sptrun
 
 ### `run/`, the account of the run
 
-Since exporter 1.2.0 the export also holds `run/` (ADR-0029):
+Since exporter 1.2.0 the export also holds `run/` (ADR-0029); 1.3.0 adds `release.json`:
 
 | Path | What it holds |
 | --- | --- |
@@ -121,6 +125,7 @@ Since exporter 1.2.0 the export also holds `run/` (ADR-0029):
 | `run/config/<directory>/<path>` | the text of every configuration file, copied as bytes, comments included |
 | `run/pre-boot.json` | written by `run_mod.sh` before the container starts: the same manifest of `user/mods`. A file whose two hashes differ was rewritten by a mod during its load. |
 | `run/origin.json` | written by `run_mod.sh` when `CURATED_REASON` is set: `shipped` or `curated`, with the reason (ADR-0029, decision 7) |
+| `run/release.json` | since exporter 1.3.0: the release the run was made on, read from the server assembly (`4.1.6-RELEASE+T10NVR.0000000000` is `4.1.6`), with the informational version and the assembly name |
 
 A configuration file is one whose path has a segment `config`, `configs`, `presets` or `loader`, or
 whose name contains `config`, `settings`, `preset`, `option` or `loader`, or whose extension is
@@ -136,6 +141,20 @@ CURATED_REASON="The overlay is the feature; the shipped preset has AllowLootOver
   ./run_mod.sh LotsOfLootRedux-Curated
 ```
 
+### Pair a run with its baseline
+
+The Archiver compares a mod run against a **baseline** of the same release: the same container, the
+same dependencies, no target mod. The baseline is a fact about the host and not about the mod, so it
+is configuration and not a file inside the export:
+
+```bash
+export Archive__BaselinePath=/home/yui/work/sptmods/exports/baseline
+```
+
+The Archiver refuses a baseline whose `run/release.json` states another release, and says that a
+difference between two releases is not the work of a mod. A baseline exported before 1.3.0 states
+no release; it is used and the run reports that it verified nothing.
+
 ## Problems
 
 **A mod is rejected before the load.** The log prints one line and no mod loads at all, so the
@@ -148,6 +167,10 @@ Mod: Manimal-ManimalIcebreaker requires: com.wtt.contentbackport to be ...
 A missing dependency is not a partial run; it is no run (TD-36, ADR-0021). `run_mod.sh` stops the
 container as soon as it sees the line and exits 1 with `NO EXPORT`. Add the dependency, and repeat
 until the chain is complete.
+
+**The exporter itself is rejected.** `Mod `SptArchive.Exporter` was built for a different version of
+SPT and was not` — the exporter is built against one release's assemblies. Rebuild it against the
+image you are exporting (`/tmp/sptapp` from that image), then run again.
 
 **A mod does not load.** The log prints `not loaded. Reason: ...` and the run continues with the other
 mods. Two reasons appear often:

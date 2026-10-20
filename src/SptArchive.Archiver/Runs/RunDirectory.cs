@@ -29,13 +29,15 @@ public sealed class RunDirectory
         string runPath,
         IReadOnlyList<LoadedMod> mods,
         IReadOnlyDictionary<string, PreBootFile> preBoot,
-        RunOrigin origin)
+        RunOrigin origin,
+        string? serverRelease)
     {
         ExportPath = exportPath;
         RunPath = runPath;
         Mods = mods;
         _preBoot = preBoot;
         Origin = origin;
+        ServerRelease = serverRelease;
     }
 
     /// <summary>The directory that holds the tables of the run: the layout of <c>SPT_Data/database</c>.</summary>
@@ -49,6 +51,12 @@ public sealed class RunDirectory
 
     /// <summary>Whether a person changed the configuration of the target, and why (ADR-0029, decision 7).</summary>
     public RunOrigin Origin { get; }
+
+    /// <summary>
+    /// The server release the run was made on, as the server states it in <c>run/release.json</c>
+    /// (exporter 1.3.0). Null when the export came from an older exporter, which stated no release.
+    /// </summary>
+    public string? ServerRelease { get; }
 
     public static RunDirectory Read(string exportPath)
     {
@@ -91,7 +99,7 @@ public sealed class RunDirectory
                 .ToDictionary(file => file.Path, StringComparer.Ordinal)
             : new Dictionary<string, PreBootFile>(StringComparer.Ordinal);
 
-        return new RunDirectory(exportPath, runPath, mods, preBoot, ReadOrigin(runPath));
+        return new RunDirectory(exportPath, runPath, mods, preBoot, ReadOrigin(runPath), ReadRelease(runPath));
     }
 
     /// <summary>The mod this run is about, by its GUID. The exporter and the dependencies are not it.</summary>
@@ -206,6 +214,25 @@ public sealed class RunDirectory
             // A .jsonc file has comments and is not JSON. Its text is kept and its jsonb column stays null.
             return null;
         }
+    }
+
+    /// <summary>
+    /// The release out of <c>run/release.json</c>. A run of an older exporter has no such file: the
+    /// reader then knows no release and says so, instead of assuming the stated one (ADR-0014).
+    /// </summary>
+    private static string? ReadRelease(string runPath)
+    {
+        var path = Path.Combine(runPath, "release.json");
+
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllBytes(path));
+        var release = Optional(document.RootElement, "sptVersion");
+
+        return string.IsNullOrWhiteSpace(release) ? null : release;
     }
 
     private static RunOrigin ReadOrigin(string runPath)

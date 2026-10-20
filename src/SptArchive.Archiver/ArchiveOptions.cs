@@ -17,6 +17,15 @@ public sealed class ArchiveOptions
     /// </summary>
     public string? SptVersion { get; set; }
 
+    /// <summary>
+    /// Path to the export of a baseline run: the same release with the exporter and its dependencies
+    /// but no target mod (ADR-0013). A mod run is compared against it, so the rows the mod contributed
+    /// are what the dataset stores. The baseline belongs to the host, not to the mod, so it is
+    /// configured here and not inside the export; the runner that made it knows the path.
+    /// Set <c>Archive__BaselinePath</c>.
+    /// </summary>
+    public string? BaselinePath { get; set; }
+
     /// <summary>Apply pending EF Core migrations before importing.</summary>
     public bool ApplyMigrations { get; set; } = true;
 

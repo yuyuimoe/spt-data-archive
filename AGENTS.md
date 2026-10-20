@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). The first migration exists and is applied, and 125 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). The first migration exists and is applied, and 132 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 125 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 132 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,7 +94,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, three migrations are applied, and 125 tests pass (TD-01, TD-02, TD-04, TD-07, TD-39).
+- **Done:** the solution builds, three migrations are applied, and 132 tests pass (TD-01, TD-02, TD-04, TD-07, TD-39).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file and the text of every configuration file (ADR-0029). The schema
   holds `mod_files` and `mod_datasets.config_origin` for it.
@@ -103,9 +103,12 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   server version argument (TD-21) and the Gherkin scenarios with Reqnroll (TD-06).
 - **Open decisions:** ADR-0012 (Reqnroll for Gherkin) is the only Proposed ADR. ADR-0005 and ADR-0010 are
   superseded; ADR-0001 to 0004, 0006 to 0009 and 0011 to 0029 are Accepted.
-- **Not built:** the Archiver importer for a run directory and its canonical form, the baseline cache, and the
-  catalog (ADR-0013 action items). The container runner and the exporter exist and ran on nineteen real mod
+- **Not built:** the Archiver importer that compares a run directory against its baseline and stores the
+  contribution, the baseline cache, and the catalog (ADR-0013 action items). The container runner and the exporter exist and ran on nineteen real mod
   runs (`docs/runbooks/mod-export.md`), including a curated run of one mod (ADR-0029).
 - **Environment:** NuGet is reachable and the packages are pinned. `items.json` is in Git LFS upstream; run
-  `git lfs pull` in the server repository before you import. The Archiver cannot read the server version from
-  the install, so a run must state it (`Archive__SptVersion`).
+  `git lfs pull` in the server repository before you import. An **installation** names no release, so an
+  official import must state it (`Archive__SptVersion`, TD-26). A **run** names its own: exporter 1.3.0 writes
+  `run/release.json` from the server assembly, and `Archive:BaselinePath` (`Archive__BaselinePath`) points at
+  the baseline export that the run is compared against. Build the exporter against the assemblies of the
+  release it runs on: a build for 4.1.6 is refused by 4.1.5.
