@@ -24,7 +24,7 @@ public sealed class ExporterMetadata : IModMetadata
     public string Name { get; init; } = "SPT Archive Exporter";
     public string Author { get; init; } = "SPT Data Archive";
     public List<string>? Contributors { get; init; }
-    public Version Version { get; init; } = new("1.4.0");
+    public Version Version { get; init; } = new("1.5.0");
     public Range SptVersion { get; init; } = new(">=4.1.0 <5.0.0");
     public bool HasPrepatcher { get; init; } = false;
     public List<string>? Incompatibilities { get; init; }
@@ -399,6 +399,8 @@ public sealed class Exporter(
 
     private async Task DumpRunAsync(CancellationToken cancellationToken)
     {
+        await DumpTargetAsync(cancellationToken);
+
         var loaded = loadedMods
             .Select(mod => new
             {
@@ -421,6 +423,54 @@ public sealed class Exporter(
         {
             await DumpManifestAsync(mod.Directory, cancellationToken);
         }
+    }
+
+    /// <summary>
+    ///     <c>run/target.json</c>: the mod that the run was made for, why, and the version that loaded
+    ///     (ADR-0033, decision 3, amended). The runner states which mod it started, in
+    ///     <c>SPT_ARCHIVE_TARGET_MOD_GUID</c>, and the reason in <c>SPT_ARCHIVE_TARGET_REASON</c>. The
+    ///     exporter writes the file, and not the runner, because the runner is a shell script outside Git
+    ///     (TD-42) and this code is tested. The version is the one of the mod that loaded, so the file can
+    ///     never state a version that did not run.
+    ///     <para>
+    ///     A run with no such variable states no target: that is a baseline. A run that names a target that
+    ///     did not load states no target either, because the export would not hold its work. The importer
+    ///     then marks the observation unverified instead of trusting the name.
+    ///     </para>
+    /// </summary>
+    private async Task DumpTargetAsync(CancellationToken cancellationToken)
+    {
+        var guid = Environment.GetEnvironmentVariable("SPT_ARCHIVE_TARGET_MOD_GUID")?.Trim();
+
+        if (string.IsNullOrEmpty(guid))
+        {
+            Console.WriteLine("[exporter] the run states no target (SPT_ARCHIVE_TARGET_MOD_GUID is not set)");
+            return;
+        }
+
+        var target = loadedMods.FirstOrDefault(mod =>
+            string.Equals(mod.ModMetadata.ModGuid, guid, StringComparison.OrdinalIgnoreCase));
+
+        if (target is null)
+        {
+            Console.WriteLine(
+                $"[exporter] the run names the target '{guid}', which the server did not load: no run/target.json"
+            );
+            return;
+        }
+
+        var reason = Environment.GetEnvironmentVariable("SPT_ARCHIVE_TARGET_REASON")?.Trim();
+
+        await WriteAsync(
+            "run/target.json",
+            new
+            {
+                modGuid = target.ModMetadata.ModGuid,
+                version = target.ModMetadata.Version.ToString(),
+                reason = string.IsNullOrEmpty(reason) ? null : reason,
+            },
+            cancellationToken
+        );
     }
 
     /// <summary>

@@ -25,11 +25,13 @@ The driver requires a history of every run: why it was made and what it produced
 **We will record one row for every run, with its purpose, its target and its result.**
 
 1. **`archive_runs` gains the columns that state the work.** `kind` (`official`, `mod`, `probe`) and `purpose` (one line of text). A mod run and a probe run state a purpose. The row also gains `target_mod_guid`, `target_version`, `baseline_release` and `baseline_hash`.
+   - `official` names the data of the server itself: an official run and an official import load no mod (driver, 2026-10-20). A `mod` run loads the target and its dependencies. Nothing checks this yet (TD-50).
 
 2. **`archive_runs` gains a result.** One jsonb column `result` holds the counts that say what came out: the dataset id, the content hash, templates per kind and operation, path rows, locale rows, files, unstored files and warnings. A failed run stores its error and its stage.
    The column copies values that rows also hold. We accept the copy because a run without a dataset, or a run that failed, has no other place to state what happened.
 
-3. **The run states its own target.** The runner writes `run/target.json` next to `pre-boot.json` and `release.json`. The file states the GUID, the version and the reason of the target. The importer reads the target from there and not from a typed value. `Archive:RunModGuid` becomes a check: when the two differ, the import stops and names both.
+3. **The run states its own target.** The run directory holds `run/target.json` next to `pre-boot.json` and `release.json`. The file states the GUID, the version and the reason of the target. The importer reads the target from there and not from a typed value. `Archive:RunModGuid` becomes a check: when the two differ, the import stops and names both.
+   - **Amended on 2026-10-20, ratified by Yui.** The **exporter** writes the file, and not the runner. The runner states the target in two environment variables: `SPT_ARCHIVE_TARGET_MOD_GUID` and `SPT_ARCHIVE_TARGET_REASON`. The reason is the same in both places: the runner is a shell script outside Git (TD-42) and this code is inside Git and is tested. The version in the file is the version of the mod that loaded, so the file cannot state a version that did not run. A run that names a target that did not load writes no file.
    - A run directory from before this rule has no `target.json`. The importer then uses `Archive:RunModGuid` and marks the observation as unverified, in the same way that ADR-0029 treats a baseline without a release.
    - This closes TD-44 for every new run.
 
@@ -69,7 +71,7 @@ The second trade is the copied result. A count in `result` can drift from the ro
 - **Easier:** a question about the history is one table. "Which runs did we make on 4.1.6, for which mods, with which outcome" needs no log file.
 - **Easier:** a failed or empty run stops being invisible.
 - **Easier:** the target of a run becomes a fact of the run, and not a value that a person types.
-- **Harder:** the runner must write `target.json`, which makes the un-Gitted bash runner (TD-42) part of the contract until ADR-0030 replaces it.
+- **Harder:** the runner must state the target of a run in two environment variables. That keeps the un-Gitted bash runner (TD-42) part of the contract until ADR-0030 replaces it. The file itself is written by tested code.
 - **Harder:** the importer has one more validation and one more failure mode.
 - **Revisit when:** the Runner of ADR-0030 exists, because it then records the run before the container starts.
 
@@ -150,7 +152,7 @@ Feature: Keep a record of every run and why it happened
 1. [x] Migration `AddRunRecord`: `archive_runs` gains `kind`, `purpose`, `target_mod_guid`, `target_version`, `baseline_release`, `baseline_hash` and `result`; `mod_datasets` gains `created_by_run_id`; `mod_data_observations.archive_run_id` is required and gains `target_unverified`.
 2. [x] The Archiver writes the run row before the work starts. It sets the status and the result after the transaction ends, in both the success path and the failure path (`RunRecordTests`). The result is not inside the import transaction, because a failed import rolls that transaction back and the failure must still be recorded. A mod run records itself before it reads the export; an official import records itself after the config checks and the skip test.
 3. [x] The importer reads `run/target.json`, refuses a mismatch and marks an observation unverified when the file is absent. Reader side only, tested with fixtures.
-4. [ ] The runner writes `run/target.json` (TD-42; ADR-0030 takes it over). Open: nothing writes the file yet.
+4. [x] The exporter writes `run/target.json` from `SPT_ARCHIVE_TARGET_MOD_GUID` and `SPT_ARCHIVE_TARGET_REASON` (decision 3, amended; exporter 1.5.0). The version comes from the mod that loaded, and a target that did not load writes no file.
 5. [ ] A `runs` verb or an Api field lists the history.
 6. [ ] Decide whether the 16 unimported run directories of the export campaign are re-imported to appear in the history.
 

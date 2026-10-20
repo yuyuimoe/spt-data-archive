@@ -127,6 +127,7 @@ Since exporter 1.2.0 the export also holds `run/` (ADR-0029); 1.3.0 adds `releas
 | `run/origin.json` | written by `run_mod.sh` when `CURATED_REASON` is set: `shipped` or `curated`, with the reason (ADR-0029, decision 7) |
 | `run/routes.json` | since exporter 1.4.0: every HTTP route the process answers, with `url`, `method`, `order`, `router`, `assembly` and the `mod` GUID that owns the assembly (ADR-0031) |
 | `run/release.json` | since exporter 1.3.0: the release the run was made on, read from the server assembly (`4.1.6-RELEASE+T10NVR.0000000000` is `4.1.6`), with the informational version and the assembly name |
+| `run/target.json` | since exporter 1.5.0: the mod the run was made for, with the `version` that loaded and the `reason` the runner gave (ADR-0033, decision 3, amended). The exporter writes it from `SPT_ARCHIVE_TARGET_MOD_GUID` and `SPT_ARCHIVE_TARGET_REASON`; a run that names a target that did not load writes no file |
 
 A configuration file is one whose path has a segment `config`, `configs`, `presets` or `loader`, or
 whose name contains `config`, `settings`, `preset`, `option` or `loader`, or whose extension is
@@ -141,6 +142,19 @@ MOD_DIR_NAME=LotsOfLootRedux \
 CURATED_REASON="The overlay is the feature; the shipped preset has AllowLootOverlay = false" \
   ./run_mod.sh LotsOfLootRedux-Curated
 ```
+
+A run of a target states the target, or it is not a run of a target:
+
+```bash
+TARGET_GUID=com.lennoxp90.coti.server \
+TARGET_REASON="Thermal imager for the archive" \
+  ./run_mod.sh ECOTI
+```
+
+`run_mod.sh` stops when `TARGET_GUID` is not set, and passes both values to the container. The
+exporter finds that GUID among the mods that loaded, takes its version, and writes `run/target.json`.
+The runner does not write the file: it is a shell script outside Git (TD-42) and the exporter is
+tested. A baseline names no target.
 
 ### Pair a run with its baseline
 

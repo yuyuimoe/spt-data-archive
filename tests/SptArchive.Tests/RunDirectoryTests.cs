@@ -249,6 +249,32 @@ public sealed class RunDirectoryTests
         }
     }
 
+    [Fact]
+    public void A_target_file_states_a_reason_or_says_nothing_about_one()
+    {
+        // ADR-0033, decision 3: the runner states a reason when it has one. The exporter then writes the
+        // field as null, and the importer falls back to the purpose it generates for the run.
+        var copy = Path.Combine(Path.GetTempPath(), "sptarchive-target-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            CopyDirectory(Path.Combine(Root, "ECOTI"), copy);
+            File.WriteAllText(
+                Path.Combine(copy, "run", "target.json"),
+                """{"modGuid":"com.lennoxp90.coti.server","version":"3.4.0","reason":null}""");
+
+            var target = RunDirectory.Read(copy).DeclaredTarget;
+
+            Assert.NotNull(target);
+            Assert.Equal("com.lennoxp90.coti.server", target.ModGuid);
+            Assert.Null(target.Reason);
+        }
+        finally
+        {
+            Directory.Delete(copy, recursive: true);
+        }
+    }
+
     private static void CopyDirectory(string from, string to)
     {
         foreach (var directory in Directory.GetDirectories(from, "*", SearchOption.AllDirectories))

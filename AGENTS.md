@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Six migrations exist and are applied, and 220 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). Six migrations exist and are applied, and 221 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 220 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 221 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,7 +94,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, six migrations are applied, and 220 tests pass (TD-01, TD-02, TD-04, TD-07,
+- **Done:** the solution builds, six migrations are applied, and 221 tests pass (TD-01, TD-02, TD-04, TD-07,
   TD-29, TD-39, TD-40).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
@@ -103,9 +103,10 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   `mod_*` rows (TD-29) and one `archive_runs` row for every execution, with its kind, purpose, target, baseline and
   result (ADR-0033). Every row is keyed by the address the archive derived for the object, and the id map keeps
   the id the run gave it (ADR-0034).
-- **Next slice:** nothing writes `run/target.json`, so every run is unverified (TD-44). Then the paths of a
-  modified quest, trader and customization (ADR-0032 action item 3), the Api server version argument (TD-21), the
-  Gherkin scenarios with Reqnroll (TD-06), the rows of a location and a bot type (TD-45) and the baseline cache.
+- **Next slice:** an official import can hold mod data and nothing checks it (TD-50: the 4.1.6 tables hold 4 locale
+  strings that two library mods add). Then the paths of a modified quest, trader and customization (ADR-0032 action
+  item 3), the Api server version argument (TD-21), the Gherkin scenarios with Reqnroll (TD-06), the rows of a
+  location and a bot type (TD-45) and the baseline cache.
 - **Open decisions:** ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are
   Proposed. ADR-0005 and ADR-0010 are
   superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0034 are Accepted.
@@ -115,7 +116,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Environment:** NuGet is reachable and the packages are pinned. `items.json` is in Git LFS upstream; run
   `git lfs pull` in the server repository before you import. An **installation** names no release, so an
   official import must state it (`Archive__SptVersion`, TD-26). A **run** names its own: exporter 1.3.0 writes
-  `run/release.json` from the server assembly and `run/routes.json` from the dispatcher (ADR-0031), and
+  `run/release.json` from the server assembly, 1.4.0 `run/routes.json` from the dispatcher (ADR-0031) and 1.5.0
+  `run/target.json` from `SPT_ARCHIVE_TARGET_MOD_GUID` (ADR-0033), and
   `Archive:BaselinePath` (`Archive__BaselinePath`) points at
   the baseline export that the run is compared against. Build the exporter against the assemblies of the
   release it runs on: a build for 4.1.6 is refused by 4.1.5.
