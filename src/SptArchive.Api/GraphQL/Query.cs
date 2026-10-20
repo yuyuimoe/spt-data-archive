@@ -13,10 +13,21 @@ namespace SptArchive.Api.GraphQL;
 /// <remarks>
 /// Official data and mod data are separate collections (<c>items</c> / <c>modItems</c>, ...). Every list supports
 /// paging, filtering and sorting, and only the columns a query selects are read from the database.
-/// Fields holding raw JSON (<c>props</c>, <c>data</c>, <c>base</c>, ...) are returned as JSON text.
+/// Fields holding raw JSON (<c>props</c>, <c>data</c>, <c>base</c>, ...) are returned as <c>JSON</c> values (TD-15).
+/// Every official field takes an optional <c>sptVersion</c>: one exact archived release, or the latest when it is
+/// left out (ADR-0014, ADR-0019). Each official row states its release in its <c>sptVersion</c> field.
 /// </remarks>
 public sealed class Query
 {
+    // ---- Releases (ADR-0014, ADR-0019) ------------------------------------------------------------
+
+    /// <summary>
+    /// The server releases that the archive holds, newest first. A client reads this list to learn
+    /// which values the <c>sptVersion</c> argument of the official queries accepts.
+    /// </summary>
+    public Task<List<SptVersion>> GetSptVersionsAsync(ArchiveDbContext db, CancellationToken cancellationToken) =>
+        Releases.ListAsync(db, cancellationToken);
+
     // ---- Mods and languages -----------------------------------------------------------------------
 
     [UsePaging]
@@ -36,11 +47,18 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<Item> GetItems(ArchiveDbContext db) => db.Items.OrderBy(x => x.Id);
+    public async Task<IQueryable<Item>> GetItemsAsync(ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return db.Items.Where(x => x.SptVersion == release).OrderBy(x => x.Id);
+    }
 
     [GraphQLName("item")]
-    public Task<Item?> GetItemAsync(string id, ArchiveDbContext db, CancellationToken cancellationToken) =>
-        db.Items.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public async Task<Item?> GetItemAsync(string id, string? sptVersion, ArchiveDbContext db, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return await db.Items.FirstOrDefaultAsync(x => x.SptVersion == release && x.Id == id, cancellationToken);
+    }
 
     [UsePaging]
     [UseProjection]
@@ -60,13 +78,20 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<Customization> GetCustomizations(ArchiveDbContext db, string? side = null) =>
-        (side is null ? db.Customizations : db.Customizations.Where(row => row.Sides.Contains(side)))
-        .OrderBy(x => x.Id);
+    public async Task<IQueryable<Customization>> GetCustomizationsAsync(
+        ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken, string? side = null)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        var rows = db.Customizations.Where(x => x.SptVersion == release);
+        return (side is null ? rows : rows.Where(row => row.Sides.Contains(side))).OrderBy(x => x.Id);
+    }
 
     [GraphQLName("customization")]
-    public Task<Customization?> GetCustomizationAsync(string id, ArchiveDbContext db, CancellationToken cancellationToken) =>
-        db.Customizations.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public async Task<Customization?> GetCustomizationAsync(string id, string? sptVersion, ArchiveDbContext db, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return await db.Customizations.FirstOrDefaultAsync(x => x.SptVersion == release && x.Id == id, cancellationToken);
+    }
 
     [UsePaging]
     [UseProjection]
@@ -82,8 +107,12 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<LocaleEntry> GetTranslations(ArchiveDbContext db) =>
-        db.LocaleEntries.OrderBy(x => x.Scope).ThenBy(x => x.LanguageCode).ThenBy(x => x.Key);
+    public async Task<IQueryable<LocaleEntry>> GetTranslationsAsync(ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return db.LocaleEntries.Where(x => x.SptVersion == release)
+            .OrderBy(x => x.Scope).ThenBy(x => x.LanguageCode).ThenBy(x => x.Key);
+    }
 
     [UsePaging]
     [UseProjection]
@@ -98,11 +127,18 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<Quest> GetQuests(ArchiveDbContext db) => db.Quests.OrderBy(x => x.Id);
+    public async Task<IQueryable<Quest>> GetQuestsAsync(ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return db.Quests.Where(x => x.SptVersion == release).OrderBy(x => x.Id);
+    }
 
     [GraphQLName("quest")]
-    public Task<Quest?> GetQuestAsync(string id, ArchiveDbContext db, CancellationToken cancellationToken) =>
-        db.Quests.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public async Task<Quest?> GetQuestAsync(string id, string? sptVersion, ArchiveDbContext db, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return await db.Quests.FirstOrDefaultAsync(x => x.SptVersion == release && x.Id == id, cancellationToken);
+    }
 
     [UsePaging]
     [UseProjection]
@@ -116,11 +152,18 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<Trader> GetTraders(ArchiveDbContext db) => db.Traders.OrderBy(x => x.Id);
+    public async Task<IQueryable<Trader>> GetTradersAsync(ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return db.Traders.Where(x => x.SptVersion == release).OrderBy(x => x.Id);
+    }
 
     [GraphQLName("trader")]
-    public Task<Trader?> GetTraderAsync(string id, ArchiveDbContext db, CancellationToken cancellationToken) =>
-        db.Traders.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+    public async Task<Trader?> GetTraderAsync(string id, string? sptVersion, ArchiveDbContext db, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return await db.Traders.FirstOrDefaultAsync(x => x.SptVersion == release && x.Id == id, cancellationToken);
+    }
 
     [UsePaging]
     [UseProjection]
@@ -134,8 +177,11 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<TraderAssortItem> GetAssortItems(ArchiveDbContext db) =>
-        db.TraderAssortItems.OrderBy(x => x.TraderId).ThenBy(x => x.InstanceId);
+    public async Task<IQueryable<TraderAssortItem>> GetAssortItemsAsync(ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return db.TraderAssortItems.Where(x => x.SptVersion == release).OrderBy(x => x.TraderId).ThenBy(x => x.InstanceId);
+    }
 
     [UsePaging]
     [UseProjection]
@@ -148,8 +194,12 @@ public sealed class Query
     [UseProjection]
     [UseFiltering]
     [UseSorting]
-    public IQueryable<TraderQuestAssort> GetQuestAssorts(ArchiveDbContext db) =>
-        db.TraderQuestAssorts.OrderBy(x => x.TraderId).ThenBy(x => x.Status).ThenBy(x => x.AssortInstanceId);
+    public async Task<IQueryable<TraderQuestAssort>> GetQuestAssortsAsync(ArchiveDbContext db, string? sptVersion, CancellationToken cancellationToken)
+    {
+        var release = await Releases.ResolveAsync(db, sptVersion, cancellationToken);
+        return db.TraderQuestAssorts.Where(x => x.SptVersion == release)
+            .OrderBy(x => x.TraderId).ThenBy(x => x.Status).ThenBy(x => x.AssortInstanceId);
+    }
 
     [UsePaging]
     [UseProjection]

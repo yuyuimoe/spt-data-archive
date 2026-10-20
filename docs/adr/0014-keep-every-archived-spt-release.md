@@ -113,8 +113,8 @@ Feature: The archive keeps every server release
 ## Action Items
 
 1. [ ] Add `spt_versions` and the `spt_version` key column to every official table.
-2. [ ] Add the `sptVersion` argument to every official GraphQL field, defaulting to the latest.
-3. [ ] Add the version to the cache key, so one release does not answer for another.
+2. [x] Add the `sptVersion` argument to every official GraphQL field, defaulting to the latest. Done: `Releases.ResolveAsync`; each official row states its release in `sptVersion`, and `sptVersions` lists the releases.
+3. [x] Add the version to the cache key, so one release does not answer for another. Done: the key hashes the request body, which holds the argument, and the data version covers a request that leaves it out.
 4. [ ] Add the version-change query to the backlog, not to the first slice.
 
 ## Links
