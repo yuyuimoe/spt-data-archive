@@ -181,6 +181,40 @@ a web root is served to a browser and not read by the mod. Exporter 1.3.1 carrie
 ECOTI run of the same day has two configuration files (`config/config.json`,
 `config/riser-sights.json`) and its manifest says `other` for the loader.
 
+### 2026-10-20, driver: the hash covers a change that has no row
+
+Decision 4 names three inputs: the contribution rows, the configuration text and the manifest. The
+importer hashes a fourth input, and the driver ratified it: **the canonical hash of each file that
+the run changed and that no row type of this archive holds** (TD-45). These are a trader's
+`assort.json` and `questassort.json`, a location overlay, a bots file, and a price or handbook
+table.
+
+The case that forced it. ECOTI adds 9 item templates and 9 offers to Peacekeeper's assort. The
+archive has no row type for an offer yet, so the two assort files are the only trace of the offers.
+Without the fourth input, a run that adds the same 9 items and no offer would hash the same as
+ECOTI, the Archiver would find ECOTI's dataset up to date, and those offers would be archived under
+a dataset that does not hold them. With it, the two runs differ and the archive keeps both.
+
+The hash covers, in full:
+
+| Input | Taken from |
+| --- | --- |
+| Template rows: kind, id, operation, parent, the object the run left, and each changed path with its old and its new value | The contribution |
+| Locale rows: language, key, value and old value | The contribution |
+| Unstored changes: file path and the canonical hash of the file | The contribution (this amendment) |
+| Files: path, SHA-256, and the SHA-256 of the configuration text | The manifest and `mod_files` |
+
+Rows sort by kind and id, locale rows by language and key, and the rest by path, so the order of
+the input never changes the hash. The hash states no release and no dependency set (the amendment
+of the same day), so a run of the same content on another release keeps the same dataset.
+
+Two limits, written here so that no one reads them as a defect. The hash names a file whose content
+the archive does not store, so it proves that two runs differ and not where (TD-45 closes that).
+The canonical form keeps the order of an array (ADR-0028), so a run that reorders one is another
+dataset, even when the arrays hold the same values.
+
+`DatasetHash.Compute` in `SptArchive.Core/Canonical/RunContribution.cs` implements this rule.
+
 ## Options Considered
 
 **A. Keep the preset as one jsonb document per dataset (ADR-0026, decision 1).** It stores one
@@ -243,7 +277,9 @@ merge it. The archive runs one defined configuration per dataset, which is the s
 ## Verification
 
 The runs of 2026-10-20 on 4.1.6 produced the evidence below. No scenario runs as a test yet
-(TD-06), and no importer reads a run directory yet (TD-29), so the database half stays unverified.
+(TD-06), so every scenario stays `@unverified`. The importer of TD-29 reads a run directory into the
+database, and `RunImportTests` holds the rows of the first scenarios; the Gherkin binding is
+missing.
 
 ```gherkin
 @adr-0029 @unverified
@@ -276,7 +312,7 @@ Feature: Archive the files and the configuration of a mod
   Scenario: The manifest names every file, and copies the configuration only
     Given a run with ECOTI 3.4.0, which ships 46 files
     Then the manifest has 46 entries, each with a size and a SHA-256
-    And three of them are of kind "config" and are stored as text
+    And two of them are of kind "config" and are stored as text
     And the rest are named and not copied
 
   Scenario: A file that the mod rewrote at load is visible
@@ -326,6 +362,14 @@ Feature: Archive the files and the configuration of a mod
     And the observation of 4.1.7 points at the same dataset
     And no new dataset exists
 
+  Scenario: A change with no row keeps two datasets apart
+    Given a run with ECOTI 3.4.0, which adds 9 offers to the assort of Peacekeeper
+    And a run of the same release that adds the same 9 items and no offer
+    When the Archiver computes the content hash of each
+    Then the two hashes differ
+    And the import names the two assort files as changes that have no row
+    And both datasets exist
+
   Scenario: A configuration decides the rows that the mod makes
     Given a run with ECOTI 3.4.0 on 4.1.6 without mods other than the pinned set
     Then the run adds 9 items, 9 Peacekeeper assort rows and 27 English translations
@@ -343,11 +387,12 @@ Feature: Archive the files and the configuration of a mod
       the runbook.
 - [ ] Compute `dependency_set` and `dependency_set_hash` from `loaded.json` (ADR-0013, TD-36).
 - [ ] Add `modFiles` to the API and to the Gherkin of `query-api.feature`.
-- [ ] Read `run/pre-boot.json` and `run/origin.json` into `mod_files.shipped_sha256` and
+- [x] Read `run/pre-boot.json` and `run/origin.json` into `mod_files.shipped_sha256` and
       `mod_datasets.config_origin` (TD-29).
 - [x] Write `run/release.json` from the server's own assembly (exporter 1.3.0) and refuse a baseline
       of another release (`Archive:BaselinePath`, TD-26).
-- [ ] Compare a run against its baseline, table by table, and store the contribution (TD-29).
+- [x] Compare a run against its baseline, table by table, and store the contribution (TD-29:
+      `RunDiff` and `RunImporter`).
 
 ## Links
 
