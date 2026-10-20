@@ -8,11 +8,12 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 36 tests. Two migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 63 tests. Two migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
-> The Api served the archive read-only. Mod data can be exported from a server container into JSON
-> (six real mods, see `docs/runbooks/mod-export.md`), but no importer reads it yet. No Gherkin scenario
+> The Api served the archive read-only. A container run exports every table of the server database
+> (642 MB for 4.1.6, seventeen real mods, see `docs/runbooks/mod-export.md`), but no importer reads a
+> run yet. No Gherkin scenario
 > runs as a test yet and the Api has no server version argument (see [Known gaps](#known-gaps)).
 
 ## Documentation
@@ -34,6 +35,8 @@ src/
   SptArchive.Core      Entities, EF Core DbContext, migrations. Shared by the other two projects.
   SptArchive.Archiver  Run-to-completion job: reads the server's JSON, writes Postgres, exits.
   SptArchive.Api       Thin read-only GraphQL API (HotChocolate) + Redis response cache.
+  SptArchive.Exporter  Mod for the server container: dumps every table as a database directory (ADR-0027).
+                       Not in the solution; it builds against an SPT install.
 docs/                  ADRs, C4 model, Gherkin specs, tech-debt register, glossary.
 docker/initdb          Creates the read-only Postgres role used by the API.
 docker/compose.yml     Throwaway Postgres for local work. Not the deployment stack.
@@ -155,7 +158,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 36 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
+- **No Gherkin runner yet.** 63 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are
   imported (4.0.13 and 4.1.6), so an official query without a version mixes them (TD-21).

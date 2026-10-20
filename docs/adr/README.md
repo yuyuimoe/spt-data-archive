@@ -32,6 +32,8 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0024](0024-archive-the-whole-server-database.md) | Archive the whole server database, not seven tables | Accepted |
 | [0025](0025-resolve-a-faction-from-locale-and-curation.md) | Resolve a faction from a curated map with a prefix fallback | Accepted |
 | [0026](0026-archive-a-value-mod-preset.md) | Archive a value mod's preset, and say when it did nothing | Accepted |
+| [0027](0027-archive-a-run-as-a-database-directory.md) | Archive a run as a database directory | Proposed |
+| [0028](0028-compare-two-runs-in-a-canonical-form.md) | Compare two runs in a canonical form | Proposed |
 
 ## Status meanings
 

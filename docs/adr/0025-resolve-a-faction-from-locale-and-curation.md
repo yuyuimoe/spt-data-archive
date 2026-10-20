@@ -98,6 +98,11 @@ The seed for 4.1.6 holds 57 rows, 21 factions, 53 memberships and 4 deliberate n
 | `bossboar` | `bossboar`, `bossboarsniper`, `followerboar`, `followerboarclose1`, `followerboarclose2` |
 | *none* | `peacemaker`, `skier`, `spiritspring`, `spiritwinter` |
 
+`peacemaker` and `skier` are leftovers of the in-game traders that BSG cancelled: the driver says so
+(2026-10-20) and the data agrees, because no location spawns them and no locale role names them. They
+keep a row with a null faction so that a later release cannot hide a new bot type behind the same
+silence.
+
 ## Options Considered
 
 1. **A prefix rule only.** Free, and it produces `followerBigpipe` → `bossbigpipe`, which is not a

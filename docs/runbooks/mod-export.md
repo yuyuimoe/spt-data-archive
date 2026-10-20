@@ -25,17 +25,26 @@ podman build -t localhost/spt-server:4.1.6 \
 
 ## 2. Build the exporter
 
-The exporter reads the tables after every mod has loaded and writes three JSON files.
-`templates.json` holds the items, the quests and the clothes (the `customization` key).
+The exporter reads every table after every mod has loaded and writes the layout of
+`SPT_Data/database` (ADR-0027). The source is in this repository and it builds against an SPT
+install, so it needs the assemblies of the image:
 
 ```bash
-cd /tmp/exporter
-dotnet build -c Release
-podman run --rm --entrypoint /bin/sh \
-  -v /tmp/mods/sptrun:/opt/spt/user:Z \
-  -v /tmp/exporter/bin/Release/net10.0:/src:Z \
-  localhost/spt-server:4.1.6 \
-  -c "mkdir -p /opt/spt/user/mods/SptArchive.Exporter && cp /src/SptArchive.Exporter.dll /opt/spt/user/mods/SptArchive.Exporter/"
+dotnet build src/SptArchive.Exporter -c Release -p:SptAssemblyPath=/tmp/sptapp
+```
+
+`/tmp/sptapp` is a copy of the assemblies of the image. Take them once:
+
+```bash
+podman run --rm --entrypoint /bin/sh localhost/spt-server:4.1.6 \
+  -c "tar -C /opt/spt -cf - ." | tar -C /tmp/sptapp -xf - --strip-components=0
+```
+
+Install the result into the mod set:
+
+```bash
+mkdir -p /tmp/mods/all/SptArchive.Exporter
+cp src/SptArchive.Exporter/bin/Release/net10.0/SptArchive.Exporter.dll /tmp/mods/all/SptArchive.Exporter/
 ```
 
 The exporter must run in the container. It is not a mod in the catalog.
@@ -80,11 +89,20 @@ never finished loading.
 
 ## 5. Read the result
 
+The export is a database directory, so it can be compared with the install (ADR-0027):
+
 ```
-export/templates.json    items and quests
-export/traders.json      traders and their assorts
-export/locales.json      locale entries
+export/globals.json  server.json  settings.json  match.json
+export/templates/    items, quests, handbook, prices, customization, achievements, ...
+export/traders/      one directory per trader: base, assort, dialogue, questassort
+export/locales/      languages.json, global/<code>.json, menu/<code>.json
+export/bots/         base.json, core.json, types/<id>.json
+export/locations/    base.json and one directory per map with base and six overlays
+export/hideout/      areas, customAreas, customisation, production, qte, settings
 ```
+
+The first export of 4.1.6 with no mod is 642 MB. `locations/lighthouse/looseLoot.json` alone is
+126 MB.
 
 With `--userns=keep-id` the files belong to the host user. Without it, take the volume back first:
 
@@ -93,6 +111,17 @@ podman unshare chown -R 0:0 /tmp/mods/sptrun
 ```
 
 ## Problems
+
+**A mod is rejected before the load.** The log prints one line and no mod loads at all, so the
+exporter does not run and there is no export:
+
+```
+Mod: Manimal-ManimalIcebreaker requires: com.wtt.contentbackport to be ...
+```
+
+A missing dependency is not a partial run; it is no run (TD-36, ADR-0021). `run_mod.sh` stops the
+container as soon as it sees the line and exits 1 with `NO EXPORT`. Add the dependency, and repeat
+until the chain is complete.
 
 **A mod does not load.** The log prints `not loaded. Reason: ...` and the run continues with the other
 mods. Two reasons appear often:
@@ -143,6 +172,32 @@ Image `localhost/spt-server:4.1.6`, dependency set `WTT-ServerCommonLib 3.0.6` +
 | Ledger 1.1.0 | 0 | 0 | +45 | +1, 36 offers |
 | MassivesoftWeapons 1.1.2 (patch alone) | 0 | 0 | 0 | 0 |
 | MassivesoftWeapons base 1.1.2 (4.0.13 build) | not loaded: missing `AbstractModMetadata` | | | |
+
+## Runs recorded on 2026-10-20, full database
+
+Image `localhost/spt-server:4.1.6`, exporter 1.1.0, dependency set `WTT-ServerCommonLib 3.0.6` +
+`MassivesoftCore 1.0.2`.
+
+| Target | Export | What the dump shows |
+| --- | --- | --- |
+| baseline, no mod | 642 MB | 4,673 items, 558 quests, 31,549 translations, 12 traders, 57 bot types, 19 locations, 6 hideout parts |
+| Factory Classic 1.0.2 + Map Variants 1.0.3 | 642 MB | `factory4_day` and `factory4_night` replaced, 7 files each |
+| Arena Map Port 0.2.3 | 642 MB | no arena map: the mod needs a real Escape from Tarkov: Arena install (TD-37) |
+| Lots of Loot Redux 4.2.2 | 642 MB | no change of a table: its multipliers act when a raid is generated |
+| Icebreaker 1.1.3 | none | rejected before the load: it needs `com.wtt.contentbackport`, then `com.morebotsapi.tacticaltoaster` (TD-38) |
+
+## Two runs of one release are not equal
+
+Two runs of the baseline, no mod, 40 minutes apart: 13 files differ.
+
+- `traders/<id>/base.json` → `.nextResupply`: the clock of the next restock.
+- `traders/<id>/assort.json` → `.items[*]._id`: a new `MongoId` for every assort item at every
+  boot. The same ids key `barter_scheme` and `loyal_level_items`, so the shape is stable.
+- `locations/lighthouse/base.json` and `locations/woods/base.json` →
+  `.BossLocationSpawn[1].BossChance`: the boss event rotates (`35` and `0`).
+
+A comparison must therefore read a canonical form (ADR-0028, TD-39). A byte diff of two runs
+shows noise that no mod made.
 
 ## Keep the data, drop the assets
 

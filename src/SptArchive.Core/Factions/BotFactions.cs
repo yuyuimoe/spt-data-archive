@@ -104,8 +104,8 @@ public static class BotFactions
             ["followerboarclose2"] = Follower("bossboar"),
 
             // Named by nothing: no location of 4.1.6 spawns these, and no locale role names them.
-            ["peacemaker"] = NoFaction("not referenced by any location of 4.1.6 and no locale role"),
-            ["skier"] = NoFaction("not referenced by any location of 4.1.6 and no locale role"),
+            ["peacemaker"] = NoFaction("not referenced by any location of 4.1.6 and no locale role; leftover of the in-game traders that BSG cancelled (driver, 2026-10-20)"),
+            ["skier"] = NoFaction("not referenced by any location of 4.1.6 and no locale role; leftover of the in-game traders that BSG cancelled (driver, 2026-10-20)"),
             ["spiritspring"] = NoFaction("not referenced by any location of 4.1.6 and no locale role"),
             ["spiritwinter"] = NoFaction("not referenced by any location of 4.1.6 and no locale role"),
         };

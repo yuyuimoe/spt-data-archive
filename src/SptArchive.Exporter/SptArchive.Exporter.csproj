@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The exporter is a mod for the SPT server. It builds against the assemblies of an SPT
+    install, so it is not part of SptArchive.slnx and it is not redistributed.
+    Build it inside the container image, where the install is at /opt/spt:
+      dotnet build src/SptArchive.Exporter -c Release -p:SptAssemblyPath=/opt/spt
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SptArchive.Exporter</AssemblyName>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <SptAssemblyPath Condition="'$(SptAssemblyPath)' == ''">/opt/spt</SptAssemblyPath>
+    <NoWarn>CS8602;CS8604;CS8618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="SPTarkov.Server.Core">
+      <HintPath>$(SptAssemblyPath)/SPTarkov.Server.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Server.Assets">
+      <HintPath>$(SptAssemblyPath)/SPTarkov.Server.Assets.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Common">
+      <HintPath>$(SptAssemblyPath)/SPTarkov.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.DI">
+      <HintPath>$(SptAssemblyPath)/SPTarkov.DI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SemanticVersioning">
+      <HintPath>$(SptAssemblyPath)/SemanticVersioning.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
