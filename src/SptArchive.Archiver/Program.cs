@@ -1,6 +1,7 @@
 using Serilog;
 using SptArchive.Archiver;
 using SptArchive.Archiver.Importers;
+using SptArchive.Archiver.Runs;
 using SptArchive.Core;
 using SptArchive.Core.Data;
 
@@ -43,6 +44,9 @@ builder.Services.AddSingleton<IImporter, ItemImporter>();
 builder.Services.AddSingleton<IImporter, CustomizationImporter>();
 builder.Services.AddSingleton<IImporter, QuestImporter>();
 builder.Services.AddSingleton<IImporter, TraderImporter>();
+
+// The run import (TD-29) is not an IImporter: it reads a run directory against its baseline, not a release.
+builder.Services.AddSingleton<RunImporter>();
 
 builder.Services.AddHostedService<ArchiveJob>();
 

@@ -156,6 +156,39 @@ The Archiver refuses a baseline whose `run/release.json` states another release,
 difference between two releases is not the work of a mod. A baseline exported before 1.3.0 states
 no release; it is used and the run reports that it verified nothing.
 
+## Import the run
+
+The Archiver reads one export against the baseline of its release. Both must be on the host; the
+container is not involved.
+
+```bash
+Archive__RunPath=/home/yui/work/sptmods/exports/ECOTI \
+Archive__RunModGuid=com.lennoxp90.coti.server \
+Archive__BaselinePath=/home/yui/work/sptmods/exports/baseline \
+ConnectionStrings__Archive="Host=127.0.0.1;Port=5432;Database=archive;Username=archive_owner;Password=..." \
+dotnet run --project src/SptArchive.Archiver
+```
+
+Three settings and no release: a run names its own (`run/release.json`), and a baseline that names
+another one is refused. `Archive__RunModGuid` is the target, because a run also loads its
+dependencies and the archive does not guess. The comparison reads both exports (about 20 seconds
+each) before the transaction opens, so a broken export fails before anything is written.
+
+What it writes, measured on 2026-10-20 with exporter 1.4.0 on SPT 4.1.6:
+
+| Run | Templates | Item paths | Locale entries | Files | Dataset |
+|-----|-----------|-----------:|---------------:|------:|---------|
+| `ECOTI` | 11 (9 items added, 2 traders changed) | 0 | 459 | 46 | `5fbbcd38f0f2` |
+| `WTT-Armory` | 1,337 (833 + 461 items, 37 quests, 6 traders) | 733 | 45,402 | 110 | new |
+| `Gunwright` | 0 | 0 | 0 | 4 | new |
+
+`Gunwright` is the case to read twice: it changes no table at all and its whole contribution is two
+HTTP routes, so it stores a dataset with no row. That is the model of ADR-0028, not a failure. A
+component of a mod that has no `mod_*` table — a trader's assort, a location, a bot type — is
+*warned about* by name and its canonical hash enters the content hash, so two datasets that differ
+only there stay apart (TD-45). A second import of the same run exits immediately; `Archive__Force=true`
+imports it again.
+
 ## Routes
 
 `run/routes.json` answers "which endpoints does this mod add", and it needs no baseline:

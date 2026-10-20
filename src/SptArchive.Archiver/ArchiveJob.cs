@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using SptArchive.Archiver.Importers;
+using SptArchive.Archiver.Runs;
 using SptArchive.Core;
 using SptArchive.Core.Data;
 using SptArchive.Core.Entities;
@@ -17,6 +18,7 @@ namespace SptArchive.Archiver;
 public sealed class ArchiveJob(
     IDbContextFactory<ArchiveDbContext> dbFactory,
     IEnumerable<IImporter> importers,
+    RunImporter runImporter,
     IDistributedCache cache,
     IOptions<ArchiveOptions> options,
     IHostApplicationLifetime lifetime,
@@ -47,6 +49,14 @@ public sealed class ArchiveJob(
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
+        // One export of one mod run is a different job from an official installation (ADR-0029):
+        // it states its own release, and it needs the baseline of that release.
+        if (!string.IsNullOrWhiteSpace(_options.RunPath))
+        {
+            await ImportRunAsync(cancellationToken);
+            return;
+        }
+
         if (!Directory.Exists(_options.DatabasePath))
         {
             throw new DirectoryNotFoundException($"Archive:DatabasePath '{_options.DatabasePath}' does not exist.");
@@ -117,6 +127,71 @@ public sealed class ArchiveJob(
         await AnnounceNewDatasetAsync(archiveRun.Id);
 
         logger.LogInformation("Archive run {RunId} finished", archiveRun.Id);
+    }
+
+    /// <summary>
+    /// Imports the export of one mod run (TD-29). The comparison with the baseline happens before the
+    /// transaction opens, because it reads two exports and the transaction should stay short.
+    /// </summary>
+    private async Task ImportRunAsync(CancellationToken cancellationToken)
+    {
+        var plan = runImporter.Prepare();
+
+        logger.LogInformation(
+            "Importing the run of {ModGuid} {Version} on {Release}",
+            plan.Target.ModGuid,
+            plan.Target.Version,
+            plan.Release);
+
+        await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
+        db.Database.SetCommandTimeout(TimeSpan.FromMinutes(30));
+
+        if (_options.ApplyMigrations)
+        {
+            await db.Database.MigrateAsync(cancellationToken);
+        }
+
+        if (!_options.Force && await runImporter.IsCurrentAsync(db, plan, cancellationToken))
+        {
+            logger.LogInformation(
+                "The run of {ModGuid} {Version} on {Release} is already archived with this content; nothing to do (use Archive:Force=true to override)",
+                plan.Target.ModGuid,
+                plan.Target.Version,
+                plan.Release);
+            return;
+        }
+
+        var archiveRun = new ArchiveRun { SourceHash = plan.ContentHash, SptVersion = plan.Release };
+        db.ArchiveRuns.Add(archiveRun);
+        await db.SaveChangesAsync(cancellationToken);
+        db.ChangeTracker.Clear();
+
+        RunImportReport report;
+
+        try
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+            report = await runImporter.ApplyAsync(db, plan, archiveRun.Id, cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Failed, exception.Message);
+            throw;
+        }
+
+        logger.LogInformation(
+            "Dataset {DatasetId} ({State}): {Templates} templates, {Locales} locale entries, {Files} files",
+            report.DatasetId,
+            report.IsNewDataset ? "new" : "already known",
+            report.TemplateCount,
+            report.LocaleCount,
+            report.FileCount);
+
+        await MarkRunAsync(db, archiveRun.Id, ArchiveRun.Succeeded, error: null);
+        await AnnounceNewDatasetAsync(archiveRun.Id);
     }
 
     /// <summary>Reads and checks <see cref="ArchiveOptions.SptVersion"/>.</summary>

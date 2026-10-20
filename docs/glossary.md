@@ -13,6 +13,9 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Item template** | The definition of one kind of item. It has an id, a name, a parent and properties. The server file `templates/items.json` holds them. |
 | **Template id** | The 24-character id of an item template. Every reference in the server data uses it. A mod keeps the id to change an item, or mints a new id to add one. |
 | **Template operation** | What a mod does to one template id: `added`, `modified` or `removed`. One row in `mod_templates` for each touched template (ADR-0017). |
+| **Contribution** | Everything a run adds and changes, measured against the baseline of its release: the template operations, the item paths with the old value from the baseline, and the locale entries (ADR-0013). A dataset stores the contribution and its content hash covers it. |
+| **Content hash** | The SHA-256 of a contribution together with the configuration text and the manifest of the files the mod ships (ADR-0029). Two mod versions with the same hash share one dataset. |
+| **Unstored change** | A file that the run changed and that no `mod_*` table holds: a trader's assort, a location, a bot type, a price table. Its canonical hash enters the content hash, so two datasets that differ only there stay apart, and the import names it in the log (TD-45). |
 | **Added template** | A template id that the baseline does not have and the target export does. Its path rows have no old value. |
 | **Modified template** | A template id that the baseline and the target export both have, with different content. |
 | **Node** | An item template with the type "Node". It is a category in the item tree, not a real item. |

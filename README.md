@@ -8,14 +8,14 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 139 tests. Three migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 161 tests. Three migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
 > The Api served the archive read-only. A container run exports every table of the server database
-> (642 MB for 4.1.6, seventeen real mods, see `docs/runbooks/mod-export.md`), but no importer reads a
-> run yet, though the canonical form a run is compared and hashed by exists and is tested
-> against two real baselines (ADR-0028), and a run now names its own release and refuses a baseline of
-> another one (ADR-0029). No Gherkin scenario
+> (642 MB for 4.1.6, nineteen real mod runs, see `docs/runbooks/mod-export.md`), and the Archiver now reads a
+> run directory against the baseline of its release into a dataset: ECOTI 9 added items, 2 changed traders and
+> 459 locale entries; WTT-Armory 1,337 templates with 733 changed paths; Gunwright a dataset with no row,
+> because its whole contribution is two HTTP routes (ADR-0028, ADR-0029, ADR-0031). No Gherkin scenario
 > runs as a test yet and the Api has no server version argument (see [Known gaps](#known-gaps)).
 
 ## Documentation
@@ -90,13 +90,21 @@ rows of that release. The whole run is one transaction, so readers keep seeing t
 new one commits, and a failure leaves the archive untouched. If no source file changed since the last successful
 run of the same release, the job exits immediately.
 
-**Mod data**: the tables exist, the ingestion does not yet. ADR-0013 decided how it works: one mod version with
-its pinned dependencies runs in a throwaway server container, an exporter mod writes the final in-memory database
-to a directory that has the layout of `SPT_Data/database` (ADR-0027), and the difference from a baseline run is
-the dataset of that mod version. The export also holds `run/`: the mods that loaded, the manifest of every file
-with its SHA-256, and the text of every configuration file (ADR-0029). The container runner and the exporter mod
-are built and ran on nineteen mod runs; nothing reads a run directory yet (TD-29), and the baseline cache is not
-built.
+**Mod data**: one mod version with its pinned dependencies runs in a throwaway server container, an exporter mod
+writes the final in-memory database to a directory that has the layout of `SPT_Data/database` (ADR-0027), and the
+difference from a baseline run is the dataset of that mod version. The export also holds `run/`: the mods that
+loaded, the manifest of every file with its SHA-256, the text of every configuration file and every HTTP route it
+answers (ADR-0029, ADR-0031). The Archiver reads that against the baseline of the same release:
+
+```bash
+Archive__RunPath=/exports/ECOTI \
+Archive__RunModGuid=com.lennoxp90.coti.server \
+Archive__BaselinePath=/exports/baseline \
+dotnet run --project src/SptArchive.Archiver
+```
+
+A run names its own release, so `Archive__SptVersion` is not needed. Two runs of the same content share one
+dataset; a second import of the same run exits immediately. The baseline cache and the catalog are not built.
 
 Importers implement `IImporter` and are registered in `Archiver/Program.cs`; adding hideout, bots, locations or mods
 means adding an importer, not changing the pipeline.
@@ -164,12 +172,14 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 95 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
+- **No Gherkin runner yet.** 161 xUnit tests check the schema, the import path, the canonical form and the
+  run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are
   imported (4.0.13 and 4.1.6), so an official query without a version mixes them (TD-21).
-- **Mod ingestion is not built.** The tables and the change model exist; the container runner, the exporter mod and
-  the baseline cache are action items of ADR-0013.
+- **Mod ingestion is half built.** One run directory becomes a dataset, an observation and its rows, and the
+  canonical comparison is the input to the hash (TD-29). The baseline cache and the catalog are still action
+  items of ADR-0013, and a change to a trader's assort or to a map is hashed but stored as no row (TD-45).
 - **`items.json` is stored in Git LFS** upstream. The Archiver stops with a clear message if it finds the pointer
   file instead of the data.
 - **Not imported yet**: bots, locations, globals, hideout, settings, match, server, handbook, prices,
@@ -181,6 +191,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
   ([ADR-0025](docs/adr/0025-resolve-a-faction-from-locale-and-curation.md), TD-33).
 - **Client mods are not run.** Skill Effects Extended and EFT Effect Manager are BepInEx plugins, and ISB Special
   Forces ships 270 files with no server part. They get catalog rows and no dataset (ADR-0023).
-- **Nothing writes a mod change yet.** `mod_templates` and `mod_item_changes` are modelled, but the exporter that
-  would fill them is not built.
+- **A change to a table without a `mod_*` row is not stored.** `mod_templates` states that a trader changed, and
+  `mod_item_changes` holds the paths of a changed item, but an assort, a location or a bot type leaves no row
+  (TD-45). The canonical hash of the changed file keeps two datasets apart.
 - **JSON columns are exposed as JSON text** in GraphQL (`props`, `data`, `base`, ...), not as a native JSON scalar.

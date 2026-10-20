@@ -27,27 +27,8 @@ public sealed class CustomizationImporter(ILogger<CustomizationImporter> logger)
 
         foreach (var property in document.RootElement.EnumerateObject())
         {
-            var entry = property.Value;
-            var props = entry.TryGetProperty("_props", out var propsElement) && propsElement.ValueKind == JsonValueKind.Object
-                ? propsElement
-                : default;
-
-            await context.QueueAsync(
-                new Customization
-                {
-                    SptVersion = context.SptVersion,
-                    Id = property.Name,
-                    Name = entry.GetScalarString("_name") ?? property.Name,
-                    ParentId = entry.GetScalarString("_parent") ?? string.Empty,
-                    Type = entry.GetScalarString("_type") ?? string.Empty,
-                    Sides = props.GetStringArray("Side"),
-                    BodyPart = props.GetScalarString("BodyPart"),
-                    PrefabPath = props.GetNestedString("Prefab", "path"),
-                    AvailableAsDefault = props.GetBool("AvailableAsDefault"),
-                    Props = props.ValueKind == JsonValueKind.Object ? props.GetRawText() : "{}",
-                },
-                cancellationToken);
-
+            var values = TemplateMapper.ReadCustomization(property.Name, property.Value);
+            await context.QueueAsync(TemplateMapper.Customization(values, context.SptVersion), cancellationToken);
             count++;
         }
 

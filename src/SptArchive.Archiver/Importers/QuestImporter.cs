@@ -24,23 +24,8 @@ public sealed class QuestImporter(ILogger<QuestImporter> logger) : IImporter
 
         foreach (var property in document.RootElement.EnumerateObject())
         {
-            var quest = property.Value;
-
-            await context.QueueAsync(
-                new Quest
-                {
-                    SptVersion = context.SptVersion,
-                    Id = property.Name,
-                    QuestName = quest.GetScalarString("QuestName"),
-                    TraderId = quest.GetScalarString("traderId") ?? string.Empty,
-                    Location = quest.GetScalarString("location"),
-                    Type = quest.GetScalarString("type"),
-                    Side = quest.GetScalarString("side"),
-                    Restartable = quest.GetBool("restartable"),
-                    Data = quest.GetRawText(),
-                },
-                cancellationToken);
-
+            var values = TemplateMapper.ReadQuest(property.Name, property.Value);
+            await context.QueueAsync(TemplateMapper.Quest(values, context.SptVersion), cancellationToken);
             count++;
         }
 

@@ -60,7 +60,12 @@ model {
 
       archiveJob = component 'Archive Job' {
         technology 'BackgroundService'
-        description 'Hashes the source, skips unchanged data, runs importers in one transaction, records the run, announces the dataset.'
+        description 'Hashes the source, skips unchanged data, runs importers in one transaction, records the run, announces the dataset. With Archive:RunPath it imports one mod run instead (TD-29).'
+      }
+
+      runImport = component 'Run Import' {
+        technology 'C#, SptArchive.Archiver.Runs'
+        description 'Compares a run directory with the baseline of its release in the canonical form (ADR-0028) and writes the dataset, the observation, the templates, the changed item paths and the mod rows. A change without a mod table is hashed and named, not stored (TD-45).'
       }
 
       importers = component 'Importers' {

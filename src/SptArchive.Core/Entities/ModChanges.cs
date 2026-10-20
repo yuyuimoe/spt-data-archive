@@ -66,7 +66,10 @@ public static class ModTemplateKind
     public const string Quest = "quest";
     public const string Trader = "trader";
 
-    public static readonly string[] All = [Item, Quest, Trader];
+    /// <summary>A player customization, which the server keeps apart from the item tree (ADR-0022).</summary>
+    public const string Customization = "customization";
+
+    public static readonly string[] All = [Item, Quest, Trader, Customization];
 }
 
 /// <summary>The operation of one template under a dataset (ADR-0017).</summary>

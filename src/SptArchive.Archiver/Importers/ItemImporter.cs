@@ -28,28 +28,8 @@ public sealed class ItemImporter(ILogger<ItemImporter> logger) : IImporter
 
         foreach (var property in document.RootElement.EnumerateObject())
         {
-            var template = property.Value;
-            var props = template.TryGetProperty("_props", out var propsElement) && propsElement.ValueKind == JsonValueKind.Object
-                ? propsElement
-                : default;
-
-            await context.QueueAsync(
-                new Item
-                {
-                    SptVersion = context.SptVersion,
-                    Id = property.Name,
-                    Name = template.GetScalarString("_name") ?? property.Name,
-                    ParentId = template.GetScalarString("_parent") ?? string.Empty,
-                    Type = template.GetScalarString("_type") ?? string.Empty,
-                    Prototype = template.GetScalarString("_proto"),
-                    Weight = props.GetDoubleOrNull("Weight"),
-                    Width = props.GetInt32OrNull("Width"),
-                    Height = props.GetInt32OrNull("Height"),
-                    StackMaxSize = props.GetInt32OrNull("StackMaxSize"),
-                    Props = props.ValueKind == JsonValueKind.Object ? props.GetRawText() : "{}",
-                },
-                cancellationToken);
-
+            var values = TemplateMapper.ReadItem(property.Name, property.Value);
+            await context.QueueAsync(TemplateMapper.OfficialItem(values, context.SptVersion), cancellationToken);
             count++;
         }
 

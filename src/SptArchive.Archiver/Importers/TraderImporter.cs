@@ -50,21 +50,14 @@ public sealed class TraderImporter(ILogger<TraderImporter> logger) : IImporter
             using var baseDocument = await SourceFiles.ReadJsonAsync(basePath, cancellationToken);
             var trader = baseDocument.RootElement;
 
-            await context.QueueAsync(
-                new Trader
-                {
-                    SptVersion = context.SptVersion,
-                    Id = traderId,
-                    Name = trader.GetScalarString("name") ?? traderId,
-                    Nickname = trader.GetScalarString("nickname"),
-                    Currency = trader.GetScalarString("currency"),
-                    Location = trader.GetScalarString("location"),
-                    Base = trader.GetRawText(),
-                    Dialogue = await ReadRawAsync(directory, "dialogue.json", cancellationToken),
-                    Suits = await ReadRawAsync(directory, "suits.json", cancellationToken),
-                    Services = await ReadRawAsync(directory, "services.json", cancellationToken),
-                },
-                cancellationToken);
+            var values = TemplateMapper.ReadTrader(
+                traderId,
+                trader,
+                await ReadRawAsync(directory, "dialogue.json", cancellationToken),
+                await ReadRawAsync(directory, "suits.json", cancellationToken),
+                await ReadRawAsync(directory, "services.json", cancellationToken));
+
+            await context.QueueAsync(TemplateMapper.Trader(values, context.SptVersion), cancellationToken);
 
             offers += await ImportAssortAsync(context, traderId, directory, cancellationToken);
             await ImportQuestAssortAsync(context, traderId, directory, cancellationToken);
