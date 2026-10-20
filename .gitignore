@@ -8,3 +8,4 @@ obj/
 
 # Local agent tooling state (not project source)
 .pi/
+backups/
