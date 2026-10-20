@@ -25,7 +25,7 @@ The driver requires a history of every run: why it was made and what it produced
 **We will record one row for every run, with its purpose, its target and its result.**
 
 1. **`archive_runs` gains the columns that state the work.** `kind` (`official`, `mod`, `probe`) and `purpose` (one line of text). A mod run and a probe run state a purpose. The row also gains `target_mod_guid`, `target_version`, `baseline_release` and `baseline_hash`.
-   - `official` names the data of the server itself: an official run and an official import load no mod (driver, 2026-10-20). A `mod` run loads the target and its dependencies. Nothing checks this yet (TD-50).
+   - `official` names the data of the server itself: an official run and an official import load no mod (driver, 2026-10-20). A `mod` run loads the target and its dependencies. ADR-0035 makes the archive check both rules.
 
 2. **`archive_runs` gains a result.** One jsonb column `result` holds the counts that say what came out: the dataset id, the content hash, templates per kind and operation, path rows, locale rows, files, unstored files and warnings. A failed run stores its error and its stage.
    The column copies values that rows also hold. We accept the copy because a run without a dataset, or a run that failed, has no other place to state what happened.

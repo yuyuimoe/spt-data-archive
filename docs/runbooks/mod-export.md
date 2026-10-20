@@ -170,6 +170,37 @@ The Archiver refuses a baseline whose `run/release.json` states another release,
 difference between two releases is not the work of a mod. A baseline exported before 1.3.0 states
 no release; it is used and the run reports that it verified nothing.
 
+The baseline is **not** a source of official data. It loads the dependencies on purpose, because the
+comparison needs the same dependency set as the run. Measured on 2026-10-20: the 4.1.6 baseline loads
+`com.wtt.commonlib` 3.0.6 and `com.massivesoft.massivesoftcore` 1.0.2, and an official import of that
+folder is refused (ADR-0035).
+
+## Official data comes from a mod-free installation
+
+Official data is the data of the server alone (ADR-0033, decision 1). The Archiver takes it only from an
+installation whose `mods` folder holds nothing but the exporter (ADR-0035):
+
+```bash
+# An installation with no mod in its mods folder, and the exporter alone.
+Archive__DatabasePath=/tmp/native416/export Archive__SptVersion=4.1.6 \
+ConnectionStrings__Archive="Host=127.0.0.1;Port=5432;Database=archive;Username=archive_owner;Password=dev_owner_password" \
+  dotnet run --project src/SptArchive.Archiver
+```
+
+- The Archiver reads `run/loaded.json` and stops when the list holds a mod other than the exporter. The
+  message names every mod that loaded, so the fix is to remove them and export again.
+- A source without `run/loaded.json` states nothing. That is an export of an exporter older than 1.2.0, or
+  a bare `SPT_Data/database` folder. The import warns and goes on; nothing proves the source either way.
+- `run/release.json` and `Archive__SptVersion` must agree (ADR-0014). A bare database folder states no
+  release, so the operator states it.
+- The official data of a release comes before any run on that release. A run of a release that holds no
+  official row stops with a message that names the release. This is why the 4.0.13 rows stay: they are
+  the official data of their release, even though the run rows of the earlier imports were removed.
+
+The export of a mod-free installation is one container start with the exporter alone. Recorded on
+2026-10-20 for 4.1.6: 4,673 items, 536,414 locale entries, 12 traders, 10,880 assort rows, and no
+`SALVAGE_*` key. The earlier official import had 4 such keys per language, which two library mods add.
+
 ## Import the run
 
 The Archiver reads one export against the baseline of its release. Both must be on the host; the

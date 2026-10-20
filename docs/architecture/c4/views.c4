@@ -39,6 +39,7 @@ views {
     title 'Dynamic: One archive run'
 
     maintainer -> archive.archiver.archiveJob 'Starts the job'
+    archive.archiver.archiveJob -> archive.archiver.sourceSupport 'Refuses a source that loaded a mod (ADR-0035)'
     archive.archiver.archiveJob -> archive.archiver.sourceSupport 'Hashes every JSON file'
     archive.archiver.archiveJob -> archive.archiver.archiverDbAccess 'Looks for a succeeded run with the same hash'
     archive.archiver.archiverDbAccess -> archive.db 'Reads archive_runs'
@@ -54,6 +55,7 @@ views {
     archive.archiver -> archive.modRunner 'Asks for one mod version'
     archive.modRunner -> sptServer 'Starts a server from a pinned commit, with the dependencies and the mod, and without bundles'
     archive.modRunner -> archive.db 'Reads the dependency baseline, writes the dataset, the change rows and the observation'
+    archive.archiver -> archive.db 'Refuses a run of a release that holds no official data (ADR-0035)'
   }
 
   dynamic view queryCacheMiss {

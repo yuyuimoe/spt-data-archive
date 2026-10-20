@@ -66,6 +66,23 @@ public sealed class ArchiveJob(
         // and the server keeps its version in its assembly, not in the database files.
         var sptVersion = RequireSptVersion();
 
+        // An official import holds the server's own data (ADR-0033, decision 1): a source that loaded
+        // a mod is the wrong source, and the rows it would write are not official.
+        if (OfficialSource.Mods(_options.DatabasePath) is null)
+        {
+            logger.LogWarning(
+                "'{Path}' has no run/loaded.json, so nothing proves it loaded no mod (exporter older than 1.2.0). " +
+                "Importing as {SptVersion} unverified (ADR-0033, decision 1)",
+                _options.DatabasePath,
+                sptVersion);
+        }
+        else
+        {
+            OfficialSource.EnsureNoMod(_options.DatabasePath);
+        }
+
+        OfficialSource.EnsureRelease(_options.DatabasePath, sptVersion);
+
         await using var db = await dbFactory.CreateDbContextAsync(cancellationToken);
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(10));
 

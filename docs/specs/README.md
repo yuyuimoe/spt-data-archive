@@ -32,6 +32,7 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 
 ## Slice to work on next
 
-Give the Api its server version argument (ADR-0014, ADR-0019; TD-21). The four version scenarios in
-`query-api.feature` are the behavior of that slice. After it, bind the Gherkin scenarios with Reqnroll (TD-06).
-Scenarios outside the slice stay `@unverified` or `@backlog`.
+Record the path of every changed value of a quest, a trader and a customization (ADR-0032, action item 3).
+The `@unverified` scenarios of `mod-registry.feature` that name a change path are the behavior of that slice.
+After it: the Api server version argument (ADR-0014, ADR-0019; TD-21), then the Gherkin scenarios bound
+with Reqnroll (TD-06). Scenarios outside the slice stay `@unverified` or `@backlog`.

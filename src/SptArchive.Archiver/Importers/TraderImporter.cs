@@ -103,6 +103,12 @@ public sealed class TraderImporter(ILogger<TraderImporter> logger) : IImporter
         using var document = await SourceFiles.ReadJsonAsync(path, cancellationToken);
         var root = document.RootElement;
 
+        // The server writes "null" for a trader with no offer at all (Ref in 4.1.6). Null is not a missing file.
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return 0;
+        }
+
         if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
         {
             return 0;
@@ -173,6 +179,12 @@ public sealed class TraderImporter(ILogger<TraderImporter> logger) : IImporter
         }
 
         using var document = await SourceFiles.ReadJsonAsync(path, cancellationToken);
+
+        // The server writes "null" for a trader with no quest link at all (Ref in 4.1.6).
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
 
         foreach (var status in document.RootElement.EnumerateObject())
         {

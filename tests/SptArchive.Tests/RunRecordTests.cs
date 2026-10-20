@@ -54,6 +54,7 @@ public sealed class RunRecordTests : IAsyncLifetime
             "delete from mod_datasets where mod_guid = @g",
             "delete from mods where mod_guid = @g",
             "delete from archive_runs where target_mod_guid = @g or purpose like '%' || @g || '%'",
+            "delete from items where spt_version in (@r1, @r2)",
             "delete from spt_versions where version in (@r1, @r2)",
         })
         {
@@ -224,6 +225,8 @@ public sealed class RunRecordTests : IAsyncLifetime
 
     private async Task RunJobAsync(bool force = false, string? configuredGuid = "")
     {
+        await EnsureOfficialImportAsync();
+
         var options = new ArchiveOptions
         {
             RunPath = Run,
@@ -244,6 +247,34 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await job.StartAsync(TestContext.Current.CancellationToken);
         await job.ExecuteTask!;
+    }
+
+    /// <summary>
+    /// The archive holds the official data of the release before it holds a run on it (ADR-0013). One
+    /// official item is enough to say the release exists; the cleanup deletes it with the rest.
+    /// </summary>
+    private async Task EnsureOfficialImportAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+
+        if (await db.Items.AnyAsync(item => item.SptVersion == _release, cancellationToken))
+        {
+            return;
+        }
+
+        await SptVersionRegistry.EnsureAsync(db, _release, cancellationToken);
+
+        db.Items.Add(new Item
+        {
+            Id = "ffffffffffffffffffffffff",
+            Name = "Official Item of the test release",
+            ParentId = "root",
+            Type = "Item",
+            Props = "{}",
+            SptVersion = _release,
+        });
+        await db.SaveChangesAsync(cancellationToken);
     }
 
     private void Tree(string baselineRelease, string runRelease, object? target = null, string addedItemId = AddedId)

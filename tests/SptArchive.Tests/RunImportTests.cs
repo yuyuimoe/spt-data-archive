@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using SptArchive.Archiver;
 using SptArchive.Archiver.Runs;
 using SptArchive.Core.Canonical;
+using SptArchive.Core.Data;
 using SptArchive.Core.Entities;
 
 namespace SptArchive.Tests;
@@ -23,6 +24,7 @@ public sealed class RunImportTests : IDisposable
     private const string QuestId = "cccccccccccccccccccccccc";
     private const string AddedQuestId = "eeeeeeeeeeeeeeeeeeeeeeee";
     private const string TraderId = "579dc571d53a0658a154fbec";
+    private const string OfficialItemId = "ffffffffffffffffffffffff";
 
     private const string TargetGuid = "com.example.thermal";
     private const string DependencyGuid = "com.example.commonlib";
@@ -152,7 +154,13 @@ public sealed class RunImportTests : IDisposable
         Assert.Equal(config.Sha256, config.ShippedSha256);
 
         // The official tables stay untouched: the Api must never mix a mod row into an official one (ADR-0003).
-        Assert.Empty(await scope.Db.Items.Where(item => item.SptVersion == Release).ToListAsync(cancellationToken));
+        // The one item they hold is the official data the import was compared against.
+        Assert.Equal(
+            [OfficialItemId],
+            await scope.Db.Items
+                .Where(item => item.SptVersion == Release)
+                .Select(item => item.Id)
+                .ToListAsync(cancellationToken));
         Assert.Empty(await scope.Db.Quests.Where(quest => quest.SptVersion == Release).ToListAsync(cancellationToken));
     }
 
@@ -264,6 +272,35 @@ public sealed class RunImportTests : IDisposable
     }
 
     [Fact]
+    public async Task A_run_on_a_release_that_has_no_official_import_is_refused()
+    {
+        // The archive shows a release before it shows what a mod did to it: a dataset is the difference
+        // between a run and the official data of its release.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        WriteBaseline();
+        WriteRun();
+
+        await using var scope = await ArchiveDatabase.BeginAsync(cancellationToken);
+        await EnsureLanguageAsync(scope, "en", cancellationToken);
+
+        var plan = Importer().Prepare();
+        var archiveRun = new ArchiveRun
+        {
+            SourceHash = plan.ContentHash,
+            SptVersion = plan.Release,
+            Kind = ArchiveRunKind.Mod,
+        };
+        scope.Db.ArchiveRuns.Add(archiveRun);
+        await scope.Db.SaveChangesAsync(cancellationToken);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Importer().ApplyAsync(scope.Db, plan, archiveRun.Id, cancellationToken));
+
+        Assert.Contains($"no official data of {plan.Release}", error.Message);
+        Assert.Empty(await TestDatasetsAsync(scope, cancellationToken));
+    }
+
+    [Fact]
     public async Task A_target_that_another_mod_depends_on_is_still_the_target_of_this_run()
     {
         // The run states the mods it loaded, not which one it was made for, so the archive cannot prove
@@ -277,6 +314,8 @@ public sealed class RunImportTests : IDisposable
 
         var importer = Importer(modGuid: DependencyGuid);
         var plan = importer.Prepare();
+
+        await EnsureOfficialReleaseAsync(scope, plan.Release, cancellationToken);
 
         var archiveRun = new ArchiveRun { SourceHash = plan.ContentHash, Kind = ArchiveRunKind.Mod };
         scope.Db.ArchiveRuns.Add(archiveRun);
@@ -310,11 +349,44 @@ public sealed class RunImportTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var plan = importer.Prepare();
 
-        var archiveRun = new ArchiveRun { SourceHash = plan.ContentHash, SptVersion = plan.Release };
+        await EnsureOfficialReleaseAsync(scope, plan.Release, cancellationToken);
+
+        var archiveRun = new ArchiveRun
+        {
+            SourceHash = plan.ContentHash,
+            SptVersion = plan.Release,
+            Kind = ArchiveRunKind.Mod,
+            Status = ArchiveRun.Succeeded,
+        };
         scope.Db.ArchiveRuns.Add(archiveRun);
         await scope.Db.SaveChangesAsync(cancellationToken);
 
         return await importer.ApplyAsync(scope.Db, plan, archiveRun.Id, cancellationToken);
+    }
+
+    /// <summary>
+    /// The archive holds the official data of a release before it holds what a mod did to it. The tests
+    /// write inside a transaction that rolls back, so the rows go away with them.
+    /// </summary>
+    private static async Task EnsureOfficialReleaseAsync(TestScope scope, string release, CancellationToken cancellationToken)
+    {
+        if (await scope.Db.Items.AnyAsync(item => item.SptVersion == release, cancellationToken))
+        {
+            return;
+        }
+
+        await SptVersionRegistry.EnsureAsync(scope.Db, release, cancellationToken);
+
+        scope.Db.Items.Add(new Item
+        {
+            Id = OfficialItemId,
+            Name = "Official Item",
+            ParentId = "root",
+            Type = "Item",
+            Props = "{}",
+            SptVersion = release,
+        });
+        await scope.Db.SaveChangesAsync(cancellationToken);
     }
 
     private RunImporter Importer(string modGuid = TargetGuid) =>

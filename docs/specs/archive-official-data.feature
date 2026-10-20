@@ -193,6 +193,32 @@ Feature: Archive the official server data
     Then the archive holds the official data of both versions
     And no row of "4.0.12" is changed or deleted
 
+  # ------------------------------------------------ Official source (ADR-0035)
+
+  @unverified
+  Scenario: An official import refuses a source that loaded a mod
+    Given a source that loaded the mod "com.wtt.commonlib" version "3.0.6"
+    When the Archiver imports it as official data of "4.1.6"
+    Then the run fails
+    And the message names "com.wtt.commonlib"
+    And the table "items" keeps its previous rows
+
+  @unverified
+  Scenario: A source that states no mods imports with a warning
+    Given a source without "run/loaded.json"
+    When the Archiver imports it as official data of "4.1.6"
+    Then the run succeeds
+    And the log warns that nothing proves the source loaded no mod
+
+  @unverified
+  Scenario: An official import refuses a trader file that holds null
+    Given the trader "638f541a29ffd1183d187f57" has "null" in "questassort.json"
+    And the same trader has "null" in "assort.json"
+    When the Archiver imports the server version "4.1.6"
+    Then the run succeeds
+    And the archive stores no offer and no quest link for that trader
+    And every other trader of that release keeps its rows
+
   # ---------------------------------------------------------- Not built yet
 
   @backlog

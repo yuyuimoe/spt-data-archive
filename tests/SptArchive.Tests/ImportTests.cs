@@ -113,6 +113,28 @@ public sealed class ImportTests : IDisposable
         Assert.Equal(2, await scope.Db.Customizations.CountAsync(row => row.Id == ClothingId, cancellationToken));
     }
 
+    [Fact]
+    public async Task A_trader_whose_assort_files_are_null_has_no_offer_and_no_unlock()
+    {
+        // The server itself writes "null" for a trader that has no offer and no quest link: Ref
+        // (638f541a29ffd1183d187f57) ships exactly this in 4.1.6. Null is not a missing file.
+        var cancellationToken = TestContext.Current.CancellationToken;
+        WriteServerDatabase(weight: 0.5);
+        Write("traders/trader2/base.json", """
+            { "name": "Ref", "nickname": "R", "currency": "RUB", "location": "bigmap" }
+            """);
+        Write("traders/trader2/assort.json", "null");
+        Write("traders/trader2/questassort.json", "null");
+
+        await using var scope = await ArchiveDatabase.BeginAsync(cancellationToken);
+        await ImportAsync(scope, ReleaseA, cancellationToken);
+
+        Assert.Equal(2, await scope.Db.Traders.CountAsync(row => row.SptVersion == ReleaseA, cancellationToken));
+        Assert.Equal(1, await scope.Db.TraderAssortItems.CountAsync(row => row.SptVersion == ReleaseA, cancellationToken));
+        var unlock = Assert.Single(await scope.Db.TraderQuestAssorts.Where(row => row.SptVersion == ReleaseA).ToListAsync(cancellationToken));
+        Assert.Equal("trader1", unlock.TraderId);
+    }
+
     private async Task ImportAsync(TestScope scope, string version, CancellationToken cancellationToken)
     {
         await SptVersionRegistry.EnsureAsync(scope.Db, version, cancellationToken);

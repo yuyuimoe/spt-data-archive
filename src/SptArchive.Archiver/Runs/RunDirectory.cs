@@ -70,29 +70,13 @@ public sealed class RunDirectory
     {
         var runPath = Path.Combine(exportPath, "run");
         var loadedPath = Path.Combine(runPath, "loaded.json");
-
-        if (!File.Exists(loadedPath))
-        {
-            throw new InvalidOperationException(
+        var mods = TryReadLoadedMods(exportPath)
+            ?? throw new InvalidOperationException(
                 $"'{exportPath}' has no run/loaded.json, so the run did not say which mods it loaded. " +
                 "Only an export of exporter 1.2.0 or later records this (ADR-0029); export the run again " +
                 "instead of guessing from the directory names.");
-        }
 
-        var mods = ReadArray(loadedPath, "mods").EnumerateArray()
-            .Select(element => new LoadedMod(
-                Directory: Required(element, "directory"),
-                ModGuid: Required(element, "modGuid"),
-                Name: Optional(element, "name") ?? Required(element, "directory"),
-                Author: Optional(element, "author") ?? string.Empty,
-                Version: Required(element, "version"),
-                DeclaredSptVersion: Optional(element, "sptVersion") ?? string.Empty,
-                HasPrepatcher: element.TryGetProperty("hasPrepatcher", out var prepatcher)
-                    && prepatcher.ValueKind == JsonValueKind.True,
-                Dependencies: ReadDependencies(element)))
-            .ToArray();
-
-        if (mods.Length == 0)
+        if (mods.Count == 0)
         {
             throw new InvalidOperationException($"'{loadedPath}' lists no mod, so there is nothing to archive.");
         }
@@ -109,6 +93,35 @@ public sealed class RunDirectory
 
         return new RunDirectory(exportPath, runPath, mods, preBoot, ReadOrigin(runPath), ReadRelease(runPath), ReadTarget(runPath));
     }
+
+    /// <summary>
+    /// The mods the export lists in <c>run/loaded.json</c>, or null when it has no such file, which is the
+    /// case for an export of an exporter older than 1.2.0. An official import only warns about that case,
+    /// so it cannot use <see cref="Read"/>, which refuses it (ADR-0033, decision 1).
+    /// </summary>
+    public static IReadOnlyList<LoadedMod>? TryReadLoadedMods(string exportPath)
+    {
+        var loadedPath = Path.Combine(exportPath, "run", "loaded.json");
+
+        return File.Exists(loadedPath)
+            ? ReadArray(loadedPath, "mods").EnumerateArray().Select(ToLoadedMod).ToArray()
+            : null;
+    }
+
+    /// <summary>The release the export states in <c>run/release.json</c>, or null when it states none (exporter 1.3.0).</summary>
+    public static string? TryReadServerRelease(string exportPath) =>
+        ReadRelease(Path.Combine(exportPath, "run"));
+
+    private static LoadedMod ToLoadedMod(JsonElement element) => new(
+        Directory: Required(element, "directory"),
+        ModGuid: Required(element, "modGuid"),
+        Name: Optional(element, "name") ?? Required(element, "directory"),
+        Author: Optional(element, "author") ?? string.Empty,
+        Version: Required(element, "version"),
+        DeclaredSptVersion: Optional(element, "sptVersion") ?? string.Empty,
+        HasPrepatcher: element.TryGetProperty("hasPrepatcher", out var prepatcher)
+            && prepatcher.ValueKind == JsonValueKind.True,
+        Dependencies: ReadDependencies(element));
 
     /// <summary>The mod this run is about, by its GUID. The exporter and the dependencies are not it.</summary>
     public LoadedMod Target(string modGuid)

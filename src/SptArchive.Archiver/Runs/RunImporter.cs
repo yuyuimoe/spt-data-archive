@@ -155,6 +155,33 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
         return declared.ModGuid;
     }
 
+    /// <summary>
+    /// Refuses a run of a release that the archive does not hold as official data. A dataset is what a
+    /// mod added to a release (ADR-0013), so the release must exist first: an official import states the
+    /// server's own data, and a mod run states what the mod did to it.
+    /// </summary>
+    /// <remarks>
+    /// The check reads the official items of the release, not a succeeded official run: a run record can be
+    /// removed, and the data it describes cannot (the drivers removed the runs of the earlier imports on
+    /// 2026-10-20). The items are what a mod run is compared against, so they are what has to exist.
+    /// </remarks>
+    public static async Task EnsureOfficialReleaseAsync(
+        ArchiveDbContext db,
+        string release,
+        CancellationToken cancellationToken)
+    {
+        var imported = await db.Items.AnyAsync(item => item.SptVersion == release, cancellationToken);
+
+        if (imported)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"The archive holds no official data of {release}, so a run on it would describe a release that " +
+            "the archive cannot show. Import the official data of the installation first, then the run.");
+    }
+
     /// <summary>True when this run is already archived: same dataset, same release.</summary>
     public async Task<bool> IsCurrentAsync(ArchiveDbContext db, RunImportPlan plan, CancellationToken cancellationToken)
     {
@@ -180,6 +207,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
     {
         var target = plan.Target;
 
+        await EnsureOfficialReleaseAsync(db, plan.Release, cancellationToken);
         await SptVersionRegistry.EnsureAsync(db, plan.Release, cancellationToken);
 
         var mod = await EnsureModAsync(db, target, cancellationToken);
