@@ -26,6 +26,7 @@ podman build -t localhost/spt-server:4.1.6 \
 ## 2. Build the exporter
 
 The exporter reads the tables after every mod has loaded and writes three JSON files.
+`templates.json` holds the items, the quests and the clothes (the `customization` key).
 
 ```bash
 cd /tmp/exporter
@@ -61,12 +62,16 @@ curl -s -o /dev/null -D - -A 'Mozilla/5.0' \
 ## 4. Run the export
 
 ```bash
-podman run --rm \
+podman run --rm --userns=keep-id \
   -v /tmp/mods/sptrun:/opt/spt/user:Z \
   -e SPT_ARCHIVE_EXPORT_DIR=/opt/spt/user/export \
   -e SPT_IP=127.0.0.1 \
   localhost/spt-server:4.1.6
 ```
+
+`--userns=keep-id` makes the container user the host user, so the export lands in a directory the
+host can read and delete without `podman unshare`. Without it, `user/` ends up owned by the container
+root and every later command needs `podman unshare chown -R 0:0`.
 
 The container exits by itself. The exporter stops the process after it writes the files.
 
@@ -81,8 +86,7 @@ export/traders.json      traders and their assorts
 export/locales.json      locale entries
 ```
 
-Files inside the volume belong to the container user. Read them as they are; they are
-world-readable. To write to the volume from the host, take it back first:
+With `--userns=keep-id` the files belong to the host user. Without it, take the volume back first:
 
 ```bash
 podman unshare chown -R 0:0 /tmp/mods/sptrun
@@ -90,10 +94,14 @@ podman unshare chown -R 0:0 /tmp/mods/sptrun
 
 ## Problems
 
-**A mod does not load.** The ModValidator is all-or-nothing: one bad mod stops the whole set. The log
-names the mod and the reason. A common reason is a core-assembly version above the image version, for
-example `Could not load file or assembly 'SPTarkov.Server.Core, Version=4.1.6.0'` on a 4.1.5 image.
-Build the image for that release.
+**A mod does not load.** The log prints `not loaded. Reason: ...` and the run continues with the other
+mods. Two reasons appear often:
+
+- A core assembly newer than the image: `Could not load file or assembly 'SPTarkov.Server.Core,
+  Version=4.1.6.0'` on a 4.1.5 image. Build the image for that release.
+- A type that the current release no longer has, from a mod built for an older release:
+  `Could not load type 'SPTarkov.Server.Core.Models.Spt.Mod.AbstractModMetadata'`. The version gate
+  only rejects a mod that references a *newer* core. Use the patched build of that mod (ADR-0021).
 
 **`Could not find bundle ...`** The run has no bundles. The server logs one line per bundle and
 continues. The export is complete without them. A mod that builds its items from bundles produces no
@@ -103,4 +111,35 @@ items, which is TD-28.
 container user on every start. Run the `podman unshare chown` command above.
 
 **No items from a mod that loaded.** Check that the mod ships data and not only code. A code-only mod
-reads its data from a dependency or from bundles.
+reads its data from a dependency, from bundles, or from the mod it patches.
+
+**A mod named "Update Patch".** It is a patch (ADR-0021). It does nothing without the base mod, and
+the Forge does not declare that dependency. Put the base in the mod set beside the patch, or the run
+returns an export equal to the baseline. MassivesoftWeapons is the example: page 3127 patches page
+2588, which is built for 4.0.13.
+
+**The download is not the version the page names.** Check the DLL, not the page. The download endpoint
+of page 3127 "2.0.1" served `MassivesoftWeapons-v1.1.zip` (26,362 bytes), whose DLL states 1.1.2 with
+GUID `com.massivesoft.massivesoftweapons`, while the page states GUID
+`com.massivesoft.massivesoftweapons.415` (TD-30). Read the version and the GUID from the DLL, and keep
+the SHA-256 of the archive.
+
+## Runs recorded on 2026-10-20
+
+Image `localhost/spt-server:4.1.6`, dependency set `WTT-ServerCommonLib 3.0.6` + `MassivesoftCore
+1.0.2`, baseline = that set without a target.
+
+| Target | Items | Clothes | Quests | Traders |
+| --- | --- | --- | --- | --- |
+| baseline | 4,673 | 728 | 558 | 12 |
+| WTT-Armory 3.0.0 | +833 (461 modified) | 0 | +14 | 0 |
+| WTT-PackNStrapServer 2.1.1 | +49 (4 new category nodes) | 0 | 0 | 0 |
+| WeebSights 1.4.1 | +21 | 0 | 0 | 0 |
+| All The Clothes 3.2.0 | 0 | **+104** | 0 | 0 |
+| WTT The Long Lost Heads 2.1.0 | 0 | **+15** | 0 | 0 |
+| WTT W.A.A.C. 2.1.0 | +2 | **+65** | 0 | 0 |
+| female pmc voice USEC 1.0.6 | 0 | +1 | 0 | 0 |
+| Gunwright 1.3.0 | 0 | 0 | 0 | +1, 579 offers |
+| Ledger 1.1.0 | 0 | 0 | +45 | +1, 36 offers |
+| MassivesoftWeapons 1.1.2 (patch alone) | 0 | 0 | 0 | 0 |
+| MassivesoftWeapons base 1.1.2 (4.0.13 build) | not loaded: missing `AbstractModMetadata` | | | |
