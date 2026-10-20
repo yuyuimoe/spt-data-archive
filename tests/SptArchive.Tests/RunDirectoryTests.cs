@@ -174,5 +174,48 @@ public sealed class RunDirectoryTests
         Assert.Null(run.ServerRelease);
     }
 
+    [Fact]
+    public void The_hash_in_a_manifest_names_the_bytes_that_the_repository_holds()
+    {
+        // A manifest is only worth something if the file it names is still the file it hashed. Git
+        // would normalize a line ending in these fixtures and change every hash with it, so
+        // .gitattributes marks them "-text" (ADR-0029). This test is what keeps that true.
+        var checkedFiles = 0;
+
+        foreach (var manifest in Directory.EnumerateFiles(Root, "*.json", SearchOption.AllDirectories))
+        {
+            if (!manifest.Replace('\\', '/').Contains("/run/files/", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var runRoot = manifest[..manifest.IndexOf("/run/files/".Replace('/', Path.DirectorySeparatorChar), StringComparison.Ordinal)];
+            var modDirectory = Path.GetFileNameWithoutExtension(manifest);
+
+            foreach (var entry in RunDirectory.Read(runRoot).ManifestOf(
+                         RunDirectory.Read(runRoot).Mods.Single(mod => mod.Directory == modDirectory)))
+            {
+                if (entry.Kind != ModFileKind.Config)
+                {
+                    continue;
+                }
+
+                var stored = Path.Combine(runRoot, "run", "config", modDirectory, entry.Path);
+                if (!File.Exists(stored))
+                {
+                    continue;
+                }
+
+                using var stream = File.OpenRead(stored);
+                var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(stream));
+
+                Assert.Equal(entry.Sha256, hash);
+                checkedFiles++;
+            }
+        }
+
+        Assert.True(checkedFiles >= 5, $"only {checkedFiles} stored configuration files were checked");
+    }
+
     private static RunDirectory Read(string name) => RunDirectory.Read(Path.Combine(Root, name));
 }

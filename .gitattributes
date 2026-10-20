@@ -1,0 +1,4 @@
+# Test fixtures are evidence, not prose: the SHA-256 in a run's manifest names their bytes.
+# Git must never normalize a line ending here, or the repository stops holding the files that the
+# archive claims to hold (ADR-0029). Everything else may use the default.
+tests/SptArchive.Tests/fixtures/** -text
