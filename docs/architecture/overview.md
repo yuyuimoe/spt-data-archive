@@ -88,7 +88,7 @@ Every official row states its server release in `spt_version`, and that column l
 (ADR-0014). Every `mod_*` row points at `mod_datasets` instead of a mod version (ADR-0013).
 
 Support tables: `spt_versions`, `mods`, `languages`, `archive_runs`, `mod_datasets`,
-`mod_data_observations`, `mod_templates` and `mod_item_changes`.
+`mod_data_observations`, `mod_templates` and `mod_change_paths`.
 
 ## Cross-cutting concerns
 

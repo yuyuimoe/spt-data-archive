@@ -64,6 +64,10 @@ entry beside it. `CanonicalFormTests` holds the 13 files as its fixture.
    the position of the item in `items`, and every reference to the old id in the same document
    (`barter_scheme` keys, `loyal_level_items` keys, `parentId`) becomes the same token. The
    structure stays, the names stop moving.
+
+   **Replaced on 2026-10-20 by ADR-0034 decision 8.** A position is not an identity: an offer that
+   enters at the first place moves every name after it. An offer is named by its content, and the
+   file is ordered by that address. See `SptArchive.Core.Canonical.Assort`.
 4. The `jsonb` column keeps the value as the run wrote it (ADR-0002). The canonical form is
    only for comparison and for the hash. The archive never rewrites what the server said.
 5. A run reports every path that differs from the previous run of the same release and is not

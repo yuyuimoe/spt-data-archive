@@ -82,7 +82,7 @@ public sealed class RunDiffTests : IDisposable
 
         var change = Assert.Single(template.Changes);
         Assert.Equal("/_props/CanSellOnRagfair", change.Path);
-        Assert.Equal((ModItemChangeOperation.Set, null, "true"), (change.Op, change.OldValue, change.NewValue));
+        Assert.Equal((ModChangePathOperation.Set, null, "true"), (change.Op, change.OldValue, change.NewValue));
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public sealed class RunDiffTests : IDisposable
 
         var change = Assert.Single(Assert.Single(diff.Templates).Changes);
         Assert.Equal("/_props/Slots/0/_name", change.Path);
-        Assert.Equal((ModItemChangeOperation.Remove, "\"mod_slot\"", null), (change.Op, change.OldValue, change.NewValue));
+        Assert.Equal((ModChangePathOperation.Remove, "\"mod_slot\"", null), (change.Op, change.OldValue, change.NewValue));
     }
 
     [Fact]
@@ -187,20 +187,121 @@ public sealed class RunDiffTests : IDisposable
     }
 
     [Fact]
-    public void A_trader_whose_assort_changed_is_a_change_with_no_row_to_hold_it()
+    public void An_offer_is_a_template_named_by_what_it_sells()
     {
+        // The offer of the baseline sells Item B; the run sells the quest template instead. One offer
+        // left and one arrived, and the trader itself did not change (ADR-0032, decision 4).
         var diff = Diff(run: new()
         {
             ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "i1", templateId: QuestId),
         });
 
-        var template = Assert.Single(diff.Templates);
-        Assert.Equal(("trader", TraderId, "modified"), (template.Kind, template.TemplateId, template.Op));
-        Assert.Contains("\"Peacekeeper\"", template.NewJson);
+        Assert.DoesNotContain(diff.Templates, row => row.Kind == ModTemplateKind.Trader);
+        Assert.Empty(diff.UnstoredChanges);
 
-        // The archive stores no assort row yet, so the file is named instead of dropped (docs/tech-debt.md).
-        Assert.Equal($"traders/{TraderId}/assort.json", Assert.Single(diff.UnstoredChanges.Keys));
+        var removed = Assert.Single(diff.Templates, row => row.Op == ModTemplateOperation.Removed);
+        var added = Assert.Single(diff.Templates, row => row.Op == ModTemplateOperation.Added);
+
+        Assert.Equal((ModTemplateKind.Assort, OfferOf(ItemId), TraderId), (removed.Kind, removed.TemplateId, removed.ParentId));
+        Assert.Equal((ModTemplateKind.Assort, OfferOf(QuestId), TraderId), (added.Kind, added.TemplateId, added.ParentId));
+
+        // The document names the offer by its address, and holds no id that the boot minted.
+        Assert.Contains(added.TemplateId, added.NewJson);
+        Assert.DoesNotContain("\"i1\"", added.NewJson);
+        Assert.Equal(added.NewJson, added.CanonicalJson);
+
+        // The id of the run is a lookup; the address is the name of the offer.
+        Assert.Contains(diff.IdMap, entry => entry.Kind == ModTemplateKind.Assort && entry.RawId == "i1" && entry.Address == added.TemplateId);
     }
+
+    [Fact]
+    public void A_boot_that_renews_every_assort_id_changes_nothing()
+    {
+        // The server mints a new instance id for every offer on every boot (ADR-0028, 5,090 values in
+        // 4.1.6). Two runs of one content differ in those ids and in nothing else (TD-48).
+        var one = Diff(run: new()
+        {
+            ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "686e34616c2a18ed6b0eabfb", templateId: ItemId),
+        });
+
+        var two = Diff(run: new()
+        {
+            ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "7fff0000000000000000fff9", templateId: ItemId),
+        });
+
+        Assert.Empty(one.Templates);
+        Assert.Empty(two.Templates);
+        Assert.Equal(DatasetHash.Compute(one, Files), DatasetHash.Compute(two, Files));
+
+        Assert.Equal(
+            Assert.Single(one.IdMap, entry => entry.Kind == ModTemplateKind.Assort).Address,
+            Assert.Single(two.IdMap, entry => entry.Kind == ModTemplateKind.Assort).Address);
+    }
+
+    [Fact]
+    public void An_offer_that_becomes_more_expensive_keeps_its_name()
+    {
+        var diff = Diff(run: new()
+        {
+            ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "i1", templateId: ItemId, count: 2),
+        });
+
+        var offer = Assert.Single(diff.Templates);
+        Assert.Equal((ModTemplateKind.Assort, OfferOf(ItemId), ModTemplateOperation.Modified),
+            (offer.Kind, offer.TemplateId, offer.Op));
+
+        // The amount is not part of the name, so the price is one path and not a new offer.
+        var change = Assert.Single(offer.Changes);
+        Assert.Equal(("/barter/5448bd6b4bdc2dfc2f8b4569/count", "set", "1", "2"),
+            (change.Path, change.Op, change.OldValue, change.NewValue));
+    }
+
+    [Fact]
+    public void A_part_of_an_offer_is_named_by_the_slot_it_sits_in()
+    {
+        // The part reaches the offer through its slot, never through the id that the boot gave it, so a
+        // renewed id is not a change and a real one states its path (ADR-0032, decision 4).
+        var diff = Diff(
+            baseline: new() { ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "i1", templateId: ItemId, parts: Part("p1", QuestId, 1)) },
+            run: new() { ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "i9", templateId: ItemId, parts: Part("p7", QuestId, 2, parent: "i9")) });
+
+        var offer = Assert.Single(diff.Templates);
+        Assert.Equal(ModTemplateOperation.Modified, offer.Op);
+
+        var change = Assert.Single(offer.Changes);
+        Assert.Equal("/parts/mod_scope/upd/StackObjectsCount", change.Path);
+        Assert.Equal(("1", "2"), (change.OldValue, change.NewValue));
+
+        Assert.Contains("\"parts\"", offer.NewJson);
+        Assert.DoesNotContain("\"p1\"", offer.NewJson);
+        Assert.DoesNotContain("\"p7\"", offer.NewJson);
+    }
+
+    [Fact]
+    public void A_part_that_the_baseline_lacks_is_one_path()
+    {
+        var diff = Diff(run: new()
+        {
+            ["traders/" + TraderId + "/assort.json"] = Assort(
+                instanceId: "i1",
+                templateId: ItemId,
+                parts: Part("p1", QuestId, 1)),
+        });
+
+        var offer = Assert.Single(diff.Templates);
+
+        // The part is a value the baseline does not have at all, so one path states it (ADR-0017).
+        var change = Assert.Single(offer.Changes);
+        Assert.Equal("/parts", change.Path);
+        Assert.Equal("set", change.Op);
+        Assert.Null(change.OldValue);
+        Assert.Contains("mod_scope", change.NewValue);
+    }
+
+    /// <summary>A part attached to the offer of the file: one node with a slot and a count.</summary>
+    private static string Part(string id, string templateId, int count, string parent = "i1") =>
+        ",{\"_id\":\"" + id + "\",\"_tpl\":\"" + templateId + "\",\"parentId\":\"" + parent + "\",\"slotId\":\"mod_scope\""
+        + ",\"upd\":{\"StackObjectsCount\":" + count + "}}";
 
     [Fact]
     public void A_locale_key_the_baseline_lacks_is_a_row_without_an_old_value()
@@ -270,18 +371,29 @@ public sealed class RunDiffTests : IDisposable
     {
         var changed = Diff(run: new()
         {
-            ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "i1", templateId: QuestId),
+            ["locations/woods/base.json"] = """{"_Id":"woods","Name":"Woods at night"}""",
         });
 
+        Assert.Equal("locations/woods/base.json", Assert.Single(changed.UnstoredChanges.Keys));
         Assert.NotEqual(DatasetHash.Compute(changed, Files), DatasetHash.Compute(Diff(), Files));
     }
 
     private static readonly ContributionFile[] Files = [new("ECOTI/SptArchive.ECOTI.dll", "0123456789abcdef", null)];
 
-    private RunContribution Diff(Dictionary<string, string>? run = null)
+    private RunContribution Diff(Dictionary<string, string>? run = null, Dictionary<string, string>? baseline = null)
     {
-        Write(Baseline, BaselineTree);
-        Write(Run, BaselineTree);
+        var tree = new Dictionary<string, string>(BaselineTree, StringComparer.Ordinal);
+
+        if (baseline is not null)
+        {
+            foreach (var (path, content) in baseline)
+            {
+                tree[path] = content;
+            }
+        }
+
+        Write(Baseline, tree);
+        Write(Run, tree);
 
         if (run is not null)
         {
@@ -313,6 +425,9 @@ public sealed class RunDiffTests : IDisposable
             {"_id":"579dc571d53a0658a154fbec","name":"Peacekeeper","nextResupply":1792518932,"currency":"USD"}
             """,
         ["traders/" + TraderId + "/assort.json"] = Assort(instanceId: "i1", templateId: ItemId),
+
+        // A map that no row type holds yet (TD-45): a change to it is a hash and a warning.
+        ["locations/woods/base.json"] = """{"_Id":"woods","Name":"Woods"}""",
     };
 
     private static string Items(
@@ -338,8 +453,19 @@ public sealed class RunDiffTests : IDisposable
         + "\",\"_parent\":\"aaaaaaaaaaaaaaaaaaaaaaaa\",\"_type\":\"Item\",\"_props\":{\"Weight\":"
         + weight.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}}";
 
-    private static string Assort(string instanceId, string templateId) =>
-        "{\"items\":[{\"_id\":\"" + instanceId + "\",\"_tpl\":\"" + templateId + "\",\"parentId\":\"hideout\"}],"
-        + "\"barter_scheme\":{\"" + instanceId + "\":[[{\"count\":1,\"_tpl\":\"5448bd6b4bdc2dfc2f8b4569\"}]]},"
-        + "\"loyal_level_items\":{\"" + instanceId + "\":2}}";
+    /// <summary>One offer of the trader of the baseline: the item it sells, what it costs and its level.</summary>
+    private static string Assort(
+        string instanceId,
+        string templateId,
+        int count = 1,
+        int loyaltyLevel = 2,
+        string parts = "") =>
+        "{\"items\":[{\"_id\":\"" + instanceId + "\",\"_tpl\":\"" + templateId + "\",\"parentId\":\"hideout\"}"
+        + parts + "],"
+        + "\"barter_scheme\":{\"" + instanceId + "\":[[{\"count\":" + count + ",\"_tpl\":\"5448bd6b4bdc2dfc2f8b4569\"}]]},"
+        + "\"loyal_level_items\":{\"" + instanceId + "\":" + loyaltyLevel + "}}";
+
+    /// <summary>The address of an offer of the trader of the baseline, from what it sells and pays with.</summary>
+    private static string OfferOf(string templateId) =>
+        ContentUlid.Create("assort", TraderId, templateId, "5448bd6b4bdc2dfc2f8b4569");
 }

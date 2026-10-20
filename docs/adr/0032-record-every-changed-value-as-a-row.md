@@ -205,12 +205,15 @@ Feature: Answer what a mod changed, value by value
 
 ## Action Items
 
-1. [ ] Rename `mod_item_changes` to `mod_change_paths` and widen the kind check (migration).
-2. [ ] Emit one path per leaf in `RunDiff`, and drop the whole-array path (closes TD-46).
-3. [ ] Emit paths for quests, traders and customizations in `RunDiff`; keep the full object rows.
-4. [ ] Add the `assort` template kind, the content ULID of an offer and the offer tree import (ADR-0034, action items 1 to 5).
-5. [ ] Extend the content hash input list in ADR-0029 amendment 4 when a hash-only kind becomes a row (no hash change expected: the rows replace the hash of the same file).
-6. [ ] Close TD-45 for the kinds that now have rows; keep the open part for locations and bots.
+1. [x] Rename `mod_item_changes` to `mod_change_paths` and widen the kind check (migration). Done: `20261020210129_AddChangePaths` renames the table and its constraints in place, so no row is copied and no row is dropped. The kind check of `mod_templates`, `mod_change_paths` and `mod_id_maps` now names `assort`.
+2. [x] Emit one path per leaf in `RunDiff`, and drop the whole-array path (closes TD-46). Done: `RunDiff.ReadChanges` reads the path of each index, and `ToPointer` writes it as an RFC 6901 pointer.
+3. [ ] Emit paths for quests, traders and customizations in `RunDiff`; keep the full object rows. Open for a modified quest, trader and customization: they still store their whole object and no path. An offer states its paths.
+4. [x] Add the `assort` template kind, the content ULID of an offer and the offer tree import (ADR-0034, action items 1 to 5). Done: `SptArchive.Core.Canonical.Assort` names every offer, `RunDiff.CollectOffers` pairs a run with its baseline by address, and `RunImporter` writes `mod_templates`, `mod_change_paths`, `mod_trader_assort_items`, `mod_trader_quest_assorts` and `mod_id_maps`.
+   - Measured on 4.1.6 on 2026-10-20: `ECOTI` adds 18 offers over two traders. The import stores 18 `assort` rows and 18 offer rows, with 0 false changes.
+   - One trader of that baseline holds 5,090 instance ids, and the run holds 5,099. The two sets share none. The diff still pairs its 6,131 offers with 0 changes.
+   - The same baseline has 4 groups of offers that share a preset, so their order names them: three groups of two and one of three, nine offers of 6,131. The decision predicted three groups.
+5. [x] Extend the content hash input list in ADR-0029 amendment 4 when a hash-only kind becomes a row (no hash change expected: the rows replace the hash of the same file). Checked: an assort file keeps its canonical hash in `table_hashes`. Its offers also enter the hash as rows, so a change is content twice and never drops out.
+6. [x] Close TD-45 for the kinds that now have rows; keep the open part for locations and bots. Done for the assort: `ECOTI` no longer stores its two assort files as files with no row. TD-45 keeps the locations, bots, hideout, prices and handbook.
 7. [ ] Update the API surface and the query spec once the rows exist.
 
 ## Links

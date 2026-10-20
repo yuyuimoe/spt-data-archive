@@ -39,6 +39,13 @@ public sealed class CanonicalFormTests
                 .SequenceEqual(File.ReadAllBytes(Path.Combine(Root, "baseline.run1", relativePath))),
             $"{relativePath} is expected to differ on disk, or the fixture is not the disagreement");
 
+        // An assort is read as offers and not as a document with ids in it (ADR-0032, decision 4).
+        if (IsOfferFile(relativePath))
+        {
+            Assert.Equal(OffersText("baseline", relativePath), OffersText("baseline.run1", relativePath));
+            return;
+        }
+
         using var left = Read("baseline", relativePath);
         using var right = Read("baseline.run1", relativePath);
 
@@ -60,31 +67,61 @@ public sealed class CanonicalFormTests
     }
 
     [Fact]
-    public void A_generated_assort_id_becomes_the_position_of_its_item()
+    public void The_instance_ids_of_a_boot_are_not_content()
     {
+        // Two boots of one release renew every assort instance id (ADR-0028), so the ids of the two
+        // fixtures differ on disk. An offer is named by what it is, and the ids stay out (ADR-0032).
         const string file = "traders/579dc571d53a0658a154fbec/assort.json";
 
+        var baseline = OffersText("baseline", file);
+        var other = OffersText("baseline.run1", file);
+
+        Assert.Equal(baseline, other);
+
         using var source = Read("baseline", file);
-        var canonical = Encoding.UTF8.GetString(CanonicalForm.Canonicalize(file, source.RootElement));
-        using var result = JsonDocument.Parse(canonical);
+        var instanceIds = source.RootElement.GetProperty("items").EnumerateArray()
+            .Select(item => item.GetProperty("_id").GetString()!)
+            .ToArray();
 
-        var items = result.RootElement.GetProperty("items");
-        Assert.Equal("item[0]", items[0].GetProperty("_id").GetString());
-        Assert.Equal($"item[{items.GetArrayLength() - 1}]", items[items.GetArrayLength() - 1].GetProperty("_id").GetString());
+        Assert.NotEmpty(instanceIds);
+        Assert.All(instanceIds, id => Assert.DoesNotContain(id, baseline));
 
-        // Every join inside the document uses the same token, so the assort still joins (decision 3).
-        Assert.All(
-            result.RootElement.GetProperty("barter_scheme").EnumerateObject(),
-            entry => Assert.Matches(@"^item\[\d+\]$", entry.Name));
+        // The offers are ordered by address, and each one states the address it is named by.
+        using var canonical = JsonDocument.Parse(baseline);
+        var offers = canonical.RootElement.GetProperty("offers").EnumerateArray()
+            .Select(offer => offer.GetProperty("_id").GetString()!)
+            .ToArray();
 
-        Assert.All(
-            result.RootElement.GetProperty("loyal_level_items").EnumerateObject(),
-            entry => Assert.Matches(@"^item\[\d+\]$", entry.Name));
-
-        var mongoId = source.RootElement.GetProperty("items")[0].GetProperty("_id").GetString()!;
-        Assert.DoesNotContain(mongoId, canonical);
-        Assert.DoesNotContain(source.RootElement.GetProperty("items")[1].GetProperty("_id").GetString()!, canonical);
+        Assert.Equal(offers.OrderBy(id => id, StringComparer.Ordinal), offers);
     }
+
+    /// <summary>The canonical form of an assort file: the offers, in the order of their addresses.</summary>
+    private static string OffersText(string side, string relativePath)
+    {
+        var traderId = relativePath.Split('/')[1];
+        var root = Path.Combine(Root, side);
+
+        using var assort = Read(side, relativePath);
+        var questPath = $"traders/{traderId}/{Assort.QuestAssortFile}";
+
+        using var quests = File.Exists(Path.Combine(root, questPath))
+            ? Read(side, questPath)
+            : null;
+
+        var read = Assort.Read(
+            Addressing.Build(root, root),
+            traderId,
+            assort.RootElement,
+            quests?.RootElement);
+
+        return Path.GetFileName(relativePath) == Assort.QuestAssortFile
+            ? read.CanonicalLinks()
+            : read.CanonicalOffers();
+    }
+
+    private static bool IsOfferFile(string relativePath) =>
+        relativePath.StartsWith("traders/", StringComparison.Ordinal)
+        && Path.GetFileName(relativePath) is Assort.AssortFile or Assort.QuestAssortFile;
 
     [Fact]
     public void A_difference_that_no_entry_covers_is_reported()

@@ -59,6 +59,8 @@ public sealed class SchemaTests
     [InlineData("mod_trader_quest_assorts")]
     [InlineData("mod_files")]
     [InlineData("mod_id_maps")]
+    [InlineData("mod_templates")]
+    [InlineData("mod_change_paths")]
     public async Task Every_mod_table_is_keyed_by_its_dataset(string table)
     {
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
@@ -117,6 +119,52 @@ public sealed class SchemaTests
         Assert.Equal(2, count);
     }
 
+    [Theory]
+    [InlineData("item")]
+    [InlineData("assort")]
+    public async Task A_change_path_states_a_kind_the_archive_holds(string kind)
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+
+        var dataset = Guid.CreateVersion7();
+        await InsertDatasetAsync(scope, dataset, "com.example.b", "hash-b");
+        await scope.ExecuteAsync(
+            "insert into mod_templates (dataset_id, kind, template_id, op) values ($1, $2, 'T1', 'modified')",
+            dataset,
+            kind);
+
+        await scope.ExecuteAsync(
+            """
+            insert into mod_change_paths (dataset_id, kind, template_id, path, op, old_value, new_value)
+            values ($1, $2, 'T1', '/_props/Weight', 'set', '1', '2')
+            """,
+            dataset,
+            kind);
+
+        var rows = await scope.Db.ModChangePaths.CountAsync(
+            row => row.DatasetId == dataset,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(1, rows);
+    }
+
+    [Fact]
+    public async Task A_change_path_of_an_unknown_kind_is_refused()
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+
+        var dataset = Guid.CreateVersion7();
+        await InsertDatasetAsync(scope, dataset, "com.example.c", "hash-c");
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
+            """
+            insert into mod_change_paths (dataset_id, kind, template_id, path, op, old_value, new_value)
+            values ($1, 'location', 'T1', '/_props/Weight', 'set', '1', '2')
+            """,
+            dataset));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+    }
+
     [Fact]
     public async Task A_change_path_needs_its_template_row()
     {
@@ -125,10 +173,10 @@ public sealed class SchemaTests
         var dataset = Guid.CreateVersion7();
         await InsertDatasetAsync(scope, dataset, "com.example.a", "hash-a");
 
-        // mod_item_changes has no foreign key of its own to mod_datasets: it names the parent key.
+        // mod_change_paths has no foreign key of its own to mod_datasets: it names the parent key.
         var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
             """
-            insert into mod_item_changes (dataset_id, kind, template_id, path, op, old_value, new_value)
+            insert into mod_change_paths (dataset_id, kind, template_id, path, op, old_value, new_value)
             values ($1, 'item', 'A1', '/_props/Weight', 'set', '1', '2')
             """,
             dataset));

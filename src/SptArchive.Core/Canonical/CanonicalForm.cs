@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 
 namespace SptArchive.Core.Canonical;
@@ -39,6 +40,21 @@ public static class CanonicalForm
     /// <summary>The SHA-256 of the canonical bytes, lowercase hex. This is a dataset hash (ADR-0013), not a file hash.</summary>
     public static string Hash(string relativePath, JsonElement value, IdTokens? ids = null) =>
         Convert.ToHexString(SHA256.HashData(Canonicalize(relativePath, value, ids))).ToLowerInvariant();
+
+    /// <summary>
+    /// The canonical form of a value that has no file rules: its keys sorted, its array order kept.
+    /// The offer documents of an assort are built and compared this way (ADR-0032, decision 4).
+    /// </summary>
+    public static string CanonicalText(JsonElement value)
+    {
+        var buffer = new ArrayBufferWriter<byte>(Math.Max(64, value.GetRawText().Length));
+        using var writer = new Utf8JsonWriter(buffer, new JsonWriterOptions { Indented = false, SkipValidation = true });
+
+        Write(writer, value, new PathCursor(), Rules.None);
+        writer.Flush();
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
 
     /// <summary>
     /// The canonical form of one object of a file, as a document to read a value from (ADR-0034,
@@ -226,23 +242,20 @@ public static class CanonicalForm
     /// <summary>The rules that apply to one file: its volatile paths, and the names of its ids.</summary>
     private sealed class Rules
     {
-        private static readonly Rules None = new([], null, null, [], []);
+        public static readonly Rules None = new([], null, [], []);
 
         private readonly ImmutableArray<string[]> _volatile;
-        private readonly Dictionary<string, string>? _ids;
         private readonly IdTokens? _tokens;
         private readonly ImmutableArray<string[]> _selfPaths;
         private readonly ImmutableArray<string[]> _namePaths;
 
         private Rules(
             ImmutableArray<string[]> volatilePaths,
-            Dictionary<string, string>? ids,
             IdTokens? tokens,
             ImmutableArray<string[]> selfPaths,
             ImmutableArray<string[]> namePaths)
         {
             _volatile = volatilePaths;
-            _ids = ids;
             _tokens = tokens;
             _selfPaths = selfPaths;
             _namePaths = namePaths;
@@ -251,9 +264,8 @@ public static class CanonicalForm
         public static Rules For(string relativePath, JsonElement root, IdTokens? tokens = null, bool rootIsTemplate = false)
         {
             var volatilePaths = VolatilePath.Matching(relativePath);
-            var ids = AssortIds.Read(relativePath, root);
 
-            if (tokens is null && volatilePaths.IsDefaultOrEmpty && ids is null)
+            if (tokens is null && volatilePaths.IsDefaultOrEmpty)
             {
                 return None;
             }
@@ -264,7 +276,6 @@ public static class CanonicalForm
 
             return new Rules(
                 volatilePaths is { IsDefault: true } ? [] : volatilePaths,
-                ids,
                 tokens,
                 isTable ? (rootIsTemplate ? SelfPathsAtRoot : SelfPaths) : [],
                 isTable && !rootIsTemplate ? NamePaths : []);
@@ -291,16 +302,11 @@ public static class CanonicalForm
         }
 
         /// <summary>
-        /// Renumbers the generated ids of an assort (ADR-0028, decision 3) and names the ids of a
-        /// template by their address (ADR-0034, decision 5).
+        /// Names the id of a template by its address (ADR-0034, decision 5). An assort is not read here:
+        /// its offers are named by their address before this (ADR-0032, decision 4).
         /// </summary>
         public string? MapValue(PathCursor path, string value)
         {
-            if (_ids is not null && path.IsItemIdOrParent)
-            {
-                return _ids.GetValueOrDefault(value);
-            }
-
             if (_tokens is null)
             {
                 return null;
@@ -309,49 +315,9 @@ public static class CanonicalForm
             return path.MatchesAny(_selfPaths) ? _tokens.OwnIdToken : _tokens.Token(value);
         }
 
-        /// <summary>A key that is an id: the key of a table of templates, or of an assort map.</summary>
-        public string MapName(PathCursor path, string name)
-        {
-            if (_ids is not null && path.IsAssortKey)
-            {
-                return _ids.GetValueOrDefault(name, name);
-            }
-
-            return _tokens is not null && path.MatchesAny(_namePaths) ? _tokens.Map(name) : name;
-        }
-    }
-
-    /// <summary>The ids of an assort, by the position of their item.</summary>
-    private static class AssortIds
-    {
-        public static Dictionary<string, string>? Read(string relativePath, JsonElement root)
-        {
-            if (!relativePath.EndsWith("/assort.json", StringComparison.Ordinal)
-                || !relativePath.StartsWith("traders/", StringComparison.Ordinal)
-                || root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty("items", out var items)
-                || items.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            var ids = new Dictionary<string, string>(items.GetArrayLength(), StringComparer.Ordinal);
-            var position = 0;
-
-            foreach (var item in items.EnumerateArray())
-            {
-                if (item.ValueKind == JsonValueKind.Object
-                    && item.TryGetProperty("_id", out var id)
-                    && id.ValueKind == JsonValueKind.String)
-                {
-                    ids[id.GetString()!] = $"item[{position}]";
-                }
-
-                position++;
-            }
-
-            return ids.Count == 0 ? null : ids;
-        }
+        /// <summary>The key of a table of templates, which is an id.</summary>
+        public string MapName(PathCursor path, string name) =>
+            _tokens is not null && path.MatchesAny(_namePaths) ? _tokens.Map(name) : name;
     }
 
     /// <summary>The position in a document while it is written, as segments that a pattern can match.</summary>
@@ -398,15 +364,6 @@ public static class CanonicalForm
         }
 
         /// <summary>"items[3]._id" reads better in a log than a list of segments.</summary>
-        public bool IsItemIdOrParent =>
-            _segments.Count == 3
-            && _segments[0] == "items"
-            && _segments[2] is "_id" or "parentId";
-
-        /// <summary>A key of <c>barter_scheme</c> or <c>loyal_level_items</c>: both are keyed by an assort item id.</summary>
-        public bool IsAssortKey =>
-            _segments.Count == 2 && _segments[0] is "barter_scheme" or "loyal_level_items";
-
         public string ToJsonPath()
         {
             var text = "$";

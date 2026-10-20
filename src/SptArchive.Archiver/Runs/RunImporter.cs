@@ -250,7 +250,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
         CancellationToken cancellationToken)
     {
         var templates = new List<ModTemplate>();
-        var changes = new List<ModItemChange>();
+        var changes = new List<ModChangePath>();
 
         foreach (var template in plan.Contribution.Templates)
         {
@@ -263,21 +263,19 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
                 ParentId = template.ParentId,
             });
 
-            // Only an item has a path table: the check constraint on mod_item_changes says so.
-            if (string.Equals(template.Kind, ModTemplateKind.Item, StringComparison.Ordinal))
+            // Every kind states the paths of its changed values (ADR-0032, decision 1).
+            foreach (var change in template.Changes)
             {
-                foreach (var change in template.Changes)
+                changes.Add(new ModChangePath
                 {
-                    changes.Add(new ModItemChange
-                    {
-                        DatasetId = datasetId,
-                        TemplateId = template.TemplateId,
-                        Path = change.Path,
-                        Op = change.Op,
-                        OldValue = change.OldValue,
-                        NewValue = change.NewValue,
-                    });
-                }
+                    DatasetId = datasetId,
+                    Kind = template.Kind,
+                    TemplateId = template.TemplateId,
+                    Path = change.Path,
+                    Op = change.Op,
+                    OldValue = change.OldValue,
+                    NewValue = change.NewValue,
+                });
             }
         }
 
@@ -290,7 +288,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
         if (changes.Count > 0)
         {
             await AddAllAsync(db, changes, cancellationToken);
-            logger.LogInformation("Item changes: {Count} paths", changes.Count);
+            logger.LogInformation("Changed values: {Count} paths", changes.Count);
         }
 
         var rows = plan.Contribution.Templates.Where(template => template.NewJson is not null).ToArray();
@@ -312,9 +310,75 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             .Where(row => string.Equals(row.Kind, ModTemplateKind.Trader, StringComparison.Ordinal))
             .Select(row => TemplateMapper.ModTrader(ReadTrader(plan, row), datasetId)), cancellationToken);
 
+        await WriteOffersAsync(db, datasetId, rows, cancellationToken);
         await WriteLocalesAsync(db, datasetId, plan, cancellationToken);
         await WriteFilesAsync(db, datasetId, plan, cancellationToken);
         await WriteIdMapAsync(db, datasetId, plan, cancellationToken);
+    }
+
+    /// <summary>
+    /// The offer trees the dataset touches, and the quest unlocks that hang from them (ADR-0032).
+    /// A dataset is written once, so the tree of one offer stays consistent with itself.
+    /// </summary>
+    private async Task WriteOffersAsync(
+        ArchiveDbContext db,
+        Guid datasetId,
+        IEnumerable<TemplateContribution> rows,
+        CancellationToken cancellationToken)
+    {
+        var offers = new List<ModTraderAssortItem>();
+        var quests = new List<ModTraderQuestAssort>();
+
+        foreach (var offer in rows.Where(row => string.Equals(row.Kind, ModTemplateKind.Assort, StringComparison.Ordinal)))
+        {
+            using var document = JsonDocument.Parse(offer.NewJson!);
+
+            // The parent of an offer is the trader it belongs to.
+            var traderId = offer.ParentId ?? string.Empty;
+
+            foreach (var node in Assort.Rows(offer.TemplateId, document.RootElement))
+            {
+                offers.Add(new ModTraderAssortItem
+                {
+                    DatasetId = datasetId,
+                    TraderId = traderId,
+                    InstanceId = node.NodeId,
+                    TemplateId = node.TemplateId,
+                    ParentId = node.ParentNodeId,
+                    SlotId = node.SlotId,
+                    Upd = node.Upd,
+                    BarterScheme = node.Barter,
+                    LoyaltyLevel = node.LoyaltyLevel,
+                });
+            }
+
+            if (document.RootElement.TryGetProperty("quests", out var unlocks) && unlocks.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var unlock in unlocks.EnumerateObject())
+                {
+                    quests.Add(new ModTraderQuestAssort
+                    {
+                        DatasetId = datasetId,
+                        TraderId = traderId,
+                        Status = unlock.Name,
+                        AssortInstanceId = offer.TemplateId,
+                        QuestId = unlock.Value.GetString() ?? string.Empty,
+                    });
+                }
+            }
+        }
+
+        if (offers.Count > 0)
+        {
+            await AddAllAsync(db, offers, cancellationToken);
+            logger.LogInformation("Offer rows: {Count}", offers.Count);
+        }
+
+        if (quests.Count > 0)
+        {
+            await AddAllAsync(db, quests, cancellationToken);
+            logger.LogInformation("Quest unlocks: {Count}", quests.Count);
+        }
     }
 
     /// <summary>

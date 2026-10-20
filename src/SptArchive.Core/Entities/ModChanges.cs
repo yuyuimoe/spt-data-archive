@@ -28,18 +28,20 @@ public class ModTemplate
 }
 
 /// <summary>
-/// One changed property path under a <see cref="ModTemplate"/> (ADR-0017). The path is an RFC 6901
-/// JSON pointer such as <c>/_props/Weight</c>.
+/// One changed value under a <see cref="ModTemplate"/> (ADR-0017, ADR-0032). The path is an RFC 6901
+/// JSON pointer such as <c>/_props/Weight</c> or <c>/barter/&lt;template address&gt;/count</c>.
 /// </summary>
 /// <remarks>
-/// The old value comes from the official table of the server release in the observation. An added
-/// template has no old value, and a removed template has no new value; the Archiver enforces both.
+/// The old value comes from the baseline of the run, which holds the official data of the release in
+/// the same shape. An added template has no old value, and a removed template has no new value; the
+/// Archiver enforces both. One row per leaf: a path that an object or an array holds is one row
+/// (ADR-0032, decision 2).
 /// </remarks>
-public class ModItemChange
+public class ModChangePath
 {
     public Guid DatasetId { get; set; }
 
-    /// <summary>Always "item". The column repeats the parent key so the foreign key can name it.</summary>
+    /// <summary>The kind of the parent template. The column repeats the parent key so the key can name it.</summary>
     public string Kind { get; set; } = ModTemplateKind.Item;
 
     public required string TemplateId { get; set; }
@@ -59,7 +61,7 @@ public class ModItemChange
     public ModTemplate Template { get; set; } = null!;
 }
 
-/// <summary>What a mod dataset touched (ADR-0017).</summary>
+/// <summary>What a mod dataset touched (ADR-0017, ADR-0032).</summary>
 public static class ModTemplateKind
 {
     public const string Item = "item";
@@ -69,7 +71,13 @@ public static class ModTemplateKind
     /// <summary>A player customization, which the server keeps apart from the item tree (ADR-0022).</summary>
     public const string Customization = "customization";
 
-    public static readonly string[] All = [Item, Quest, Trader, Customization];
+    /// <summary>
+    /// One offer of a trader's assort, named by its address rather than by the instance id that the
+    /// server renews on every boot (ADR-0032, decision 4). Its parent is the trader.
+    /// </summary>
+    public const string Assort = "assort";
+
+    public static readonly string[] All = [Item, Quest, Trader, Customization, Assort];
 }
 
 /// <summary>The operation of one template under a dataset (ADR-0017).</summary>
@@ -83,7 +91,7 @@ public static class ModTemplateOperation
 }
 
 /// <summary>The operation of one changed path (ADR-0017).</summary>
-public static class ModItemChangeOperation
+public static class ModChangePathOperation
 {
     public const string Set = "set";
     public const string Remove = "remove";

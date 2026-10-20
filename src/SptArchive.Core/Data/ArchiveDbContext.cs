@@ -48,7 +48,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
     public DbSet<ModDataset> ModDatasets => Set<ModDataset>();
     public DbSet<ModDataObservation> ModDataObservations => Set<ModDataObservation>();
     public DbSet<ModTemplate> ModTemplates => Set<ModTemplate>();
-    public DbSet<ModItemChange> ModItemChanges => Set<ModItemChange>();
+    public DbSet<ModChangePath> ModChangePaths => Set<ModChangePath>();
 
     // The files a dataset loaded: the manifest of every mod, and the text of its configuration (ADR-0029)
     public DbSet<ModFile> ModFiles => Set<ModFile>();
@@ -215,7 +215,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_id_map_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader')"));
+                "kind IN ('item', 'customization', 'quest', 'trader', 'assort')"));
         });
 
         b.Entity<ModTemplate>(e =>
@@ -228,14 +228,14 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader')"));
+                "kind IN ('item', 'customization', 'quest', 'trader', 'assort')"));
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_op",
                 "op IN ('added', 'modified', 'removed')"));
         });
 
-        b.Entity<ModItemChange>(e =>
+        b.Entity<ModChangePath>(e =>
         {
             e.HasKey(x => new { x.DatasetId, x.Kind, x.TemplateId, x.Path });
 
@@ -246,8 +246,12 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.Property(x => x.OldValue).HasColumnType("jsonb");
             e.Property(x => x.NewValue).HasColumnType("jsonb");
 
-            e.ToTable(t => t.HasCheckConstraint("ck_mod_item_changes_kind", "kind = 'item'"));
-            e.ToTable(t => t.HasCheckConstraint("ck_mod_item_changes_op", "op IN ('set', 'remove')"));
+            // Every kind of data states its paths (ADR-0032, decision 1), not only an item.
+            e.ToTable(t => t.HasCheckConstraint(
+                "ck_mod_change_paths_kind",
+                "kind IN ('item', 'customization', 'quest', 'trader', 'assort')"));
+
+            e.ToTable(t => t.HasCheckConstraint("ck_mod_change_paths_op", "op IN ('set', 'remove')"));
         });
 
         // ---- Mod data: one row set per dataset ------------------------------------------------------

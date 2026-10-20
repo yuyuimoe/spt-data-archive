@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 181 tests. Four migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 200 tests. Five migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
 > The Api served the archive read-only. A container run exports every table of the server database
@@ -66,7 +66,7 @@ share one dataset (ADR-0013).
 
 Support tables: `spt_versions` (the releases the archive holds), `mods` (registered mod versions),
 `mod_datasets` (the content of one mod), `mod_data_observations` (one load attempt per mod version and
-server release, with its outcome), `mod_templates` and `mod_item_changes` (what a dataset changes in
+server release, with its outcome), `mod_templates` and `mod_change_paths` (what a dataset changes in
 official data), `mod_files` (the manifest of every file a dataset loaded, with the text of its configuration
 files, ADR-0029), `languages`, and `archive_runs` (one row per Archiver execution, with the source hash and
 the release).
@@ -172,7 +172,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 181 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 200 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are
@@ -192,6 +192,6 @@ The API is then at `http://localhost:8080/graphql`. Example:
 - **Client mods are not run.** Skill Effects Extended and EFT Effect Manager are BepInEx plugins, and ISB Special
   Forces ships 270 files with no server part. They get catalog rows and no dataset (ADR-0023).
 - **A change to a table without a `mod_*` row is not stored.** `mod_templates` states that a trader changed, and
-  `mod_item_changes` holds the paths of a changed item, but an assort, a location or a bot type leaves no row
+  `mod_change_paths` holds the paths of a changed item, but an assort, a location or a bot type leaves no row
   (TD-45). The canonical hash of the changed file keeps two datasets apart.
 - **JSON columns are exposed as JSON text** in GraphQL (`props`, `data`, `base`, ...), not as a native JSON scalar.

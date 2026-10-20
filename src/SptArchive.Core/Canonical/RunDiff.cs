@@ -42,11 +42,17 @@ public static class RunDiff
         var locales = new List<LocaleContribution>();
         var hashes = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var unstored = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var idMap = new List<Addressing.AddressEntry>(addressing.Entries);
+        var warnings = new List<string>(addressing.Warnings);
 
         CollectTemplateTable(run, baseline, ItemsTable, ModTemplateKind.Item, addressing, templates, hashes);
         CollectTemplateTable(run, baseline, QuestsTable, ModTemplateKind.Quest, addressing, templates, hashes);
         CollectTemplateTable(run, baseline, CustomizationsTable, ModTemplateKind.Customization, addressing, templates, hashes);
         CollectTraders(run, baseline, addressing, templates, hashes);
+
+        // An offer is a template of its own, named by what it is (ADR-0032, decision 4), so the
+        // assort of a trader becomes rows instead of one hash of the file.
+        CollectOffers(run, baseline, addressing, templates, hashes, idMap, warnings);
         CollectLocales(run, baseline, addressing, locales, hashes);
 
         // A file that changed and that no row type holds. Its canonical hash enters the dataset hash,
@@ -80,8 +86,10 @@ public static class RunDiff
             unstored,
             hashes,
             counts,
-            addressing.Entries,
-            addressing.Warnings);
+            idMap,
+
+            // Both sides of a comparison state the same limit in the same words.
+            warnings.Distinct(StringComparer.Ordinal).ToArray());
     }
 
     /// <summary>A stable order, so the same content always writes the same rows in the same order.</summary>
@@ -138,9 +146,10 @@ public static class RunDiff
             return true;
         }
 
-        // The trader itself is a row; its assort is not, yet (docs/tech-debt.md).
+        // The trader itself is a row, and so is each offer of its assort (ADR-0032, decision 4).
         return path.StartsWith(TradersTable + "/", StringComparison.Ordinal)
-            && Path.GetFileName(path) is "base.json" or "dialogue.json" or "suits.json" or "services.json";
+            && (Path.GetFileName(path) is "base.json" or "dialogue.json" or "suits.json" or "services.json"
+                or Assort.AssortFile or Assort.QuestAssortFile);
     }
 
     private static string CanonicalHash(string path, string file, Addressing addressing)
@@ -333,8 +342,10 @@ public static class RunDiff
         foreach (var traderId in directories)
         {
             var prefix = $"{TradersTable}/{traderId}/";
-            var runFiles = FilesUnder(run, prefix);
-            var baselineFiles = FilesUnder(baseline, prefix);
+
+            // The assort of a trader is not the trader: its offers are rows of their own (CollectOffers).
+            var runFiles = WithoutAssort(FilesUnder(run, prefix));
+            var baselineFiles = WithoutAssort(FilesUnder(baseline, prefix));
 
             if (runFiles.Count > 0)
             {
@@ -378,6 +389,157 @@ public static class RunDiff
                 []));
         }
     }
+
+    /// <summary>
+    /// The offers of every trader, by address (ADR-0032, decision 4). The server renews every assort
+    /// instance id on each boot (ADR-0028), so an offer is named by its trader, its root item and its
+    /// payment channel: the diff pairs two runs by what the offers are, not by where they sit.
+    /// </summary>
+    private static void CollectOffers(
+        SortedDictionary<string, string> run,
+        SortedDictionary<string, string> baseline,
+        Addressing addressing,
+        List<TemplateContribution> templates,
+        IDictionary<string, string> hashes,
+        List<Addressing.AddressEntry> idMap,
+        List<string> warnings)
+    {
+        var traders = DirectoryNames(run, TradersTable)
+            .Union(DirectoryNames(baseline, TradersTable), StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal);
+
+        foreach (var traderId in traders)
+        {
+            var prefix = $"{TradersTable}/{traderId}/";
+            var assortPath = prefix + Assort.AssortFile;
+            var questPath = prefix + Assort.QuestAssortFile;
+
+            var runAssort = ReadAssort(run, paths: (assortPath, questPath), traderId, addressing, warnings);
+            var oldAssort = ReadAssort(baseline, paths: (assortPath, questPath), traderId, addressing, warnings);
+
+            if (runAssort is null && oldAssort is null)
+            {
+                continue;
+            }
+
+            if (runAssort is not null)
+            {
+                if (run.ContainsKey(assortPath))
+                {
+                    hashes[assortPath] = Assort.Hash(runAssort.CanonicalOffers());
+                }
+
+                if (run.ContainsKey(questPath))
+                {
+                    hashes[questPath] = Assort.Hash(runAssort.CanonicalLinks());
+                }
+
+                // The id the run minted for an offer is a lookup, never the name of the offer.
+                foreach (var offer in runAssort.Offers)
+                {
+                    idMap.Add(new Addressing.AddressEntry(Assort.OfferKind, offer.RawId, offer.Address, Pinned: false));
+                }
+            }
+
+            var traderAddress = addressing.Address(traderId);
+            var offers = runAssort?.Offers.ToDictionary(offer => offer.Address, StringComparer.Ordinal)
+                ?? new Dictionary<string, Offer>(StringComparer.Ordinal);
+            var before = oldAssort?.Offers.ToDictionary(offer => offer.Address, StringComparer.Ordinal)
+                ?? new Dictionary<string, Offer>(StringComparer.Ordinal);
+
+            foreach (var address in offers.Keys
+                         .Union(before.Keys, StringComparer.Ordinal)
+                         .OrderBy(address => address, StringComparer.Ordinal))
+            {
+                var inRun = offers.TryGetValue(address, out var offer);
+                var inBaseline = before.TryGetValue(address, out var original);
+
+                if (inRun && !inBaseline)
+                {
+                    templates.Add(new TemplateContribution(
+                        Assort.OfferKind,
+                        address,
+                        offer!.RawId,
+                        ModTemplateOperation.Added,
+                        traderAddress,
+                        offer.Document,
+                        offer.Document,
+                        []));
+                    continue;
+                }
+
+                if (!inRun && inBaseline)
+                {
+                    templates.Add(new TemplateContribution(
+                        Assort.OfferKind,
+                        address,
+                        original!.RawId,
+                        ModTemplateOperation.Removed,
+                        traderAddress,
+                        null,
+                        null,
+                        []));
+                    continue;
+                }
+
+                using var left = JsonDocument.Parse(original!.Document);
+                using var right = JsonDocument.Parse(offer!.Document);
+
+                var differences = CanonicalForm.Compare(string.Empty, left.RootElement, right.RootElement);
+
+                if (differences.Count == 0)
+                {
+                    continue;
+                }
+
+                templates.Add(new TemplateContribution(
+                    Assort.OfferKind,
+                    address,
+                    offer.RawId,
+                    ModTemplateOperation.Modified,
+                    traderAddress,
+                    offer.Document,
+                    offer.Document,
+                    ReadChanges(left.RootElement, right.RootElement, differences)));
+            }
+        }
+    }
+
+    /// <summary>One side of an assort, or null when that side holds neither file of the trader.</summary>
+    private static Assort? ReadAssort(
+        SortedDictionary<string, string> files,
+        (string Assort, string Quests) paths,
+        string traderId,
+        Addressing addressing,
+        List<string> warnings)
+    {
+        var hasAssort = files.TryGetValue(paths.Assort, out var assortFile);
+        var hasQuests = files.TryGetValue(paths.Quests, out var questFile);
+
+        if (!hasAssort && !hasQuests)
+        {
+            return null;
+        }
+
+        using var assort = hasAssort ? Parse(assortFile!) : null;
+        using var quests = hasQuests ? Parse(questFile!) : null;
+
+        var read = Assort.Read(
+            addressing,
+            traderId,
+            assort?.RootElement,
+            quests?.RootElement);
+
+        warnings.AddRange(read.Warnings);
+        return read;
+    }
+
+    /// <summary>A trader directory without the two files that hold offers.</summary>
+    private static SortedDictionary<string, string> WithoutAssort(SortedDictionary<string, string> files) =>
+        new(files
+                .Where(pair => Path.GetFileName(pair.Key) is not (Assort.AssortFile or Assort.QuestAssortFile))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal);
 
     /// <summary>A locale file is a flat map of key to text; a key the baseline does not hold with the same text is a row.</summary>
     private static void CollectLocales(
@@ -477,6 +639,33 @@ public static class RunDiff
             StringComparer.Ordinal);
 
     /// <summary>
+    /// Turns the paths of a canonical comparison into rows, reading both values from the two documents
+    /// that were compared (ADR-0032, decision 6).
+    /// </summary>
+    private static IReadOnlyList<PathContribution> ReadChanges(
+        JsonElement baseline,
+        JsonElement run,
+        IReadOnlyList<string> differences)
+    {
+        var changes = new List<PathContribution>(differences.Count);
+
+        foreach (var jsonPath in differences)
+        {
+            var pointer = ToPointer(jsonPath);
+            TryResolve(baseline, pointer, out var oldValue);
+            var hasNew = TryResolve(run, pointer, out var newValue);
+
+            changes.Add(new PathContribution(
+                pointer,
+                hasNew ? ModChangePathOperation.Set : ModChangePathOperation.Remove,
+                oldValue,
+                newValue));
+        }
+
+        return changes;
+    }
+
+    /// <summary>
     /// Turns the paths of <see cref="CanonicalForm.Compare"/> into rows: the pointer in RFC 6901 form,
     /// the operation, and the value from each side in canonical form, so a value names an object by its
     /// address (ADR-0034, decision 6).
@@ -501,7 +690,7 @@ public static class RunDiff
 
             changes.Add(new PathContribution(
                 pointer,
-                hasNew ? ModItemChangeOperation.Set : ModItemChangeOperation.Remove,
+                hasNew ? ModChangePathOperation.Set : ModChangePathOperation.Remove,
                 oldValue,
                 newValue));
         }

@@ -178,9 +178,25 @@ What it writes, measured on 2026-10-20 with exporter 1.4.0 on SPT 4.1.6:
 
 | Run | Templates | Item paths | Locale entries | Files | Id map | Dataset |
 |-----|-----------|-----------:|---------------:|------:|-------:|---------|
-| `ECOTI` | 11 (9 items added, 2 traders changed) | 0 | 459 | 46 | 5,980 | new |
+| `ECOTI` | 27 (9 items, 18 offers) | 0 | 459 | 46 | 12,129 | new |
 | `WTT-Armory` | 1,337 (833 + 461 items, 37 quests, 6 traders) | 733 | 45,402 | 110 | 6,818 | new |
 | `Gunwright` | 0 | 0 | 0 | 4 | none | before ADR-0034 |
+
+An assort file is read as offers, not as a document (ADR-0032, decision 4). Every offer of every
+trader is named by its trader, the item it sells and what the player pays with, so the run and its
+baseline pair by content and not by the position of an item. The server renews the instance id of
+every offer on every boot: Peacekeeper holds 5,090 of them in the baseline and 5,099 in the `ECOTI`
+run, and the two sets share none of them. The import still reads the run as 18 additions and 0
+changes, and stores them in `mod_templates` (kind `assort`), `mod_trader_assort_items` (one row for the
+offer and one for each part) and `mod_id_maps`.
+
+Two limits are measured, not guessed:
+
+- An offer with more than one payment option stores one amount per template. 4.1.6 has 6,131 offers
+  and every one of them states exactly one option, so nothing is wrong today (TD-49).
+- Two offers of one item, paid for alike, that share a preset are named by their order. 4.1.6 has
+  four such groups, nine offers of 6,131. The import warns for each group, and a change to a field of
+  a preset of one of them reads as a removal and an addition (ADR-0032, decision 4).
 
 A row of the map is one id of the run and the address the archive derived for it (ADR-0034). Every
 object of the baseline is pinned, so its address is its own id; an added item is named by a content
@@ -198,7 +214,7 @@ ECOTI items — is named by its `_name`, so a boot that mints a new id keeps one
 
 `Gunwright` is the case to read twice: it changes no table at all and its whole contribution is two
 HTTP routes, so it stores a dataset with no row. That is the model of ADR-0028, not a failure. A
-component of a mod that has no `mod_*` table — a trader's assort, a location, a bot type — is
+component of a mod that has no `mod_*` table — a location, a bot type, a price or a handbook file — is
 *warned about* by name and its canonical hash enters the content hash, so two datasets that differ
 only there stay apart (TD-45). A second import of the same run exits immediately; `Archive__Force=true`
 imports it again.

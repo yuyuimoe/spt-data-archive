@@ -18,6 +18,8 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Address** | The name the archive gives an object (ADR-0034). It is the id of the baseline when the baseline holds the object. Otherwise it is a content ULID, because the run made the object. |
 | **Content ULID** | A 26-character id that the archive derives from a seed: the kind of the object and its identity fields (ADR-0034). The time half is zero, so a boot that makes new instance ids does not change it. |
 | **Pinned** | An object that the baseline of a release holds, so its own id is its address (ADR-0034). Every official row is pinned. |
+| **Offer** | One thing a trader sells: an item, the parts attached to it, what the player pays with and the loyalty level. An offer is a template named by its address (ADR-0032). |
+| **Payment channel** | What the player pays an offer with: the templates of the payment, named by their addresses, sorted and joined by `+`. The amount is not part of it. |
 | **Id map** | The rows of a dataset that pair the id a run gave an object with its address (ADR-0034). The map is a lookup and is not part of the content hash. |
 | **Unstored change** | A file that the run changed and that no `mod_*` table holds: a trader's assort, a location, a bot type, a price table. Its canonical hash enters the content hash, so two datasets that differ only there stay apart, and the import names it in the log (TD-45). |
 | **Added template** | A template id that the baseline does not have and the target export does. Its path rows have no old value. |
@@ -47,7 +49,7 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Mod dataset** | The content of one mod version: the rows it adds and the official rows it changes. Two mod versions with the same content share one mod dataset. |
 | **Mod data observation** | One attempt to load one mod version on one server version. It points at a mod dataset, or it states why there is none. |
 | **Outcome** | The result of one mod data observation: `archived`, `not_loaded`, `dependency_unresolved`, `outside_declared_range`, `crashed`, `timeout`, `no_server_data` or `loaded_but_disabled` (ADR-0023, ADR-0026). |
-| **Mod change** | One property path that a mod dataset changes. A row in `mod_item_changes`, under one row of `mod_templates`. The path is a JSON pointer. |
+| **Mod change** | One property path that a mod dataset changes. A row in `mod_change_paths`, under one row of `mod_templates`. The path is a JSON pointer. |
 | **Role** | The label the game shows for a kind of bot. The official vocabulary is the `ScavRole/*` keys of a locale: Boss, Guard, Raider, Rogue, Sniper, Smuggler, Sectant, Infected. A mod can add a key (ADR-0025). |
 | **Faction** | A named group that a player recognises, such as USEC, BEAR, Savage, Black Division, or one boss squad. The archive resolves it from a curated seed, then from four trusted prefixes, and never from an escort pair, because no field holds it (ADR-0025). |
 | **Bot squad** | A boss and the followers that spawn with it. One squad is one faction, and the faction id is the boss id: `bossbully` holds `followerbully` and `followerbigpipe` belongs to `bossknight`. |

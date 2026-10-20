@@ -157,14 +157,14 @@ Feature: Keep mod data apart from official data
 
   # ---------------------------------------------------- Change to official data
   # ADR-0017. One row in "mod_templates" states the operation of a template.
-  # The rows in "mod_item_changes" are the paths under that template.
+  # The rows in "mod_change_paths" are the paths under that template.
 
   @unverified
   Scenario: A mod that changes an official item is archived
     Given a mod that changes the weight of the official item "A1"
     When the Archiver archives that mod on the server version "4.0.13"
     Then the table "mod_templates" has one row for "A1" with the operation "modified"
-    And the table "mod_item_changes" states the path "_props/Weight"
+    And the table "mod_change_paths" states the path "_props/Weight"
     And that row states the old value from the official table of "4.0.13"
     And the official row of "A1" is not changed
 
@@ -196,7 +196,7 @@ Feature: Keep mod data apart from official data
     Given a mod that removes the property "_props/CanSellOnRagfair" of the official item "A1"
     When the Archiver archives that mod
     Then the template "A1" states the operation "modified"
-    And the table "mod_item_changes" has a row with the path "_props/CanSellOnRagfair"
+    And the table "mod_change_paths" has a row with the path "_props/CanSellOnRagfair"
     And that row states the operation "remove"
 
   @backlog

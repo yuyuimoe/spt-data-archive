@@ -91,7 +91,15 @@ public sealed class RunImportTests : IDisposable
         Assert.Equal(NodeId, templates.Single(row => row.TemplateId == addedAddress).ParentId);
         Assert.Equal(ModTemplateOperation.Modified, templates.Single(row => row.TemplateId == ItemId).Op);
         Assert.Equal(ModTemplateOperation.Added, templates.Single(row => row.TemplateId == addedQuestAddress).Op);
-        Assert.Equal(ModTemplateOperation.Modified, templates.Single(row => row.TemplateId == TraderId).Op);
+
+        // The assort of a trader is not the trader: the offer the run added is a template of its own,
+        // named by what it sells and what the player pays with (ADR-0032, decision 4).
+        var offer = templates.Single(row => row.Kind == ModTemplateKind.Assort);
+        Assert.Equal((ModTemplateOperation.Added, TraderId), (offer.Op, offer.ParentId));
+        Assert.Equal(
+            ContentUlid.Create(ModTemplateKind.Assort, TraderId, addedAddress, "5448bd6b4bdc2dfc2f8b4569"),
+            offer.TemplateId);
+        Assert.DoesNotContain(templates, row => row.Kind == ModTemplateKind.Trader);
 
         // The id the run gave is kept as a lookup, and never as the name of a row (ADR-0034).
         var map = await scope.Db.ModIdMaps
@@ -100,11 +108,23 @@ public sealed class RunImportTests : IDisposable
         Assert.Contains(map, row => row.RawId == "dddddddddddddddddddddddd" && row.Address == addedAddress);
         Assert.Contains(map, row => row.RawId == AddedQuestId && row.Address == addedQuestAddress);
         Assert.Contains(map, row => row.RawId == ItemId && row.Pinned);
+        Assert.Contains(map, row => row.Kind == ModTemplateKind.Assort && row.RawId == "i2" && row.Address == offer.TemplateId);
+
+        // The offer tree of a dataset is stored, one row for the offer itself (ADR-0032, decision 4).
+        var assortRows = await scope.Db.ModTraderAssortItems
+            .Where(row => datasetIds.Contains(row.DatasetId))
+            .ToListAsync(cancellationToken);
+        var node = Assert.Single(assortRows);
+        Assert.Equal((TraderId, offer.TemplateId, addedAddress), (node.TraderId, node.InstanceId, node.TemplateId));
+        Assert.Equal(4, node.LoyaltyLevel);
+
+        using var barter = JsonDocument.Parse(node.BarterScheme!);
+        Assert.Equal(1, barter.RootElement.GetProperty("5448bd6b4bdc2dfc2f8b4569").GetProperty("count").GetInt32());
 
         // A changed official item keeps its paths, and the old value is the baseline's (ADR-0017).
-        var change = await scope.Db.ModItemChanges.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
+        var change = await scope.Db.ModChangePaths.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
         Assert.Equal(ItemId, change.TemplateId);
-        Assert.Equal(("/_props/Weight", ModItemChangeOperation.Set, "1.5", "2"), (change.Path, change.Op, change.OldValue, change.NewValue));
+        Assert.Equal(("/_props/Weight", ModChangePathOperation.Set, "1.5", "2"), (change.Path, change.Op, change.OldValue, change.NewValue));
 
         var added = await scope.Db.ModItems.SingleAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken);
         Assert.Equal(addedAddress, added.Id);
