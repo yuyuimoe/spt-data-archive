@@ -45,7 +45,7 @@ row. A gap that blocks the current slice is not a row: it is the slice.
 | TD-36 | Architecture | A run whose mod fails validation produces no export at all. The server loads no mod when one mod is rejected, so the exporter does not run either, and the container serves until the runner stops it. `run_mod.sh` stops early and says so, and a successful run now states its loaded mods in `run/loaded.json` (ADR-0029), but a rejected run still has no such file and is not recorded as `not_loaded` or `dependency_unresolved` (ADR-0021). | 3 | 3 | 1 | 30 | A dependency mistake looks like a broken pipeline and not a fact about the mod. |
 | TD-37 | Data | Arena Map Port 0.2.3 needs a real Escape from Tarkov: Arena installation. Without it the log says "The 3 Arena maps stay unregistered" and the export has no `arena_airpit`, `arena_bay5` or `arena_equator` (ADR-0023). | 3 | 2 | 2 | 20 | A map mod is archived as a client-only facet while its maps exist on the author's disk. |
 | TD-38 | Data | Mod dependencies are deeper than a Forge page says. Icebreaker 1.1.3 needs `com.wtt.contentbackport` and then `com.morebotsapi.tacticaltoaster`, which its page names in prose and not as a dependency (ADR-0021). | 3 | 3 | 3 | 18 | The catalog must resolve a chain, or a run stops after two downloads. |
-| TD-03 | Infrastructure | The backup script does not exist (ADR-0011). | 4 | 4 | 1 | 40 | The archive can be the only copy of mod data. |
+| TD-03 | Infrastructure | `scripts/backup.sh` dumps, verifies and restores (ADR-0011, `docs/runbooks/backup.md`). Still open: nothing calls it after a run, there is no schedule, no real off-host target and no encryption. | 4 | 4 | 3 | 24 | The archive can be the only copy of mod data. |
 | TD-20 | Code | The exporter depends on ten injected table types and on `OnLoadOrder.PostLoad` (ADR-0020, ADR-0027). The bundle patch of ADR-0015 is not used. | 3 | 3 | 2 | 24 | A release can rename a table. The exporter then fails to compile, which is the cheaper failure. |
 | TD-22 | Architecture | No run asserts that every mod dataset is pointed at by an observation (ADR-0018). | 2 | 3 | 1 | 25 | An orphan dataset is a bug. Silence hides it. |
 | TD-05 | Infrastructure | The Api has no rate limit of its own. The edge proxy is only planned. | 3 | 4 | 2 | 28 | A public API gets scraped. |
@@ -117,7 +117,7 @@ Done when `dotnet build` passes and the first migration is committed.
 - TD-06: The test project exists and 34 tests pass. Bind the Gherkin scenarios with Reqnroll.
 - TD-04: Done. The importers ran on the local server clone.
 - TD-09: Add a CI pipeline that builds, runs the tests and runs `scripts/check-docs.py`.
-- TD-03: Add the backup script.
+- TD-03: The backup script exists. Call it after a successful run and pick the off-host target.
 
 Done when no scenario of the first three feature files has the tag `@unverified`.
 
