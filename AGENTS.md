@@ -98,8 +98,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Next slice:** extend the exporter to all twelve tables (TD-32, ADR-0024) and read one export directory into
   the mod tables (TD-29). Then the Api server version argument (TD-21) and the Gherkin
   scenarios with Reqnroll (TD-06).
-- **Open decisions:** ADR-0025 (how a faction is resolved) needs the driver. ADR-0012 is still Proposed.
-  ADR-0005 and ADR-0010 are superseded.
+- **Open decisions:** ADR-0012 (Reqnroll for Gherkin) is the only Proposed ADR. ADR-0005 and ADR-0010
+  are superseded; ADR-0001 to 0004, 0006 to 0009 and 0011 to 0026 are Accepted.
 - **Not built:** the Archiver importer for an export directory, the baseline cache, and the catalog (ADR-0013
   action items). The container runner and the exporter mod exist and ran on eleven real mods
   (`docs/runbooks/mod-export.md`).

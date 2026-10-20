@@ -1,92 +1,141 @@
-# ADR-0025: Resolve a faction from a locale key and a curated membership
+# ADR-0025: Resolve a faction from a curated map with a prefix fallback
 
-**Status:** Proposed (decision needed)
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0002, ADR-0014, ADR-0023, ADR-0024
 
 ## Context
 
-The driver asked the API to resolve factions, because the archive will be fetched for many reasons and
-several mods add new factions and bots. The data does not contain a faction.
+The driver asked the API to resolve factions, because the archive is fetched for many reasons and
+several mods add new factions and bots. The driver also said the answer "goes between prefix and
+maps", and that "the factions are separated through boss ID".
 
-What the data does contain, measured on 4.1.6:
+The server data has no faction field. Measured on 4.1.6:
 
-1. **Bot type identity is the file name.** A file under `bots/types/` has ten keys —
-   `appearance`, `chances`, `difficulty`, `experience`, `firstName`, `generation`, `health`,
-   `inventory`, `lastName`, `skills`. There is no `type` field and no faction field. The name of the
-   file is the identity. There are 57 files.
-2. **Location waves name a spawn type.** Over the 19 maps there are 151 waves with
-   `BotSide: "Savage"` and 3 with `BotSide: "Usec"`, and only two distinct `WildSpawnType` values
-   (`assault` 140, `marksman` 14). The variety is in the boss spawns: 24 distinct `BossName` values
-   (`bossBully`, `bossGluhar`, `pmcBEAR`, `pmcUSEC`, `exUsec`, `sectantPriest`, `gifter`, …).
-3. **The names are the client enum, lowercased into a file name.** A wave says `pmcBEAR` and the file
-   is `pmcbear.json`. The join is `name.ToLowerInvariant()`. The same holds for `bossKojaniy` →
-   `bosskojaniy.json` and `arenaFighterEvent` → `arenafighterevent.json`.
-4. **The one faction vocabulary is a locale namespace.** `locales/global/en.json` has 12 keys of the
+1. **Bot type identity is the file name.** A file under `bots/types/` has ten keys — `appearance`,
+   `chances`, `difficulty`, `experience`, `firstName`, `generation`, `health`, `inventory`,
+   `lastName`, `skills`. No `type` field and no faction field. The file name is the identity. There
+   are 57 files.
+2. **Location data names 35 of them.** The other 23 — most followers, the infected variants, three
+   sectant variants, `shooterbtr`, `skier`, `spiritspring`, `spiritwinter`, `bear` and `usec` — are
+   never named by a wave, a boss spawn or an escort in 4.1.6.
+3. **A boss squad is visible, but the pairs are not reliable.** `BossLocationSpawn` states a
+   `BossName` and a `BossEscortType`, and the pairs contradict the file names:
+   `bossKilla` escorts `followerTagilla` — a bot type this release does not have;
+   `bossTagilla` escorts `followerBully`; `bossKnight` escorts `exUsec`; `bossPartisan` escorts
+   `sectantWarrior` and `exUsec`; `pmcUSEC` escorts `pmcBEAR`. One name out of 35 that the data
+   references has no file at all.
+4. **The prefix does not reach the squad.** `followerBigpipe` and `followerBirdeye` are the crew of
+   `bossKnight`. There is no `bossBigpipe`. A rule cannot find that boss, and the driver's answer
+   says the same: the squad is separated through the boss id, which is curation.
+5. **Names are the client enum, lowercased.** A wave says `pmcBEAR` and the file is `pmcbear.json`.
+6. **The one vocabulary in the data is a role namespace.** `locales/global/en.json` has 12 keys of the
    form `ScavRole/<Name>`: `Boss`, `Follower` ("Guard"), `PmcBot` ("Raider"), `ExUsec` ("Rogue"),
-   `Marksman` ("Sniper"), `ArenaFighterEvent` ("Smuggler"), `Sectant`, and `infected*` ("Infected").
-   These are **roles**, not factions. `USEC`, `BEAR` and `Savage` are not in that list.
-5. **A mod extends that namespace for its faction.** WTT - Black Division adds one line:
-   `"ScavRole/BlackDiv": "Black Div."`. The same mod adds `db/bots/types/bossWedge.json`,
-   `db/bots/config/bossWedge.jsonc` (`"type": "bossWedge"`, `"isBoss": true`),
-   `db/bots/sharedTypes/blackDiv.json`, `db/bots/sharedConfig/blackDiv.jsonc`
-   (`"type": "blackDiv"`), and `db/CustomBotLoadouts/{blackdivassault,blackdivib,bosswedge}.json`.
+   `Marksman` ("Sniper"), `ArenaFighterEvent` ("Smuggler"), `Sectant`, and the infected roles. These
+   are **roles**, not factions. `USEC`, `BEAR` and `Savage` are not in that list. Only 26 of the 57
+   bot types are named by a locale key at all.
+7. **A mod extends the namespace for its faction.** WTT - Black Division adds
+   `"ScavRole/BlackDiv": "Black Div."`, `db/bots/types/bossWedge.json`,
+   `db/bots/config/bossWedge.jsonc` (`"type": "bossWedge"`, `"isBoss": true`) and
+   `db/bots/sharedConfig/blackDiv.jsonc` (`"type": "blackDiv"`).
 
-Nothing in the data links `bossWedge` or `blackDiv` to `ScavRole/BlackDiv`. The only link is the
-string `blackdiv` appearing in three file names. Skill Effects Extended and EFT Effect Manager add no
-server data at all (ADR-0023), and ISB Special Forces is 270 files under `BepInEx/` with no server
-part, so its faction exists only in the client.
+Nothing in the data links `bossWedge` or `blackDiv` to `ScavRole/BlackDiv`.
 
 ## Decision
 
-1. The archive keeps **two levels**: a **role** and a **faction**.
-   - `roles`: the official `ScavRole/*` vocabulary of a release, keyed `(spt_version, role_id)` with
-     the display name from the locale. Mods extend it through their merged locale.
-   - `factions`: named groups a player recognises (`usec`, `bear`, `savage`, `blackdiv`, …), keyed
-     `(dataset_id or spt_version, faction_id)`, with `display_name`, `role_id` nullable, and
-     `source` one of `locale`, `curated`, `mod`.
-2. `bot_types` rows carry `role_id` and `faction_id`, both **nullable**. The Archiver fills them from
-   the curated map only. It never derives a faction from a file-name prefix.
-3. The curated map is a table `faction_bot_types(faction_id, bot_type_id, evidence)` where `evidence`
-   is a short text: the locale key, the mod that declares it, or the human who curated it.
-4. A missing membership is `null` in the API, never a guess. The API says "unknown faction" and names
-   the bot type.
-5. The API resolves a faction for a map: `locationBossSpawns` and `locationWaves` join `bot_types`,
-   then `faction_bot_types`, then `factions`. The answer names the release, or the mod dataset, that
-   supplied the bot type.
-6. A faction that only a client mod adds (ISB) has no dataset and no API row. The catalog records the
-   mod and its facets, and the API returns nothing for it. This is a limit of the server data, and the
-   archive states it rather than inventing it.
+1. **Four levels of authority, highest first.**
+
+   | Level | Source | Example |
+   |---|---|---|
+   | 1 | The mod itself, when it ships `db/bots/config/<type>.jsonc` with a `type` and a role | `blackDiv` from its own config (TD-29, TD-32) |
+   | 2 | The curated seed for the release's own bot types | `exusec` → `rogue` |
+   | 3 | A prefix family whose prefix names the faction | `infectedLooter` → `infected` |
+   | 4 | Nothing. The faction is null | `peacemaker`, `skier` |
+
+2. **The seed is complete, not partial.** Every bot type of a release has a row. A row either names a
+   faction or names none with a reason. Silence is not allowed, because silence is indistinguishable
+   from "nobody looked".
+3. **A boss squad is one faction, named by the boss id.** `bossbully` is Reshala and his guard. Every
+   follower is curated to its boss id, because the prefix cannot reach it (`followerBigpipe` →
+   `bossknight`).
+4. **Only four prefixes are trusted**, because in these the prefix is the faction:
+   `boss<X>` → the faction `boss<x>`, but only when that faction exists;
+   `infected<X>` → `infected`; `sectant<X>` → `cultist`; `exusec<X>` → `rogue`.
+   There is no `follower<X>` rule. A follower needs a curated boss id.
+5. **Roles stay separate from factions.** `ScavRole/*` is the release's own vocabulary and is imported
+   as locale data. A faction is curation. A GUI groups bosses by role and a crew by faction.
+6. **A missing membership is null in the API, never a guess.** The answer names the bot type. It is
+   never an empty list.
+7. **The seed lives in code with a test, not in a table only.** A new bot type in a new release fails
+   the coverage test until somebody curates it. The database tables arrive with TD-32; the rule
+   arrives now.
+
+The seed for 4.1.6 holds 57 rows, 21 factions, 53 memberships and 4 deliberate nulls:
+
+| Faction | Bot types |
+|---|---|
+| `usec` | `pmcusec`, `usec` |
+| `bear` | `pmcbear`, `bear` |
+| `savage` | `assault`, `marksman`, `cursedassault`, `crazyassaultevent` |
+| `raider` | `pmcbot` |
+| `rogue` | `exusec` |
+| `cultist` | `sectantpriest`, `sectantwarrior`, `sectantpredvestnik`, `sectantprizrak`, `sectantoni` |
+| `infected` | `infectedassault`, `infectedcivil`, `infectedlaborant`, `infectedpmc`, `infectedtagilla` |
+| `arenafighter` | `arenafighterevent` |
+| `btr` | `shooterbtr` |
+| `gifter` | `gifter` |
+| `bossbully` | `bossbully`, `followerbully` |
+| `bossgluhar` | `bossgluhar`, `followergluharassault`, `followergluharscout`, `followergluharsecurity` |
+| `bosskilla` | `bosskilla`, `bosskillaagro` |
+| `bossknight` | `bossknight`, `followerbigpipe`, `followerbirdeye` |
+| `bosskojaniy` | `bosskojaniy`, `followerkojaniy` |
+| `bosskolontay` | `bosskolontay`, `followerkolontayassault`, `followerkolontaysecurity` |
+| `bosspartisan` | `bosspartisan` |
+| `bosssanitar` | `bosssanitar`, `followersanitar` |
+| `bosstagilla` | `bosstagilla`, `bosstagillaagro`, `tagillahelperagro` |
+| `bosszryachiy` | `bosszryachiy`, `followerzryachiy`, `ravangezryachiyevent` |
+| `bossboar` | `bossboar`, `bossboarsniper`, `followerboar`, `followerboarclose1`, `followerboarclose2` |
+| *none* | `peacemaker`, `skier`, `spiritspring`, `spiritwinter` |
 
 ## Options Considered
 
-1. **A prefix rule.** `blackDiv` and `blackdivassault` start with `blackdiv`, so a rule could group them.
-   It guesses, and it breaks on the first faction whose assets do not share a prefix.
-2. **A curated map with evidence.** Chosen. A human writes `bossWedge → blackdiv` once, with the reason,
-   and the archive never infers.
-3. **Ask the mod.** No SPT mod declares a faction. Black Division declares a locale key and four asset
-   files, and the locale key is the closest thing to a declaration.
+1. **A prefix rule only.** Free, and it produces `followerBigpipe` → `bossbigpipe`, which is not a
+   faction, and `exusec` → `ex`, which is not a word. It also cannot say what `peacemaker` is.
+2. **A curated map only.** Correct and it does not scale to a mod's six bot types, where the mod
+   already states the family in its own config.
+3. **Layered: mod declaration, then curated seed, then four trusted prefixes, then null.** Chosen.
+   Each level is used only where it is reliable, and the highest level that answers wins.
 4. **No factions at all.** Honest and useless: a GUI showing spawns wants to group them.
 
 ## Trade-off Analysis
 
-Curation is a small amount of human work and the only option that cannot be wrong silently. The
-prefix rule is free and produces confident nonsense the first time a mod names its boss after its
-author. Asking the mod would be best and the data does not support it, because the client holds the
-enum that names the faction. The cost of curation is that a faction added by a mod stays unresolved
-until somebody adds a row, which the API states as `null` instead of an empty list.
+The curated seed is 57 rows of human work for 4.1.6, and a release adds a handful of rows. The prefix
+fallback removes the work for the infected, sectant and rogue families, where the name is the answer,
+and for a new boss whose squad is named after it. The mod declaration is the only level that keeps
+working when a mod adds a faction the archive has never seen.
+
+The cost is that a faction stays unresolved until somebody writes a row, which the API states as null
+with the bot type. That is the same trade the archive makes for a silent mod: an uncurated bot type is
+visible, not invisible.
+
+The escort data is not a source. It contradicts the file names in five pairs and names one bot type
+that does not exist, so using it as a rule would import those mistakes as facts. The archive keeps the
+pairs as data — they are in `locations` — and does not derive a faction from them.
 
 ## Consequences
 
-- The seed mapping is small and human: the 12 roles, plus `usec`, `bear` and `savage` for the base
-  game, plus one row per faction a curated mod declares.
-- `bossWedge` resolves to `blackDiv` only because a human wrote that row. If nobody writes it, the API
-  returns `null` and the bot type, which is correct and testable.
-- The role vocabulary is data and moves with a release. The faction vocabulary is curation and moves
-  with the catalog.
-- An API that groups "all bosses" uses `roles`; an API that groups "the Black Division" uses
-  `factions`. A GUI needs both, and the archive must not confuse them.
+- `BotFactions.Seed` in `SptArchive.Core` holds the map, and `BotFactions.Resolve` applies the four
+  levels. `FactionTests` checks that the seed covers every bot type file of 4.1.6, that every named
+  faction exists, and that the four nulls stay null.
+- A new release with a new bot type fails that coverage test until somebody adds a row. That is the
+  alarm, and it is louder than a silent null.
+- The mod level needs TD-32 (the bots importer) and TD-29 (the export importer). Until then a mod bot
+  type resolves by prefix or is null.
+- `locations` keeps `BossName` and `BossEscortType` as they are, mistakes included. A consumer that
+  wants a squad reads the faction, not the escort.
+- One data fault is worth a ticket: `bossKilla` escorts `followerTagilla`, and 4.1.6 has no such bot
+  type (TD-35).
 
 ## Verification
 
@@ -94,23 +143,33 @@ until somebody adds a row, which the API states as `null` instead of an empty li
 @adr-0025 @unverified
 Feature: Resolve a bot to a faction
 
-  Scenario: A wave resolves to its bot type and role
-    Given the release "4.1.6" with the map "bigmap"
-    When I read the waves of that map
-    Then the wave with the spawn type "assault" names the bot type "assault"
-    And the bot type has a role
+  Scenario: A curated seed row resolves an irregular name
+    Given the release "4.1.6" with the curated seed
+    When I resolve the bot type "exusec"
+    Then the faction is "rogue"
 
-  Scenario: A curated faction resolves a mod bot type
-    Given a curated row that puts the bot type "bossWedge" in the faction "blackdiv"
-    When I read the boss spawns of a map that spawns "bossWedge"
-    Then the answer names the faction "blackdiv"
-    And the answer names the dataset that supplied the bot type
+  Scenario: A follower resolves to its boss id, not to its prefix
+    When I resolve the bot type "followerbigpipe"
+    Then the faction is "bossknight"
+    And the faction is not "bossbigpipe"
 
-  Scenario: An uncured bot type has no faction
-    Given the bot type "bossWedge" has no curated faction row
-    When I read that bot type
+  Scenario: A trusted prefix covers a bot type no row names
+    When I resolve the bot type "infectedlooter"
+    Then the faction is "infected"
+
+  Scenario: A follower with no curated boss id stays unresolved
+    When I resolve the bot type "followernonsense"
     Then the faction is null
-    And the answer is not an empty list
+
+  Scenario: A bot type nobody curates is null and named
+    When I resolve the bot type "peacemaker"
+    Then the faction is null
+    And the answer names the bot type "peacemaker"
+
+  Scenario: A new release with a new bot type fails the coverage check
+    Given a release with the bot type "bossNewcomer" and no seed row
+    When I import that release
+    Then the run fails and names the bot type "bossNewcomer"
 
   Scenario: A client-only faction is absent from the data
     Given a mod with the facet "client" and no server part
@@ -121,10 +180,12 @@ Feature: Resolve a bot to a faction
 
 ## Action Items
 
-- [ ] Yui decides: curated membership (this ADR), or a prefix rule, or no factions.
-- [ ] Seed the curated map: 12 roles, `usec`, `bear`, `savage`, `blackdiv`.
-- [ ] Add `roles`, `factions`, `faction_bot_types` to the schema.
-- [ ] TD-33: nothing links a bot type to a faction today.
+- [x] Yui decided the rule: curated seed with a prefix fallback, separated by boss id.
+- [x] Seed the map: 21 factions, 57 rows, 4 deliberate nulls (`BotFactions.Seed`).
+- [x] Test the seed against the 57 bot type files of 4.1.6 (`FactionTests`).
+- [ ] Add `factions` and the bot type membership columns to the schema (TD-32).
+- [ ] Fail the import when a release has a bot type with no seed row (TD-33).
+- [ ] Resolve a mod's own bot types from its `db/bots/config` file (TD-29).
 
 ## Links
 

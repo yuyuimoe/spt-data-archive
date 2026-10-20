@@ -42,7 +42,8 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Outcome** | The result of one mod data observation: `archived`, `not_loaded`, `dependency_unresolved`, `outside_declared_range`, `crashed`, `timeout`, `no_server_data` or `loaded_but_disabled` (ADR-0023, ADR-0026). |
 | **Mod change** | One property path that a mod dataset changes. A row in `mod_item_changes`, under one row of `mod_templates`. The path is a JSON pointer. |
 | **Role** | The label the game shows for a kind of bot. The official vocabulary is the `ScavRole/*` keys of a locale: Boss, Guard, Raider, Rogue, Sniper, Smuggler, Sectant, Infected. A mod can add a key (ADR-0025). |
-| **Faction** | A named group that a player recognises, such as USEC, BEAR, Savage or Black Division. A faction is curated, not read from a field, because no field holds it (ADR-0025). |
+| **Faction** | A named group that a player recognises, such as USEC, BEAR, Savage, Black Division, or one boss squad. The archive resolves it from a curated seed, then from four trusted prefixes, and never from an escort pair, because no field holds it (ADR-0025). |
+| **Bot squad** | A boss and the followers that spawn with it. One squad is one faction, and the faction id is the boss id: `bossbully` holds `followerbully` and `followerbigpipe` belongs to `bossknight`. |
 | **Bot type** | One file under `bots/types/`. The name of the file is the identity, and it is the client spawn type lowercased: the wave says `pmcBEAR` and the file is `pmcbear.json`. |
 | **Bot facet** | One part of what a mod ships: `client` (files under `BepInEx`), `server_data` (a `db` tree under `SPT_Runtime/user/mods`), `server_code` (a server `.dll`), `bundle` (assets that are not data). A mod has a set of facets (ADR-0023). |
 | **db fragment** | A file under a mod's `db` tree that the server merges into its tables at load, for example `db/bots/types/bossWedge.json`. The fragment is provenance, not a dataset. |

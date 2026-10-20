@@ -101,11 +101,23 @@ the cost on disk is lower than the source size.
   (ADR-0023), not with an empty table: Skill Effects Extended and EFT Effect Manager are client
   plugins, and ISB Special Forces is 270 files under `BepInEx/`.
 
-## Open point
+## `looseLoot`
 
-`looseLoot` is the only part that is hard to justify: it is 42 MB per map, it holds loot spawn points,
-and no GUI has asked for it. It is imported because the driver chose "everything" and because ADR-0002
-says not to lose data. If storage becomes a problem, the honest change is an explicit exclusion, not a
+The driver asked whether `looseLoot` can be compressed, because it is the heavy part. Measured on
+4.1.6: the 13 maps that have the file hold **549 MB**, and the file compresses well:
+
+| Map | Raw | gzip -6 | zstd -3 | xz -3 |
+|---|---|---|---|---|
+| `lighthouse` | 126 MB | 23 MB (19%) | 13 MB (11%) | 9 MB (7%) |
+| `bigmap` | 40 MB | 7 MB (19%) | 4 MB (11%) | 3 MB (8%) |
+
+So it does compress, by 5 to 14 times, and Postgres applies its own compression to a `jsonb` value
+that is larger than a page. The decision is to **keep `looseLoot`**: the driver chose "everything",
+ADR-0002 says not to lose data, and 549 MB per release costs about 40 to 80 MB on disk. Six of the 19
+map directories have no `looseLoot` file at all, so the table holds `location_files` rows only where
+the file exists.
+
+If storage becomes a problem, the honest change is an explicit exclusion of that one overlay, not a
 silent truncation.
 
 ## Verification

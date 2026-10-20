@@ -30,7 +30,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0022](0022-archive-player-customization.md) | Archive player customization as a seventh dataset | Accepted |
 | [0023](0023-classify-a-mod-by-the-parts-it-ships.md) | Classify a mod by the parts it ships | Accepted |
 | [0024](0024-archive-the-whole-server-database.md) | Archive the whole server database, not seven tables | Accepted |
-| [0025](0025-resolve-a-faction-from-locale-and-curation.md) | Resolve a faction from a locale key and a curated membership | Proposed (decision needed) |
+| [0025](0025-resolve-a-faction-from-locale-and-curation.md) | Resolve a faction from a curated map with a prefix fallback | Accepted |
 | [0026](0026-archive-a-value-mod-preset.md) | Archive a value mod's preset, and say when it did nothing | Accepted |
 
 ## Status meanings
