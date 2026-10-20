@@ -177,9 +177,10 @@ The API is then at `http://localhost:8080/graphql`. Example:
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are
   imported (4.0.13 and 4.1.6), so an official query without a version mixes them (TD-21).
-- **Mod ingestion is half built.** One run directory becomes a dataset, an observation and its rows, and the
-  canonical comparison is the input to the hash (TD-29). The baseline cache and the catalog are still action
-  items of ADR-0013, and a change to a trader's assort or to a map is hashed but stored as no row (TD-45).
+- **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
+  `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). The baseline cache
+  and the catalog are still action items of ADR-0013, and a change to a map, a bot type or a price is hashed but
+  stored as no row (TD-45).
 - **`items.json` is stored in Git LFS** upstream. The Archiver stops with a clear message if it finds the pointer
   file instead of the data.
 - **Not imported yet**: bots, locations, globals, hideout, settings, match, server, handbook, prices,
