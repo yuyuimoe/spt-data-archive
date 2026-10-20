@@ -24,6 +24,8 @@ Today it says so for items only.
 
 A test also showed a second limit (TD-46). When an array changes length, the diff collapses the whole array into one path. WTT-Armory grows a slot filter from 30 to 39 entries. The archive says "this array changed" and cannot say which entry arrived.
 
+A third limit has no row at all. A trader assorts stays a canonical hash. ECOTI adds nine offers to Peacekeeper and changes two traders, and the archive stores 733 change paths: none of them is an offer. The driver named the identity of an offer: the trader, the item and what the player pays with. A player buys the same item in more than one way. One example is a P90 for 90,000 roubles, or for two AA batteries, both at Mechanic. The measurement in the Decision section confirms that rule. It also shows where the rule needs one more part.
+
 ## Decision
 
 **We will store one row for every changed value, for every kind of data.**
@@ -34,9 +36,15 @@ A test also showed a second limit (TD-46). When an array changes length, the dif
 
 3. **Quests, traders and customizations get paths.** Their template row stays. Their full object stays in its table (ADR-0002). Each changed value becomes a path row under the template.
 
-4. **Assort becomes a row type.** The template kind is `assort`. The template id is the offer key. The offer key is `<traderId>:<rootTemplateId>`. When one trader sells the same root template more than once, the key gains `@<first 8 hex digits of the canonical hash of its barter scheme>`.
+4. **Assort becomes a row type. An offer has three keys.** The template kind is `assort`. The template id is the offer key, `<traderId>:<rootTemplateId>:<barterChannel>`.
+   - The barter channel is the set of templates that the player pays with, sorted and joined by `+`. It is the rouble template, the euro template, or a barter item such as `619cbfcc…+66b37f11…`. The amount is not part of the key. An offer that becomes more expensive keeps its identity. The change is then a `set` path on the amount, and not a removed offer plus an added offer.
+   - Evidence, measured on the 4.1.6 baseline: 6,131 offers, 317 channels, 4,901 offers in roubles, 618 in euros and 156 in dollars. 144 pairs of (trader, root template) hold more than one offer, and 167 offers are paid with two to five different items at once. The three parts name 6,100 keys. The remaining 23 keys hold two to five offers each.
+   - When a key holds more than one offer, the key gains `@<4 hex digits of the canonical hash of the offer's preset>`. Two offers pair first by preset, then by canonical order. Fifteen of those 23 keys are not separated by the loyalty level, because the offers differ only by attached parts or by durability.
+   - The payment is addressed by its template and not by its position: `/barter/<templateId>/count`. A position would name different payers in the next run.
    - The offer tree is stored in `mod_trader_assort_items`: one row for the root and one row for each attached part, with the instance ids of the run. The tree stays self-consistent because a dataset is written once.
-   - The changes inside an offer are paths under the offer key. The root fields keep their own path, such as `/loyaltyLevel` and `/barterScheme/0/0/count`. A part is keyed by its slot and not by its position: `/parts/<slotId>/upd/StackObjectsCount`.
+   - A part is keyed by its slot and not by its position: `/parts/<slotId>/upd/StackObjectsCount`.
+   - The same key matches a run against its baseline. Today the diff renumbers the assort instance ids by position (ADR-0028, decision 3), so an added offer at position 0 shifts every position after it. With the key the diff pairs real offers.
+   - A quest unlock stays attached to the offer by the same key: `mod_trader_quest_assorts` holds the dataset, the offer key, the status and the quest id. The 4.1.6 baseline has 236 such links, 5 with the status `started` and 231 with `success`. The `questassort.json` file names offers by instance id, which the server renumbers on every boot; the key removes that dependency.
 
 5. **The old value comes from the baseline.** The new value comes from the run. A removed value has no new value. An added value has no old value. A volatile path (ADR-0028) never becomes a row, because it never differs.
 
@@ -65,7 +73,7 @@ An added item costs one template row. A changed value costs one path row. A ques
 
 For this project the trade is right. The archive exists to answer questions about mod data. A dataset that only holds a hash answers no question. Row volume is bounded by what a mod changes, and a mod that changes everything is rare.
 
-The second trade-off is the offer key. A key based on the root template is readable and stable. It fails in one case: a trader sells the identical template twice with the identical barter scheme. The key then needs a suffix, and a change to that barter scheme looks like a removal and an addition. We accept that case and state it in the runbook.
+The second trade-off is the offer key. A key of trader, root template and barter channel is readable, and it survives a price change. It fails in one case: a trader sells the same template through the same channel in several offers that differ only by preset. The rule of decision 4 separates those offers by the hash of the preset. A change to such a preset therefore looks like a removal and an addition. This is 23 keys of 6,131 offers in 4.1.6, and 3 of those keys hold offers that are identical in preset, amount and loyalty level. The archive states those as separate rows and cannot say which one changed. We accept that case and state it in the runbook.
 
 ## Consequences
 
@@ -117,19 +125,28 @@ Feature: Answer what a mod changed, value by value
 
   @unverified
   Scenario: An added offer is a template of the kind "assort"
-    Given the dataset "D1" adds one offer of the template "T1" to the trader "TR1"
+    Given the dataset "D1" adds one offer of the template "T1", paid in roubles, to the trader "TR1"
     When I read the templates of "D1"
     Then one template has the kind "assort"
-    And its template id is "TR1:T1"
+    And its template id is "TR1:T1:<rouble template id>"
     And its operation is "added"
 
   @unverified
-  Scenario: A barter count that rises from 9 to 10 is a path row
-    Given the dataset "D1" changes the required count of one barter item of the offer "TR1:T1" from 9 to 10
-    When I read the change paths of the offer "TR1:T1" in "D1"
-    Then one path row names the barter entry
+  Scenario: A price that rises from 9 to 10 keeps the identity of the offer
+    Given the dataset "D1" changes the rouble count of the offer of the template "T1" at the trader "TR1" from 9 to 10
+    When I read the change paths of that offer in "D1"
+    Then one path row is "/barter/<rouble template id>/count"
     And its old value is "9"
     And its new value is "10"
+    And no offer of "D1" has the operation "removed"
+
+  @unverified
+  Scenario: Two ways to pay for one item are two offers
+    Given the trader "TR1" sells the template "T1" for roubles and for two batteries
+    When I read the templates of the kind "assort" of the dataset "D1"
+    Then two offers hold the template id "T1"
+    And their template ids differ only in the barter channel
+    And the channel of one offer names the battery template
 
   @unverified
   Scenario: A part of an offer is keyed by its slot
@@ -139,11 +156,19 @@ Feature: Answer what a mod changed, value by value
     And the path names no array position
 
   @unverified
-  Scenario: A trader that sells one template twice gets one key per offer
-    Given the trader "TR1" sells the template "T1" in two offers with different barter schemes
+  Scenario: A trader that sells one template twice through one channel gets one key per offer
+    Given the trader "TR1" sells the template "T1" for roubles in two offers with different presets
     When I read the templates of the kind "assort" of the dataset "D1"
     Then the two offers have two different template ids
-    And both ids start with "TR1:T1@"
+    And both ids start with "TR1:T1:<rouble template id>@"
+
+  @unverified
+  Scenario: A quest that unlocks an offer is linked through the offer key
+    Given the quest "Q1" unlocks the offer of the template "T1" at the trader "TR1" when it succeeds
+    When I read the offers of "D1" that a quest unlocks
+    Then one offer has the key of "T1"
+    And its status is "success"
+    And its quest is "Q1"
 
   # ADR-0032 decision 2, TD-46. A longer array names the added indexes.
 
