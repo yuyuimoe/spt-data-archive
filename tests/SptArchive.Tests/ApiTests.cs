@@ -77,6 +77,30 @@ public sealed class ApiTests
     }
 
     [Fact]
+    public async Task A_jsonb_column_offers_comparison_only()
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+        await SeedAsync(scope);
+
+        // A text operation on a jsonb column becomes LIKE, which Postgres refuses; the schema must not
+        // announce it at all, so the client learns at query validation instead of from a failed request.
+        var refused = await JsonAsync(scope, """{ items(where: { props: { startsWith: "{" } }) { nodes { name } } }""");
+        var message = refused.GetProperty("errors")[0].GetProperty("message").GetString()!;
+        Assert.Contains("startsWith", message);
+        Assert.Contains("does not exist", message);
+
+        // Comparison does work, and compares the content of the documents, not their text.
+        var matched = await JsonAsync(
+            scope,
+            """{ items(where: { props: { eq: "{\"Nested\":{\"list\":[1,2]},\"Weight\":0.5}" } }) { nodes { name } } }""");
+        Assert.Equal(["NewOnly"], Names(matched));
+
+        // A text column keeps every operation, including the pattern ones.
+        var text = await JsonAsync(scope, """{ items(where: { name: { contains: "New" } }) { nodes { name } } }""");
+        Assert.Equal(["NewOnly"], Names(text));
+    }
+
+    [Fact]
     public async Task No_version_answers_from_the_latest_release()
     {
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);

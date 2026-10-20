@@ -45,6 +45,9 @@ GRANT CONNECT ON DATABASE "$db" TO archive_reader;
 GRANT USAGE ON SCHEMA public TO archive_reader;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO archive_reader;
 SQL
+  else
+    # On a new server the role does not exist yet, and a restore that says nothing leaves the Api unable to read.
+    echo "backup: warning: role archive_reader is missing on this server, so $db has no read-only grant. Create the roles first (docker/initdb/01-reader-role.sh), then restore again." >&2
   fi
 }
 

@@ -40,6 +40,11 @@ names the value, the reason and the latest archived release.
 
 The Api does not resolve a version range.
 
+An amendment of 2026-10-21 covers the archive that holds no release. A query that names no release
+is then an error with its own code (`SPT_ARCHIVE_EMPTY`), and not an empty list, because the
+argument has no default to fall back on and an empty answer would state something false. This
+follows decision 2 and adds no new option.
+
 ## Options Considered
 
 | Dimension                         | A. Empty list          | B. One error for both cases | C. Two errors, exact key only        |
@@ -104,6 +109,12 @@ Feature: The Api rejects a server version that the archive does not hold
     Then both responses have an error
     And the error codes of the two responses are different
 
+  Scenario: An empty archive is an error and not an empty list
+    Given the archive holds no release
+    When I query "items" without a version argument
+    Then the response has an error
+    And the error code is "SPT_ARCHIVE_EMPTY"
+
   Scenario: The default needs no version and no check
     Given the archive holds the releases "4.0.12" and "4.0.13"
     When I query "items" without a version argument
@@ -113,10 +124,18 @@ Feature: The Api rejects a server version that the archive does not hold
 
 ## Action Items
 
-1. [ ] Add the `sptVersion` argument with its default (TD-21).
-2. [ ] Return the two errors, with a different code for each, and name both codes in the docs.
-3. [ ] Add the range case to `query-api.feature`.
-4. [ ] Treat a partial form such as "4.0" and the word "latest" as the range case.
+1. [x] Add the `sptVersion` argument with its default (TD-21). Done on 2026-10-21: every official field
+   of the Api takes `sptVersion`, and `Releases.ResolveAsync` answers from the latest archived release
+   when the argument is left out.
+2. [x] Return the two errors, with a different code for each, and name both codes in the docs. Done:
+   `SPT_VERSION_UNKNOWN` and `SPT_VERSION_MALFORMED`, each with a message that names the value, and
+   `query-api.feature` names both codes.
+3. [x] Add the range case to `query-api.feature`. Done, with the case "4.0" and the word "latest".
+4. [x] Treat a partial form such as "4.0" and the word "latest" as the range case. Done: a release key
+   needs three or four numbers, and a key that the archive holds is always valid.
+5. [x] Return `SPT_ARCHIVE_EMPTY` when the archive holds no release and the query names none (the
+   amendment of 2026-10-21). Done, with a scenario in `query-api.feature` and a test in `ApiTests`.
+   The driver has not confirmed this item yet.
 
 ## Links
 

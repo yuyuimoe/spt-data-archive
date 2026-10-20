@@ -47,8 +47,28 @@ The server must run the same or a newer major PostgreSQL version than the one th
 
 Throwaway PostgreSQL 17, 25 tables, `pg_dump` 18.6: 6,000 items, 40,000 locale entries and 2 mod datasets gave a dump of 285,344 bytes. The restored copy had the same counts in all 25 tables. `archive_reader` could read the restored tables and could not delete from them.
 
+## Measured on 2026-10-21, on the real archive
+
+The development database of `docker/compose.yml` held two releases, 9,255 items, 536,414 locale entries
+and 7 mod datasets. `pg_dump` 18.6 against PostgreSQL 17 gave 43,490,841 bytes. `verify` read every table
+of the restored copy in 6.4 seconds and found the same count in all 25 tables. `restore` into a new
+database `archive_check` gave 9,255 items, and `archive_reader` read them and could not delete from them.
+
+## Decisions
+
+- **The script does not run itself.** A systemd timer runs `dump` and `verify`, not the Archiver. An
+  Archiver that dies must not take the backup with it, and several imports may run at once (ADR-0036).
+- **The off-host target is a directory.** `ARCHIVE_BACKUP_COPY_DIR` points at a mount, and `rclone` or
+  `scp` can fill that mount. The script names no cloud service, because the deployment stack is not built.
+- **Retention is 7 daily dumps and the newest dump of each of the last 4 weeks**, as the scenario in
+  `backup-and-restore.feature` states.
+- **The dump is not encrypted.** It holds published game data and published mod data, so secrecy is not
+  the risk and integrity is; the checksum covers integrity. Use TLS on the transport to the second host.
+- **Roles are not in the dump.** `docker/initdb/01-reader-role.sh` stays the only source of the roles.
+  `restore` grants the reader when the role exists and warns when it does not.
+
 ## Not done
 
 - No call from the Archiver or a timer. A maintainer runs the script.
 - No encryption of the dump and no real off-host copy. The script copies to a directory that you mount.
-- No scheduled restore test. See the questions in TD-03.
+- No scheduled restore test. See TD-03.

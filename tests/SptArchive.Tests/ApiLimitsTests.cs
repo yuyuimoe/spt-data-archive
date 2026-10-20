@@ -86,10 +86,32 @@ public sealed class ApiLimitsTests : IAsyncLifetime
     [Fact]
     public async Task A_normal_page_is_inside_the_cost_limit()
     {
-        var (_, body) = await PostAsync("""{ items(sptVersion: "4.0.13", first: 200) { nodes { id } } }""");
+        // A data browser asks for a full page and selects the whole row, which is every field of Item:
+        // 200 rows times 11 fields costs 2,011. A limit below that refuses the commonest query of the Api.
+        const string everyFieldOfItem =
+            "sptVersion id name parentId type prototype weight width height stackMaxSize props";
 
-        Assert.DoesNotContain("COST", body.ToUpperInvariant());
+        var query = "{ items(sptVersion: \"4.0.13\", first: 200) { nodes { " + everyFieldOfItem + " } } }";
+
+        var (_, body) = await PostAsync(query);
+
         Assert.DoesNotContain("HC0047", body);
+        Assert.Contains("\"nodes\"", body);
+    }
+
+    [Fact]
+    public async Task Two_pages_in_one_request_are_inside_the_cost_limit()
+    {
+        // The headroom above one page: a client that compares two releases, or fills two panes, is served.
+        const string everyFieldOfItem =
+            "sptVersion id name parentId type prototype weight width height stackMaxSize props";
+
+        var query = "{ older: items(sptVersion: \"4.0.13\", first: 200) { nodes { " + everyFieldOfItem + " } } newer: items(sptVersion: \"4.1.6\", first: 200) { nodes { " + everyFieldOfItem + " } } }";
+
+        var (_, body) = await PostAsync(query);
+
+        Assert.DoesNotContain("HC0047", body);
+        Assert.Contains("\"newer\"", body);
     }
 
     [Fact]

@@ -45,7 +45,7 @@ model {
 
       graphql = component 'GraphQL Query' {
         technology 'HotChocolate'
-        description 'One Query type. Paging, filtering and sorting for official and mod collections.'
+        description 'One Query type. Paging, filtering and sorting for official and mod collections. Every official field takes one archived release and answers from the latest when it is left out (ADR-0014, ADR-0019). A request is bounded by size, depth, time and cost.'
       }
 
       apiDbAccess = component 'ArchiveDbContext (Api)' {
@@ -104,6 +104,11 @@ model {
       }
     }
 
+    backupScript = container 'Backup Script' {
+      technology 'bash, pg_dump, pg_restore'
+      description 'Dumps the archive to a custom-format file with a checksum, proves that the file restores, prunes old files and restores into a new database (ADR-0011). A maintainer runs it; nothing schedules it yet (TD-03).'
+    }
+
     db = database 'PostgreSQL' {
       technology 'PostgreSQL 17'
       description 'Official tables and mod tables with identical columns, plus mods, languages and archive runs.'
@@ -125,6 +130,8 @@ model {
   }
   consumer -> archive.api 'Sends GraphQL requests over HTTPS'
   maintainer -> archive.archiver 'Starts a run (cron, systemd timer or docker compose run)'
+  maintainer -> archive.backupScript 'Runs a dump, a verify or a restore'
+  archive.backupScript -> archive.db 'Dumps every table and restores into a scratch database'
   archive.archiver -> sptServer 'Reads SPT_Data/database (read-only mount)'
   archive.archiver -> modSources 'Reads the mod versions, their server ranges and their dependency sets' {
     #planned

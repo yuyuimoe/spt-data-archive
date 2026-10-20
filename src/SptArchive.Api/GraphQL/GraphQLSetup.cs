@@ -27,6 +27,19 @@ public static class GraphQLSetup
             .AddTypeExtension<TraderAssortItemJson>()
             .AddTypeExtension<ModTraderAssortItemJson>()
             .AddTypeExtension<ModJson>()
+            // A jsonb column offers comparison only: the text operations a string filter announces fail in
+            // Postgres against jsonb (JsonFilter.cs).
+            .AddType<ItemFilter>()
+            .AddType<ModItemFilter>()
+            .AddType<CustomizationFilter>()
+            .AddType<ModCustomizationFilter>()
+            .AddType<QuestFilter>()
+            .AddType<ModQuestFilter>()
+            .AddType<TraderFilter>()
+            .AddType<ModTraderFilter>()
+            .AddType<TraderAssortItemFilter>()
+            .AddType<ModTraderAssortItemFilter>()
+            .AddType<ModFilter>()
             // The default security policy switches introspection off outside Development. A public data browser
             // needs the schema, so it stays on.
             .DisableIntrospection(false)
@@ -53,9 +66,15 @@ public static class GraphQLSetup
     /// <summary>The largest GraphQL request body, in bytes.</summary>
     public const int MaxRequestBytes = 1_000_000;
 
-    /// <summary>The most work that the resolvers of one query may cost.</summary>
-    public const double MaxFieldCost = 2_000;
+    /// <summary>
+    /// The most work that the resolvers of one query may cost. One field of one row costs 1, so this is
+    /// about 1,800 rows: nine full pages, with every field of a row.
+    /// </summary>
+    public const double MaxFieldCost = 20_000;
 
-    /// <summary>The most objects that one query may return, counting the page size of every list.</summary>
+    /// <summary>
+    /// The most objects that one query may return, counting the page size of every list. A page costs its
+    /// size, so this refuses a request that asks for ten pages at once.
+    /// </summary>
     public const double MaxTypeCost = 2_000;
 }

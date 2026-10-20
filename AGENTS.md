@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Seven migrations exist and are applied, and 236 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). Seven migrations exist and are applied, and 258 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 236 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 258 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,8 +94,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, seven migrations are applied, and 236 tests pass (TD-01, TD-02, TD-04, TD-07,
-  TD-29, TD-39, TD-40, TD-44, TD-50, TD-51).
+- **Done:** the solution builds, seven migrations are applied, and 258 tests pass (TD-01, TD-02, TD-04, TD-07,
+  TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-21, TD-15).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -105,9 +105,19 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   the id the run gave it (ADR-0034). Official data comes only from an installation that loaded no mod, and a run
   waits for the official data of its release (ADR-0035). Several imports may run at the same time: a run holds a
   lease, and a transaction-scoped advisory lock covers what it writes (ADR-0036).
-- **Next slice:** the paths of a modified quest, trader and customization (ADR-0032 action item 3). Then the Api
-  server version argument (TD-21), the Gherkin scenarios with Reqnroll (TD-06), the rows of a location and a bot
-  type (TD-45) and the baseline cache. ADR-0036 is Accepted: several imports may run at the same time.
+- **The Api answers one release at a time.** Every official field takes an optional `sptVersion`, and an
+  answer comes from the latest archived release when the argument is left out (ADR-0014, ADR-0019). A bad
+  value is an error with its own code and never an empty list: `SPT_VERSION_UNKNOWN`,
+  `SPT_VERSION_MALFORMED`, and `SPT_ARCHIVE_EMPTY` when the archive holds no release at all. The jsonb
+  columns are `Any` values, so a client reads JSON as JSON (TD-15), and such a column offers comparison only,
+  because the text operations would become `LIKE` against jsonb (TD-52). A request is bounded by 1 MB, depth
+  10, 10 seconds and a cost limit that serves nine full pages and refuses eleven.
+- **Backups.** `scripts/backup.sh dump | verify FILE | restore FILE DBNAME` writes a custom-format dump with
+  a checksum, proves that it restores, and prunes old files; `docs/runbooks/backup.md` is the runbook
+  (ADR-0011). Nothing runs it on a schedule yet (TD-03).
+- **Next slice:** the Api surface for the mod tables (ADR-0032 action item 7), so a client reads a dataset, its
+  change paths and its files. Then the Gherkin scenarios with Reqnroll (TD-06, ADR-0012), the rows of a
+  location and a bot type (TD-45), JSON filtering by path (TD-52) and the baseline cache.
 - **Open decisions:** none. ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export and
   import) and ADR-0036 (several imports at the same time) are Accepted. ADR-0005 and ADR-0010 are
   superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0035 are Accepted.

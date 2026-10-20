@@ -194,6 +194,13 @@ Feature: Query the archive through a read-only GraphQL API
     Then the error code is "SPT_VERSION_MALFORMED"
 
   @unverified
+  Scenario: An empty archive is an error and not an empty list
+    Given the archive holds no release
+    When I query "items" without a version argument
+    Then the response has an error
+    And the error code is "SPT_ARCHIVE_EMPTY"
+
+  @unverified
   Scenario: A client lists the archived releases
     Given the archive holds the releases "4.0.12" and "4.0.13"
     When I query "sptVersions"
@@ -216,6 +223,11 @@ Feature: Query the archive through a read-only GraphQL API
   Scenario: A query deeper than 10 levels is refused
     When I send a query nested 11 levels deep
     Then the response has an error and no data
+
+  @unverified
+  Scenario: A full page that selects every field is inside the cost limit
+    When I query one page of 200 rows and select every field of a row
+    Then the response has no cost error
 
   @unverified
   Scenario: A wide query over the cost limit is refused
@@ -242,6 +254,15 @@ Feature: Query the archive through a read-only GraphQL API
     When I query "allItems"
     Then the result has "A1" and "B1"
     And each row states whether it is official or from a mod
+
+  @unverified
+  Scenario: A JSON column offers comparison and not text matching
+    Given the item "A1" has the property "Weight" 0.5 in its "props" column
+    When I query "items" with the text operation "startsWith" on "props"
+    Then the response has an error that names "startsWith"
+    And the error comes from the schema and not from the database
+    When I query "items" where "props" equals the property of "A1"
+    Then the answer has the item "A1"
 
   @unverified
   Scenario: JSON properties are returned as JSON values

@@ -55,8 +55,11 @@ Feature: Backups
 
 ## Action Items
 
-1. [ ] Add a backup script and call it after a successful run.
-2. [ ] Add a scheduled restore test.
+1. [ ] Add a backup script and call it after a successful run. Half done on 2026-10-21:
+   `scripts/backup.sh` dumps, verifies and restores (`docs/runbooks/backup.md`), and a maintainer runs
+   it by hand. Nothing calls it after a run, and no schedule exists (TD-03).
+2. [ ] Add a scheduled restore test. `scripts/backup.sh verify` restores a dump into a scratch
+   database and compares the row count of every table. Nothing runs it on a schedule.
 
 ## Links
 

@@ -8,11 +8,12 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 236 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 258 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
-> The Api served the archive read-only. A container run exports every table of the server database
+> The Api serves the archive read-only, one release at a time: every official field takes an optional
+> `sptVersion` (ADR-0014, ADR-0019), and a jsonb column reaches the client as JSON (TD-15). A container run exports every table of the server database
 > (642 MB for 4.1.6, nineteen real mod runs, see `docs/runbooks/mod-export.md`), and the Archiver now reads a
 > run directory against the baseline of its release into a dataset: ECOTI 9 added items and 18 added offers in
 > 27 templates; WTT-Armory 2,434 templates with 1,294 added and 461 changed items; Gunwright a dataset with no
@@ -167,14 +168,16 @@ The API is then at `http://localhost:8080/graphql`. Example:
 - **Caching.** Whole GraphQL responses are cached in Redis, keyed by the request body plus a dataset version that the
   Archiver changes after every run, so there is nothing to invalidate. Redis is capped at 128 MB with LRU eviction.
   Because the API is anonymous, identical requests always have identical answers; revisit this before adding auth.
-- **Backups.** Take a `pg_dump -Fc` after each successful run and keep it off the host:
-  `docker compose exec -T db pg_dump -U archive_owner -Fc archive > archive-$(date +%F).dump`
-- **Limits.** Page size is capped at 200, queries at depth 10 and 10 seconds. Put the API behind a rate limiter
-  (Cloudflare, Traefik) as well.
+- **Backups.** `scripts/backup.sh dump` writes a `pg_dump -Fc` with a checksum, copies it to
+  `ARCHIVE_BACKUP_COPY_DIR` and proves that it restores (`scripts/backup.sh verify`). Keep the copy off the
+  host. See `docs/runbooks/backup.md` (ADR-0011, TD-03 for the missing schedule).
+- **Limits.** Page size is capped at 200, a request body at 1 MB, and a query at depth 10, 10 seconds and a
+  cost limit of 20,000 field cost and 2,000 objects — nine full pages of rows with every field. A JSON column
+  offers comparison only. Put the API behind a rate limiter (Cloudflare, Traefik) as well.
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 236 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 258 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
