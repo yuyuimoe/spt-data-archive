@@ -39,8 +39,14 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Mod version** | One release of one mod, for example "1.0.0" of "com.example.mod". It is not a server version (ADR-0013). |
 | **Mod dataset** | The content of one mod version: the rows it adds and the official rows it changes. Two mod versions with the same content share one mod dataset. |
 | **Mod data observation** | One attempt to load one mod version on one server version. It points at a mod dataset, or it states why there is none. |
-| **Outcome** | The result of one mod data observation: `archived`, `not_loaded`, `dependency_unresolved`, `outside_declared_range`, `crashed` or `timeout`. |
+| **Outcome** | The result of one mod data observation: `archived`, `not_loaded`, `dependency_unresolved`, `outside_declared_range`, `crashed`, `timeout`, `no_server_data` or `loaded_but_disabled` (ADR-0023, ADR-0026). |
 | **Mod change** | One property path that a mod dataset changes. A row in `mod_item_changes`, under one row of `mod_templates`. The path is a JSON pointer. |
+| **Role** | The label the game shows for a kind of bot. The official vocabulary is the `ScavRole/*` keys of a locale: Boss, Guard, Raider, Rogue, Sniper, Smuggler, Sectant, Infected. A mod can add a key (ADR-0025). |
+| **Faction** | A named group that a player recognises, such as USEC, BEAR, Savage or Black Division. A faction is curated, not read from a field, because no field holds it (ADR-0025). |
+| **Bot type** | One file under `bots/types/`. The name of the file is the identity, and it is the client spawn type lowercased: the wave says `pmcBEAR` and the file is `pmcbear.json`. |
+| **Bot facet** | One part of what a mod ships: `client` (files under `BepInEx`), `server_data` (a `db` tree under `SPT_Runtime/user/mods`), `server_code` (a server `.dll`), `bundle` (assets that are not data). A mod has a set of facets (ADR-0023). |
+| **db fragment** | A file under a mod's `db` tree that the server merges into its tables at load, for example `db/bots/types/bossWedge.json`. The fragment is provenance, not a dataset. |
+| **Preset** | The configuration file that a value mod reads, for example the SVM preset that `Greed.exe` writes. The archive stores what the mod ships and never authors one (ADR-0026). |
 | **Dependency set** | The pinned mod versions that a run loads beside the target mod. The catalog states it, and the mod metadata is the fallback. It is frozen on the observation. |
 | **Version range** | A semver expression that states which versions satisfy a requirement, for example ">=2.0.0 <2.5.0". The Archiver resolves one for a dependency set. The Api does not accept one (ADR-0019). |
 | **Baseline cache** | The stored baseline export, keyed by the dependency set hash and the server version. Two mods with one dependency set share it. |

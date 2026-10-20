@@ -1,6 +1,6 @@
 # ADR-0021: Archive a patching mod together with the mod it patches
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0013, ADR-0016, ADR-0020, ADR-0022

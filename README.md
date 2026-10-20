@@ -163,8 +163,15 @@ The API is then at `http://localhost:8080/graphql`. Example:
   the baseline cache are action items of ADR-0013.
 - **`items.json` is stored in Git LFS** upstream. The Archiver stops with a clear message if it finds the pointer
   file instead of the data.
-- **Not imported yet**: hideout, bots, locations, globals, settings, handbook, prices, achievements, prestige,
-  dialogue, the `menu`/`server`/`web` locale folders, the character template, and the side-specific trader suits.
+- **Not imported yet**: bots, locations, globals, hideout, settings, match, server, handbook, prices,
+  achievements, prestige, dialogue, the `menu`/`server`/`web` locale folders, the character template, and the
+  side-specific trader suits. [ADR-0024](docs/adr/0024-archive-the-whole-server-database.md) decides that every
+  server table is imported; TD-32 is the work.
+- **No faction exists in the data.** A bot type is a file name, and the only faction vocabulary is the
+  `ScavRole/*` locale keys, which name roles. Factions need a curated map
+  ([ADR-0025](docs/adr/0025-resolve-a-faction-from-locale-and-curation.md), TD-33).
+- **Client mods are not run.** Skill Effects Extended and EFT Effect Manager are BepInEx plugins, and ISB Special
+  Forces ships 270 files with no server part. They get catalog rows and no dataset (ADR-0023).
 - **Nothing writes a mod change yet.** `mod_templates` and `mod_item_changes` are modelled, but the exporter that
   would fill them is not built.
 - **JSON columns are exposed as JSON text** in GraphQL (`props`, `data`, `base`, ...), not as a native JSON scalar.

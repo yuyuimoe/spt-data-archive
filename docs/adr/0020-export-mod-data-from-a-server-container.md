@@ -1,6 +1,6 @@
 # ADR-0020: Export mod data from a server container, without a Harmony patch
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0013, ADR-0014, ADR-0015, ADR-0017

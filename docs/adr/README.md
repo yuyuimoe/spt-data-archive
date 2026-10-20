@@ -25,9 +25,13 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0017](0017-record-a-template-operation.md) | Record one template operation for every item that a mod touches | Accepted |
 | [0018](0018-do-not-delete-mod-data-in-the-first-release.md) | Do not delete mod data in the first release | Accepted |
 | [0019](0019-reject-a-version-the-archive-does-not-hold.md) | Reject a server version that the archive does not hold | Accepted |
-| [0020](0020-export-mod-data-from-a-server-container.md) | Export mod data from a server container, without a Harmony patch | Proposed |
-| [0021](0021-archive-a-patch-mod-with-its-base.md) | Archive a patching mod together with the mod it patches | Proposed |
-| [0022](0022-archive-player-customization.md) | Archive player customization as a seventh dataset | Proposed |
+| [0020](0020-export-mod-data-from-a-server-container.md) | Export mod data from a server container, without a Harmony patch | Accepted |
+| [0021](0021-archive-a-patch-mod-with-its-base.md) | Archive a patching mod together with the mod it patches | Accepted |
+| [0022](0022-archive-player-customization.md) | Archive player customization as a seventh dataset | Accepted |
+| [0023](0023-classify-a-mod-by-the-parts-it-ships.md) | Classify a mod by the parts it ships | Accepted |
+| [0024](0024-archive-the-whole-server-database.md) | Archive the whole server database, not seven tables | Accepted |
+| [0025](0025-resolve-a-faction-from-locale-and-curation.md) | Resolve a faction from a locale key and a curated membership | Proposed (decision needed) |
+| [0026](0026-archive-a-value-mod-preset.md) | Archive a value mod's preset, and say when it did nothing | Accepted |
 
 ## Status meanings
 

@@ -1,6 +1,6 @@
 # ADR-0022: Archive player customization as a seventh dataset
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0002, ADR-0003, ADR-0014, ADR-0017, ADR-0020
@@ -141,7 +141,7 @@ These scenarios stay `@unverified` until the Gherkin bindings exist (TD-06) and 
 
 ## Action Items
 
-- [ ] Yui ratifies this ADR, or rejects it and keeps the six datasets.
+- [x] Yui ratified this ADR on 2026-10-20 (Q1a).
 - [ ] TD-29: import the `customization` key of an export into `mod_customizations`.
 - [ ] TD-06: bind the three scenarios to tests.
 
