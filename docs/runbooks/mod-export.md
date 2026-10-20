@@ -110,6 +110,32 @@ With `--userns=keep-id` the files belong to the host user. Without it, take the 
 podman unshare chown -R 0:0 /tmp/mods/sptrun
 ```
 
+### `run/`, the account of the run
+
+Since exporter 1.2.0 the export also holds `run/` (ADR-0029):
+
+| Path | What it holds |
+| --- | --- |
+| `run/loaded.json` | one entry per loaded mod: `directory`, `modGuid`, `name`, `author`, `version`, the declared SPT range, its declared dependencies and `hasPrepatcher` |
+| `run/files/<directory>.json` | the manifest of that mod directory: one entry per file with `path`, `size`, `sha256` and `kind` (`assembly`, `bundle`, `data`, `config`, `text`, `other`) |
+| `run/config/<directory>/<path>` | the text of every configuration file, copied as bytes, comments included |
+| `run/pre-boot.json` | written by `run_mod.sh` before the container starts: the same manifest of `user/mods`. A file whose two hashes differ was rewritten by a mod during its load. |
+| `run/origin.json` | written by `run_mod.sh` when `CURATED_REASON` is set: `shipped` or `curated`, with the reason (ADR-0029, decision 7) |
+
+A configuration file is one whose path has a segment `config`, `configs`, `presets` or `loader`, or
+whose name contains `config`, `settings`, `preset`, `option` or `loader`, or whose extension is
+`.jsonc`. Above 2 MB it stays in the manifest and is not copied. The rule is
+`ModFileKind.IsConfigFile`, one file compiled into the exporter and into the Archiver.
+
+A curated run keeps the mod directory name, or every path in its manifest would differ from the
+shipped run by the name alone:
+
+```bash
+MOD_DIR_NAME=LotsOfLootRedux \
+CURATED_REASON="The overlay is the feature; the shipped preset has AllowLootOverlay = false" \
+  ./run_mod.sh LotsOfLootRedux-Curated
+```
+
 ## Problems
 
 **A mod is rejected before the load.** The log prints one line and no mod loads at all, so the
@@ -183,8 +209,25 @@ Image `localhost/spt-server:4.1.6`, exporter 1.1.0, dependency set `WTT-ServerCo
 | baseline, no mod | 642 MB | 4,673 items, 558 quests, 31,549 translations, 12 traders, 57 bot types, 19 locations, 6 hideout parts |
 | Factory Classic 1.0.2 + Map Variants 1.0.3 | 642 MB | `factory4_day` and `factory4_night` replaced, 7 files each |
 | Arena Map Port 0.2.3 | 642 MB | no arena map: the mod needs a real Escape from Tarkov: Arena install (TD-37) |
-| Lots of Loot Redux 4.2.2 | 642 MB | no change of a table: its multipliers act when a raid is generated |
+| Lots of Loot Redux 4.2.2 | 642 MB | no change of a table. `Presets/default.json` holds `LooseLootMultiplier.* = 7.5` and `StaticLootMultiplier.* = 2`, but also `General.AllowLootOverlay = false`, so the mod had nothing to apply. The archive keeps the preset and the reason (ADR-0029, TD-40). |
 | Icebreaker 1.1.3 | none | rejected before the load: it needs `com.wtt.contentbackport`, then `com.morebotsapi.tacticaltoaster` (TD-38) |
+
+## Runs recorded on 2026-10-20, with `run/`
+
+Image `localhost/spt-server:4.1.6`, exporter 1.2.0, dependency set `WTT-ServerCommonLib 3.0.6` +
+`MassivesoftCore 1.0.2`.
+
+| Target | Export | `run/` | What the dump shows |
+| --- | --- | --- | --- |
+| baseline, no mod | 642 MB | 3 mods loaded, 8 files | the same 4,673 items as the install; pre-boot and post-boot hashes are equal, so no mod rewrote a file |
+| Lots of Loot Redux 4.2.2, shipped | 642 MB | 4 files, 2 configuration files | no table change. The manifest holds `Presets/default.json` with `AllowLootOverlay = false`, and it is stored as text, so the empty diff has its reason next to it |
+| Lots of Loot Redux 4.2.2, curated (`AllowLootOverlay = true`) | 642 MB | 4 files, 2 configuration files, `origin.json` says `curated` | still no table change, and the two manifests differ in exactly one file: `Presets/default.json` (5,294 → 5,293 bytes). The mod applies its multipliers when a raid is generated, so it is a behaviour mod and not a data mod (ADR-0028). Recording it as such is the point of the curated run. |
+| ECOTI 3.4.0 | 642 MB | 46 files, 3 configuration files | a config-driven dataset: **+9 items**, **+9 Peacekeeper assort rows**, **+27 English translations**, and changed `prices.json` and `handbook.json`. `config/config.json` decides them (`trader.priceUsd`, `loot.weightFraction`, `loot.enabled`) |
+
+ECOTI's own `config.json` has the same pre-boot and post-boot hash, so ECOTI 3.4.0 reads its
+configuration and does not rewrite it. Its server code contains a `File.WriteAllTextAsync` path, but
+the run did not take it. This is the case the pre-boot snapshot exists for: the next release of a mod
+that does rewrite its file shows the difference without anyone reading its source.
 
 ## Two runs of one release are not equal
 

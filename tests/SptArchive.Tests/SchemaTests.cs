@@ -57,6 +57,7 @@ public sealed class SchemaTests
     [InlineData("mod_traders")]
     [InlineData("mod_trader_assort_items")]
     [InlineData("mod_trader_quest_assorts")]
+    [InlineData("mod_files")]
     public async Task Every_mod_table_is_keyed_by_its_dataset(string table)
     {
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
@@ -157,6 +158,136 @@ public sealed class SchemaTests
         Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
     }
 
+    [Theory]
+    [InlineData(ModObservationOutcome.NoServerData)]
+    [InlineData(ModObservationOutcome.LoadedButDisabled)]
+    public async Task An_outcome_that_states_a_mod_did_nothing_is_a_known_value(string outcome)
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(outcome, ModObservationOutcome.All);
+
+        var modId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into spt_versions (version, version_parts, archived_at) values ('9.9.9', $1, now())",
+            new[] { 9, 9, 9, 0 });
+        await scope.ExecuteAsync(
+            "insert into mods (id, mod_guid, name, version, archived_at) values ($1, 'com.example.b', 'Example', '1.0.0', now())",
+            modId);
+
+        await scope.ExecuteAsync(
+            """
+            insert into mod_data_observations (id, mod_id, spt_version, outcome, kind, observed_at)
+            values ($1, $2, '9.9.9', $3, 'archive', now())
+            """,
+            Guid.CreateVersion7(), modId, outcome);
+    }
+
+    [Fact]
+    public async Task A_dataset_uses_the_shipped_configuration_unless_it_says_otherwise()
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+
+        var shipped = Guid.CreateVersion7();
+        await InsertDatasetAsync(scope, shipped, "com.example.shipped", "hash-shipped");
+
+        var origin = await scope.ScalarAsync<string>(
+            "select config_origin from mod_datasets where id = $1", shipped);
+        Assert.Equal(ModConfigOrigin.Shipped, origin);
+
+        // ADR-0029 decision 7: a curated configuration is a second dataset, named as such.
+        var curated = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into mod_datasets (id, mod_guid, content_hash, table_hashes, row_counts, config_origin,
+                                      config_origin_reason, created_at)
+            values ($1, 'com.example.shipped', 'hash-curated', '{}'::jsonb, '{}'::jsonb, 'curated',
+                    'The overlay is the feature of the mod', now())
+            """,
+            curated);
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
+            "update mod_datasets set config_origin = 'invented' where id = $1", shipped));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+    }
+
+    [Fact]
+    public async Task A_file_needs_a_dataset_that_exists()
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
+            """
+            insert into mod_files (dataset_id, path, kind, size, sha256)
+            values ($1, 'Example/config/config.json', 'config', 10, 'abc')
+            """,
+            Guid.CreateVersion7()));
+
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState);
+    }
+
+    [Fact]
+    public async Task A_file_states_its_kind()
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+
+        var dataset = Guid.CreateVersion7();
+        await InsertDatasetAsync(scope, dataset, "com.example.files", "hash-files");
+
+        foreach (var kind in ModFileKind.All)
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into mod_files (dataset_id, path, kind, size, sha256)
+                values ($1, $2, $3, 10, 'abc')
+                """,
+                dataset, $"Example/{kind}", kind);
+        }
+
+        // The text is the extra: a configuration file keeps what the mod read.
+        await scope.ExecuteAsync(
+            """
+            insert into mod_files (dataset_id, path, kind, size, sha256, content_text, content)
+            values ($1, 'Example/config/config.json', 'config', 10, 'abc', '{"a":1}', '{"a":1}'::jsonb)
+            """,
+            dataset);
+
+        var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
+            """
+            insert into mod_files (dataset_id, path, kind, size, sha256)
+            values ($1, 'Example/bundle.bundle', 'asset', 10, 'abc')
+            """,
+            dataset));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);
+    }
+
+    [Fact]
+    public async Task Two_datasets_can_hold_the_same_file_path()
+    {
+        await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+        await InsertDatasetAsync(scope, first, "com.example.first", "hash-first");
+        await InsertDatasetAsync(scope, second, "com.example.second", "hash-second");
+
+        foreach (var dataset in new[] { first, second })
+        {
+            await scope.ExecuteAsync(
+                """
+                insert into mod_files (dataset_id, path, kind, size, sha256)
+                values ($1, 'Example/db/Items/x.json', 'data', 10, 'abc')
+                """,
+                dataset);
+        }
+
+        var count = await scope.ScalarAsync<long>(
+            "select count(*) from mod_files where path = 'Example/db/Items/x.json'");
+
+        Assert.Equal(2, count);
+    }
+
     [Fact]
     public async Task The_reader_role_can_read_and_cannot_write()
     {
@@ -176,6 +307,17 @@ public sealed class SchemaTests
         var error = await Assert.ThrowsAsync<PostgresException>(() => write.ExecuteNonQueryAsync(cancellationToken));
 
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, error.SqlState);
+
+        await using var writeFile = new NpgsqlCommand(
+            """
+            insert into mod_files (dataset_id, path, kind, size, sha256)
+            values ('00000000-0000-0000-0000-000000000000', 'Example/x.dll', 'assembly', 1, 'abc')
+            """, connection);
+
+        var fileError = await Assert.ThrowsAsync<PostgresException>(
+            () => writeFile.ExecuteNonQueryAsync(cancellationToken));
+
+        Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, fileError.SqlState);
     }
 
     private static Task<int> InsertDatasetAsync(TestScope scope, Guid id, string modGuid, string contentHash) =>
@@ -186,3 +328,4 @@ public sealed class SchemaTests
             """,
             id, modGuid, contentHash);
 }
+

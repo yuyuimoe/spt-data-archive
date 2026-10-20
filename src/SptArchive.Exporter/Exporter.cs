@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
@@ -7,6 +8,7 @@ using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Core.Utils.Json;
+using SptArchive.Core.Entities;
 using Range = SemanticVersioning.Range;
 using Version = SemanticVersioning.Version;
 
@@ -22,7 +24,7 @@ public sealed class ExporterMetadata : IModMetadata
     public string Name { get; init; } = "SPT Archive Exporter";
     public string Author { get; init; } = "SPT Data Archive";
     public List<string>? Contributors { get; init; }
-    public Version Version { get; init; } = new("1.1.0");
+    public Version Version { get; init; } = new("1.2.0");
     public Range SptVersion { get; init; } = new(">=4.1.0 <5.0.0");
     public bool HasPrepatcher { get; init; } = false;
     public List<string>? Incompatibilities { get; init; }
@@ -36,6 +38,7 @@ public sealed class ExporterMetadata : IModMetadata
 ///     directory, then stops the host. ADR-0013: the container exists to produce one export.
 ///     ADR-0027: the export is a database directory, so the Archiver reads one layout for an
 ///     install and for a run.
+///     ADR-0029: the export also holds <c>run/</c>, the account that the run gives of itself.
 /// </summary>
 [Injectable(TypePriority = OnLoadOrder.PostLoad + 1)]
 public sealed class Exporter(
@@ -48,9 +51,13 @@ public sealed class Exporter(
     HideoutTable hideout,
     MatchTable match,
     ServerTable server,
-    SettingsTable settings
+    SettingsTable settings,
+    IReadOnlyList<SptMod> loadedMods
 ) : IOnLoad
 {
+    /// <summary>A configuration file larger than this is named in the manifest and not copied (ADR-0029).</summary>
+    private const long MaxConfigTextBytes = 2 * 1024 * 1024;
+
     private string _root = string.Empty;
 
     /// <summary>
@@ -97,6 +104,8 @@ public sealed class Exporter(
         await WriteAsync("server.json", server, cancellationToken);
         await WriteAsync("settings.json", settings, cancellationToken);
         await WriteAsync("match.json", match, cancellationToken);
+
+        await DumpRunAsync(cancellationToken);
 
         Console.WriteLine($"[exporter] wrote export to {_root}");
         Console.Out.Flush();
@@ -231,6 +240,98 @@ public sealed class Exporter(
         await WriteAsync("hideout/production.json", hideout.Production, cancellationToken);
         await WriteAsync("hideout/qte.json", hideout.Qte, cancellationToken);
         await WriteAsync("hideout/settings.json", hideout.Settings, cancellationToken);
+    }
+
+    /// <summary>
+    ///     <c>run/</c>: the account that a run gives of itself (ADR-0029). <c>loaded.json</c> names
+    ///     every mod that loaded, which becomes the dependency set of the observation. The manifest of
+    ///     each mod directory records every file with its size and hash, and the text of every
+    ///     configuration file is copied as it is on disk.
+    /// </summary>
+    private async Task DumpRunAsync(CancellationToken cancellationToken)
+    {
+        var loaded = loadedMods
+            .Select(mod => new
+            {
+                directory = DirectoryName(mod.Directory),
+                modGuid = mod.ModMetadata.ModGuid,
+                name = mod.ModMetadata.Name,
+                author = mod.ModMetadata.Author,
+                version = mod.ModMetadata.Version.ToString(),
+                // The range the mod declares, not the release it runs on (ADR-0019).
+                sptVersion = mod.ModMetadata.SptVersion.ToString(),
+                modDependencies = mod.ModMetadata.ModDependencies?
+                    .ToDictionary(entry => entry.Key, entry => entry.Value.ToString()),
+                hasPrepatcher = mod.ModMetadata.HasPrepatcher,
+            })
+            .ToList();
+
+        await WriteAsync("run/loaded.json", loaded, cancellationToken);
+
+        foreach (var mod in loadedMods)
+        {
+            await DumpManifestAsync(mod.Directory, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    ///     One manifest per mod directory, and the text of its configuration files. Paths in the
+    ///     manifest are relative to the mod directory; the reader prefixes the directory, because the
+    ///     <c>mod_files</c> key holds the whole path under <c>user/mods</c> (ADR-0029).
+    /// </summary>
+    private async Task DumpManifestAsync(string directory, CancellationToken cancellationToken)
+    {
+        var root = new DirectoryInfo(directory);
+        if (!root.Exists)
+        {
+            Console.WriteLine($"[exporter] mod directory {directory} does not exist");
+            return;
+        }
+
+        var name = root.Name;
+        var files = new List<object>();
+        var configs = 0;
+
+        foreach (var file in root.EnumerateFiles("*", SearchOption.AllDirectories).OrderBy(f => f.FullName, StringComparer.Ordinal))
+        {
+            var relative = Path.GetRelativePath(root.FullName, file.FullName).Replace('\\', '/');
+            var kind = ModFileKind.Classify(relative);
+
+            files.Add(new
+            {
+                path = relative,
+                size = file.Length,
+                sha256 = await HashAsync(file.FullName, cancellationToken),
+                kind,
+            });
+
+            if (kind != ModFileKind.Config || file.Length > MaxConfigTextBytes)
+            {
+                continue;
+            }
+
+            // Copied as bytes: a .jsonc file keeps its comments, and a re-serialized file would
+            // not be the file that the mod read.
+            var target = Path.Combine(_root, "run", "config", name, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file.FullName, target, overwrite: true);
+            configs++;
+        }
+
+        await WriteAsync($"run/files/{name}.json", files, cancellationToken);
+        Console.WriteLine($"[exporter] run/files/{name}.json {files.Count} files, {configs} configuration files");
+    }
+
+    private static string DirectoryName(string directory)
+    {
+        return Path.GetFileName(directory.TrimEnd('/', '\\'));
+    }
+
+    private static async Task<string> HashAsync(string path, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(path);
+        var hash = await SHA256.HashDataAsync(stream, cancellationToken);
+        return Convert.ToHexStringLower(hash);
     }
 
     /// <summary>

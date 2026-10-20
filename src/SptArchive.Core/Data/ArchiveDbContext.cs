@@ -50,6 +50,9 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
     public DbSet<ModTemplate> ModTemplates => Set<ModTemplate>();
     public DbSet<ModItemChange> ModItemChanges => Set<ModItemChange>();
 
+    // The files a dataset loaded: the manifest of every mod, and the text of its configuration (ADR-0029)
+    public DbSet<ModFile> ModFiles => Set<ModFile>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // ---- Server releases and runs -------------------------------------------------------------
@@ -148,6 +151,10 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.HasIndex(x => new { x.ModGuid, x.ContentHash }).IsUnique();
             e.Property(x => x.TableHashes).HasColumnType("jsonb");
             e.Property(x => x.RowCounts).HasColumnType("jsonb");
+
+            e.ToTable(t => t.HasCheckConstraint(
+                "ck_mod_datasets_config_origin",
+                "config_origin IN ('shipped', 'curated')"));
         });
 
         b.Entity<ModDataObservation>(e =>
@@ -167,11 +174,29 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_data_observations_outcome",
-                "outcome IN ('archived', 'not_loaded', 'dependency_unresolved', 'outside_declared_range', 'crashed', 'timeout')"));
+                "outcome IN ('archived', 'not_loaded', 'dependency_unresolved', 'outside_declared_range', 'crashed', 'timeout', 'no_server_data', 'loaded_but_disabled')"));
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_data_observations_kind",
                 "kind IN ('archive', 'probe')"));
+        });
+
+        // ---- The files a dataset loaded (ADR-0029) -------------------------------------------------
+        b.Entity<ModFile>(e =>
+        {
+            // The path starts with the mod directory, so one dataset can hold a target and its deps.
+            e.HasKey(x => new { x.DatasetId, x.Path });
+            e.HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
+
+            e.Property(x => x.Content).HasColumnType("jsonb");
+
+            // "Which datasets ship this file" is a lookup on the hash, not on the path.
+            e.HasIndex(x => x.Sha256);
+            e.HasIndex(x => new { x.DatasetId, x.Kind });
+
+            e.ToTable(t => t.HasCheckConstraint(
+                "ck_mod_files_kind",
+                "kind IN ('assembly', 'bundle', 'data', 'config', 'text', 'other')"));
         });
 
         // ---- What a dataset changes (ADR-0017) -----------------------------------------------------

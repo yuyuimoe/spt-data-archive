@@ -1,6 +1,6 @@
 # ADR-0027: Archive a run as a database directory
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0002, ADR-0013, ADR-0014, ADR-0020, ADR-0024
@@ -83,6 +83,24 @@ Four deviations are deliberate and are written here so that no one reads them as
 The source of the exporter lives in the repository, `src/SptArchive.Exporter`. It is not part
 of the solution and it is not redistributed. It builds against an SPT install whose path a
 build property gives (`-p:SptAssemblyPath=...`).
+
+## What this ADR does not change
+
+The run directory is a transport format, not a second database. PostgreSQL stays the only store
+of record (ADR-0001), with promoted columns and `jsonb` next to them (ADR-0002), and official and
+mod rows in separate tables (ADR-0003). This ADR decides the shape of the handover between one
+container run and the Archiver. It decides nothing about storage:
+
+- Which rows are stored, and how they are keyed, is ADR-0013, ADR-0017 and ADR-0024.
+- The official import still reads the install directly (ADR-0004). An export is read only for a run
+  with a mod, or for a release whose install is not on the machine that runs the Archiver.
+- A run directory may be deleted after the import. It costs 642 MB for 4.1.6, and the archive holds
+  what the run said. The directories that are worth keeping are the two baselines of ADR-0028,
+  because they are the fixture of the canonical-form test.
+
+The reason the run is database-shaped is not that a directory is a database. It is that the
+Archiver then owns one set of importers, and a run can be read by the code that already reads an
+install.
 
 ## Options Considered
 

@@ -47,7 +47,11 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Bot type** | One file under `bots/types/`. The name of the file is the identity, and it is the client spawn type lowercased: the wave says `pmcBEAR` and the file is `pmcbear.json`. |
 | **Bot facet** | One part of what a mod ships: `client` (files under `BepInEx`), `server_data` (a `db` tree under `SPT_Runtime/user/mods`), `server_code` (a server `.dll`), `bundle` (assets that are not data). A mod has a set of facets (ADR-0023). |
 | **db fragment** | A file under a mod's `db` tree that the server merges into its tables at load, for example `db/bots/types/bossWedge.json`. The fragment is provenance, not a dataset. |
-| **Preset** | The configuration file that a value mod reads, for example the SVM preset that `Greed.exe` writes. The archive stores what the mod ships and never authors one (ADR-0026). |
+| **Preset** | The configuration file that a value mod reads, for example the SVM preset that `Greed.exe` writes. The archive stores it file by file, with its text and its hash, and never authors one (ADR-0026, ADR-0029). |
+| **Config file** | A file inside a mod directory that the mod reads to choose what it does: `config/config.json`, `Presets/default.json`, `db/config.json`, or any `.jsonc`. The run archives its text and never edits it (ADR-0029). |
+| **Curated configuration** | A configuration file that a person edits, or writes, after the mod shipped it. It runs as its own dataset, marked `curated` in `mod_datasets.config_origin`, and never replaces the run with the shipped file (ADR-0026, ADR-0029). |
+| **Manifest** | The list of files that a mod directory holds, with the size and the SHA-256 of each. It records that a file exists and never its bytes (ADR-0029). |
+| **Run directory** | The export of one container run: the ten table roots of the server database, and a `run` root that states which mods loaded and what each mod shipped (ADR-0027, ADR-0029). |
 | **Dependency set** | The pinned mod versions that a run loads beside the target mod. The catalog states it, and the mod metadata is the fallback. It is frozen on the observation. |
 | **Version range** | A semver expression that states which versions satisfy a requirement, for example ">=2.0.0 <2.5.0". The Archiver resolves one for a dependency set. The Api does not accept one (ADR-0019). |
 | **Baseline cache** | The stored baseline export, keyed by the dependency set hash and the server version. Two mods with one dependency set share it. |

@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 63 tests. Two migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 95 tests. Two migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
 > 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
 > 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
 > The Api served the archive read-only. A container run exports every table of the server database
@@ -35,7 +35,7 @@ src/
   SptArchive.Core      Entities, EF Core DbContext, migrations. Shared by the other two projects.
   SptArchive.Archiver  Run-to-completion job: reads the server's JSON, writes Postgres, exits.
   SptArchive.Api       Thin read-only GraphQL API (HotChocolate) + Redis response cache.
-  SptArchive.Exporter  Mod for the server container: dumps every table as a database directory (ADR-0027).
+  SptArchive.Exporter  Mod for the server container: dumps every table as a database directory, plus `run/` (ADR-0027, ADR-0029).
                        Not in the solution; it builds against an SPT install.
 docs/                  ADRs, C4 model, Gherkin specs, tech-debt register, glossary.
 docker/initdb          Creates the read-only Postgres role used by the API.
@@ -65,7 +65,8 @@ share one dataset (ADR-0013).
 Support tables: `spt_versions` (the releases the archive holds), `mods` (registered mod versions),
 `mod_datasets` (the content of one mod), `mod_data_observations` (one load attempt per mod version and
 server release, with its outcome), `mod_templates` and `mod_item_changes` (what a dataset changes in
-official data), `languages`, and `archive_runs` (one row per Archiver execution, with the source hash and
+official data), `mod_files` (the manifest of every file a dataset loaded, with the text of its configuration
+files, ADR-0029), `languages`, and `archive_runs` (one row per Archiver execution, with the source hash and
 the release).
 
 Design decisions:
@@ -89,8 +90,11 @@ run of the same release, the job exits immediately.
 
 **Mod data**: the tables exist, the ingestion does not yet. ADR-0013 decided how it works: one mod version with
 its pinned dependencies runs in a throwaway server container, an exporter mod writes the final in-memory database
-to JSON, and the difference from a baseline run is the dataset of that mod version. The container runner, the
-exporter mod and the baseline cache are not built.
+to a directory that has the layout of `SPT_Data/database` (ADR-0027), and the difference from a baseline run is
+the dataset of that mod version. The export also holds `run/`: the mods that loaded, the manifest of every file
+with its SHA-256, and the text of every configuration file (ADR-0029). The container runner and the exporter mod
+are built and ran on nineteen mod runs; nothing reads a run directory yet (TD-29), and the baseline cache is not
+built.
 
 Importers implement `IImporter` and are registered in `Archiver/Program.cs`; adding hideout, bots, locations or mods
 means adding an importer, not changing the pipeline.
@@ -158,7 +162,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 63 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
+- **No Gherkin runner yet.** 95 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **The Api has no server version argument.** The schema holds one row set per release, and two releases are
   imported (4.0.13 and 4.1.6), so an official query without a version mixes them (TD-21).

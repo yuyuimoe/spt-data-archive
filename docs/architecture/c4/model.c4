@@ -81,16 +81,16 @@ model {
 
     modRunner = container 'Mod Runner' {
       technology 'Docker, one server container per mod version'
-      description 'Starts a throwaway server container for one mod version and its dependencies. No network, read-only mount, hard kill. It writes the final in-memory database to JSON (ADR-0013).'
+      description 'Starts a throwaway server container for one mod version and its dependencies. No network, one container per run, then a hard stop. It hands the export of the run to the Archiver (ADR-0013).'
 
       exporterMod = component 'Exporter Mod' {
-        technology 'C# server mod, HarmonyX'
-        description 'Runs at the load stage after PostSptModLoader. Writes the final database to JSON, asserts the mod GUID is present, then stops the host.'
+        technology 'C# server mod, IOnLoad at PostLoad + 1'
+        description 'Reads every table, including the lazy loads, and writes the final in-memory database as a directory in the layout of SPT_Data/database, plus run/: the mods that loaded, the manifest of every file with its hash, and the text of every configuration file. Then it stops the host (ADR-0020, ADR-0027, ADR-0029).'
       }
 
-      bundlePatch = component 'Bundle Patch' {
+      bundlePatch = component 'Container start-up cut' {
         technology 'C# server mod, HarmonyX prefix patch'
-        description 'Stops the bundle step before it runs. The run fails when the patch is not applied (ADR-0015).'
+        description 'Stops the bundle step before it runs, so a run starts in seconds. ADR-0020 replaced the HarmonyX export with a load-order hook; the bundle cut is the remaining patch.'
       }
 
       baselineCache = component 'Baseline Cache' {

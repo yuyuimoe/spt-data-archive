@@ -1,6 +1,6 @@
 # ADR-0028: Compare two runs in a canonical form
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-20
 **Deciders:** Yui
 **Related:** ADR-0002, ADR-0013, ADR-0017, ADR-0023, ADR-0026, ADR-0027
@@ -50,6 +50,33 @@ One canonical form is the only input to a comparison, a diff and a hash.
 6. A mod change is a row that differs after this canonicalization. A mod that changes only the
    behaviour of a run (for example a loot multiplier that acts when a raid is generated)
    produces no row, and the observation records that outcome (ADR-0023, ADR-0026).
+
+## Why a hash of the run directory is not enough
+
+The archive keeps SHA-256 sums, and it keeps three of them. Each one answers a different
+question, and none of them replaces a diff.
+
+| Hash | Over | Question it answers |
+| --- | --- | --- |
+| Source hash | The files of an install | Did this release change on disk, so that a new import is needed (ADR-0004)? |
+| Artifact hash | The file that was downloaded | Is this the artifact that the page offered (TD-31)? |
+| `content_hash` | The canonical tables and the configuration of a dataset | Are these two datasets the same content (ADR-0013, ADR-0029)? |
+
+A sum of the run directory as it lies on disk is not usable as the third one. The two baseline
+runs prove it: 13 files and 42 paths differ, all of them the server. Every boot would produce a
+new hash, so `mod_datasets` unique on `(mod_guid, content_hash)` would never fold two runs into
+one dataset, and every run would add a dataset per mod.
+
+A sum is also not a substitute for a difference. It says **that** two runs differ and not
+**what** differs. The archive stores only the difference (ADR-0013, ADR-0017): the mod tables
+hold rows that differ from the baseline, and `mod_item_changes` holds the changed paths. A
+reader who needs "what did this mod change in the weight of item X" needs the rows. Hash-only
+would mean keeping the full 642 MB table set of every run with a mod, which is the cost that
+ADR-0013 rejected.
+
+So the sum is over the canonical bytes, and the canonical form is the part that is hard. The
+cost of hashing is the same as the cost of serializing: the Archiver materializes a table once,
+writes the canonical bytes, and hashes the bytes it wrote.
 
 ## Options Considered
 

@@ -448,7 +448,7 @@ namespace SptArchive.Core.Migrations
                         {
                             t.HasCheckConstraint("ck_mod_data_observations_kind", "kind IN ('archive', 'probe')");
 
-                            t.HasCheckConstraint("ck_mod_data_observations_outcome", "outcome IN ('archived', 'not_loaded', 'dependency_unresolved', 'outside_declared_range', 'crashed', 'timeout')");
+                            t.HasCheckConstraint("ck_mod_data_observations_outcome", "outcome IN ('archived', 'not_loaded', 'dependency_unresolved', 'outside_declared_range', 'crashed', 'timeout', 'no_server_data', 'loaded_but_disabled')");
                         });
                 });
 
@@ -458,6 +458,15 @@ namespace SptArchive.Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<string>("ConfigOrigin")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("config_origin");
+
+                    b.Property<string>("ConfigOriginReason")
+                        .HasColumnType("text")
+                        .HasColumnName("config_origin_reason");
 
                     b.Property<string>("ContentHash")
                         .IsRequired()
@@ -490,7 +499,61 @@ namespace SptArchive.Core.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_mod_datasets_mod_guid_content_hash");
 
-                    b.ToTable("mod_datasets", (string)null);
+                    b.ToTable("mod_datasets", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mod_datasets_config_origin", "config_origin IN ('shipped', 'curated')");
+                        });
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModFile", b =>
+                {
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("Path")
+                        .HasColumnType("text")
+                        .HasColumnName("path");
+
+                    b.Property<string>("Content")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentText")
+                        .HasColumnType("text")
+                        .HasColumnName("content_text");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sha256");
+
+                    b.Property<string>("ShippedSha256")
+                        .HasColumnType("text")
+                        .HasColumnName("shipped_sha256");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size");
+
+                    b.HasKey("DatasetId", "Path")
+                        .HasName("pk_mod_files");
+
+                    b.HasIndex("Sha256")
+                        .HasDatabaseName("ix_mod_files_sha256");
+
+                    b.HasIndex("DatasetId", "Kind")
+                        .HasDatabaseName("ix_mod_files_dataset_id_kind");
+
+                    b.ToTable("mod_files", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mod_files_kind", "kind IN ('assembly', 'bundle', 'data', 'config', 'text', 'other')");
+                        });
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModItem", b =>
@@ -1155,6 +1218,18 @@ namespace SptArchive.Core.Migrations
                     b.Navigation("Dataset");
 
                     b.Navigation("Mod");
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModFile", b =>
+                {
+                    b.HasOne("SptArchive.Core.Entities.ModDataset", "Dataset")
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mod_files_mod_datasets_dataset_id");
+
+                    b.Navigation("Dataset");
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModItem", b =>

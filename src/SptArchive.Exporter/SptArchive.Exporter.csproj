@@ -16,6 +16,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- One rule for "is this a configuration file", shared with Core (ADR-0029). -->
+    <Compile Include="..\SptArchive.Core\Entities\ModFileKind.cs" Link="ModFileKind.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="SPTarkov.Server.Core">
       <HintPath>$(SptAssemblyPath)/SPTarkov.Server.Core.dll</HintPath>
       <Private>false</Private>

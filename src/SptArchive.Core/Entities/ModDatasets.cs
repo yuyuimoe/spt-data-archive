@@ -24,7 +24,28 @@ public class ModDataset
     /// <summary>Row count per exported table (jsonb).</summary>
     public required string RowCounts { get; set; }
 
+    /// <summary>
+    /// "shipped" when the run used the configuration that the mod ships, "curated" when a person
+    /// edited it (ADR-0029). The label sits on the dataset: the rows of both runs are real.
+    /// </summary>
+    public string ConfigOrigin { get; set; } = ModConfigOrigin.Shipped;
+
+    /// <summary>Why the configuration was curated. Null for a shipped configuration.</summary>
+    public string? ConfigOriginReason { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>The origin of the configuration that a dataset was produced with (ADR-0029).</summary>
+public static class ModConfigOrigin
+{
+    /// <summary>The configuration the mod ships untouched.</summary>
+    public const string Shipped = "shipped";
+
+    /// <summary>A configuration that a person edited or wrote, with a recorded reason.</summary>
+    public const string Curated = "curated";
+
+    public static readonly string[] All = [Shipped, Curated];
 }
 
 /// <summary>
@@ -75,6 +96,12 @@ public static class ModObservationOutcome
     public const string Crashed = "crashed";
     public const string Timeout = "timeout";
 
+    /// <summary>The mod loaded and changed no table: it ships client data only, or nothing the server holds (ADR-0023).</summary>
+    public const string NoServerData = "no_server_data";
+
+    /// <summary>The mod loaded and then switched itself off, for a reason its log states (ADR-0026).</summary>
+    public const string LoadedButDisabled = "loaded_but_disabled";
+
     public static readonly string[] All =
     [
         Archived,
@@ -83,6 +110,8 @@ public static class ModObservationOutcome
         OutsideDeclaredRange,
         Crashed,
         Timeout,
+        NoServerData,
+        LoadedButDisabled,
     ];
 }
 
