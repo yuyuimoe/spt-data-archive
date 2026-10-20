@@ -16,6 +16,7 @@ public sealed class ImportTests : IDisposable
     private const string ItemId = "123456789012345678901234";
     private const string NodeId = "aaaaaaaaaaaaaaaaaaaaaaaa";
     private const string QuestId = "555555555555555555555555";
+    private const string ClothingId = "777777777777777777777777";
 
     // Deliberately not a real release: the tests also run against a database that holds real data.
     private const string ReleaseA = "999.0.1";
@@ -63,6 +64,16 @@ public sealed class ImportTests : IDisposable
         Assert.Equal(ReleaseA, quest.SptVersion);
         Assert.Equal("A quest", quest.QuestName);
 
+        var clothing = Assert.Single(
+            await scope.Db.Customizations
+                .Where(row => row.SptVersion == ReleaseA && row.Id == ClothingId)
+                .ToListAsync(cancellationToken));
+        Assert.Equal(ReleaseA, clothing.SptVersion);
+        Assert.Equal("Body A", clothing.Name);
+        Assert.Equal("Body", clothing.BodyPart);
+        Assert.Equal(["Usec", "Bear"], clothing.Sides);
+        Assert.Equal("assets/content/characters/body_a.bundle", clothing.PrefabPath);
+
         var name = Assert.Single(
             await scope.Db.LocaleEntries
                 .Where(entry => entry.SptVersion == ReleaseA && entry.Key == ItemId + " Name")
@@ -99,6 +110,7 @@ public sealed class ImportTests : IDisposable
         Assert.Equal(2, await scope.Db.Items.CountAsync(row => row.Id == ItemId, cancellationToken));
         Assert.Equal(2, await scope.Db.Traders.CountAsync(row => row.Id == "trader1", cancellationToken));
         Assert.Equal(2, await scope.Db.Quests.CountAsync(row => row.Id == QuestId, cancellationToken));
+        Assert.Equal(2, await scope.Db.Customizations.CountAsync(row => row.Id == ClothingId, cancellationToken));
     }
 
     private async Task ImportAsync(TestScope scope, string version, CancellationToken cancellationToken)
@@ -109,6 +121,7 @@ public sealed class ImportTests : IDisposable
 
         await new LocaleImporter(NullLogger<LocaleImporter>.Instance).ImportAsync(context, cancellationToken);
         await new ItemImporter(NullLogger<ItemImporter>.Instance).ImportAsync(context, cancellationToken);
+        await new CustomizationImporter(NullLogger<CustomizationImporter>.Instance).ImportAsync(context, cancellationToken);
         await new QuestImporter(NullLogger<QuestImporter>.Instance).ImportAsync(context, cancellationToken);
         await new TraderImporter(NullLogger<TraderImporter>.Instance).ImportAsync(context, cancellationToken);
 
@@ -132,6 +145,31 @@ public sealed class ImportTests : IDisposable
                 "_parent": "",
                 "_type": "Node",
                 "_props": {}
+              }
+            }
+            """);
+
+        Write("templates/customization.json", $$"""
+            {
+              "{{ClothingId}}": {
+                "_id": "{{ClothingId}}",
+                "_name": "Body A",
+                "_parent": "cccccccccccccccccccccccc",
+                "_type": "Item",
+                "_props": {
+                  "Name": "Body A",
+                  "BodyPart": "Body",
+                  "Side": ["Usec", "Bear"],
+                  "AvailableAsDefault": true,
+                  "Prefab": { "path": "assets/content/characters/body_a.bundle", "rcid": "" }
+                }
+              },
+              "cccccccccccccccccccccccc": {
+                "_id": "cccccccccccccccccccccccc",
+                "_name": "Customization",
+                "_parent": "",
+                "_type": "Node",
+                "_props": { "Side": ["Savage"] }
               }
             }
             """);

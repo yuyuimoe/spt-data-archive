@@ -31,6 +31,30 @@ Feature: Archive the official server data
     And the error message asks for "git lfs pull"
     And the table "items" keeps its previous rows
 
+  # --------------------------------------------------------- Customization
+
+  @unverified
+  Scenario: Clothes are imported with their body part and sides
+    Given the file "templates/customization.json" has an entry "6746f06e05e15b1b8bb2a0a5" with the body part "Head" and the sides "Usec" and "Bear"
+    When the Archiver runs
+    Then the table "customizations" has a row with the id "6746f06e05e15b1b8bb2a0a5"
+    And that row has the body part "Head" and the sides "Usec" and "Bear"
+    And the "props" column holds the complete "_props" object of the entry
+
+  @unverified
+  Scenario: Clothes of an older release stay when a newer one is imported
+    Given the archive holds the release "4.0.13"
+    When the Archiver imports the release "4.1.6"
+    Then the table "customizations" has rows for "4.1.6"
+    And the rows of "4.0.13" are unchanged
+
+  @unverified
+  Scenario: A clothes-only mod changes the archive
+    Given a mod dataset whose export adds one entry to "customization"
+    When the Archiver imports the dataset
+    Then the table "mod_customizations" has the new row
+    And the table "mod_templates" has a template row of the kind "customization"
+
   # ---------------------------------------------------------------- Locales
 
   @unverified

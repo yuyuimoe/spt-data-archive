@@ -141,6 +141,38 @@ internal static class JsonElementExtensions
         && element.TryGetProperty(name, out var value)
         && value.ValueKind == JsonValueKind.True;
 
+    /// <summary>Reads an array of strings. Missing, null or a non-array value gives an empty array.</summary>
+    public static string[] GetStringArray(this JsonElement element, string name)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(name, out var array)
+            || array.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return array.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString()!)
+            .ToArray();
+    }
+
+    /// <summary>Follows a path of object properties and reads the last one as text.</summary>
+    public static string? GetNestedString(this JsonElement element, params string[] path)
+    {
+        var current = element;
+
+        foreach (var step in path)
+        {
+            if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(step, out current))
+            {
+                return null;
+            }
+        }
+
+        return current.ValueKind == JsonValueKind.String ? current.GetString() : null;
+    }
+
     /// <summary>The raw JSON of a property, or null when it is missing or JSON null.</summary>
     public static string? GetRawOrNull(this JsonElement element, string name)
     {

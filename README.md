@@ -8,10 +8,12 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 34 tests. The initial migration is applied, a real import of SPT 4.0.13 ran (4,582 items, 528,577
-> translations, 558 quests, 12 traders, 5,790 assort rows in 26 seconds), and the Api served that data
-> read-only. No Gherkin scenario runs as a test yet, the Api has no server version argument, and mod
-> ingestion is not built (see [Known gaps](#known-gaps)).
+> 36 tests. Two migrations are applied and two real releases are archived: 4.0.13 (4,582 items) and
+> 4.1.6 (4,673 items, 536,499 translations, 558 quests, 12 traders, 5,790 assort rows, 728 clothes).
+> 4.0.13 stays queryable beside it (4,582 items, 677 clothes).
+> The Api served the archive read-only. Mod data can be exported from a server container into JSON
+> (six real mods, see `docs/runbooks/mod-export.md`), but no importer reads it yet. No Gherkin scenario
+> runs as a test yet and the Api has no server version argument (see [Known gaps](#known-gaps)).
 
 ## Documentation
 
@@ -50,6 +52,7 @@ share one dataset (ADR-0013).
 | Official                | Mods                        | Key                                                                    |
 |-------------------------|-----------------------------|------------------------------------------------------------------------|
 | `items`                 | `mod_items`                 | `(spt_version, id)` / `(dataset_id, id)`                               |
+| `customizations`        | `mod_customizations`        | `(spt_version, id)` / `(dataset_id, id)`                               |
 | `locale_entries`        | `mod_locale_entries`        | `(spt_version, scope, language_code, key)` / `(dataset_id, ...)`       |
 | `quests`                | `mod_quests`                | `(spt_version, id)` / `(dataset_id, id)`                               |
 | `traders`               | `mod_traders`               | `(spt_version, id)` / `(dataset_id, id)`                               |
@@ -152,16 +155,16 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 34 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
+- **No Gherkin runner yet.** 36 xUnit tests check the schema and the import path, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
-- **The Api has no server version argument.** The schema holds one row set per release, so an official query
-  without a version merges releases. One release is imported today, which hides the problem (TD-21).
+- **The Api has no server version argument.** The schema holds one row set per release, and two releases are
+  imported (4.0.13 and 4.1.6), so an official query without a version mixes them (TD-21).
 - **Mod ingestion is not built.** The tables and the change model exist; the container runner, the exporter mod and
   the baseline cache are action items of ADR-0013.
 - **`items.json` is stored in Git LFS** upstream. The Archiver stops with a clear message if it finds the pointer
   file instead of the data.
-- **Not imported yet**: hideout, bots, locations, globals, settings, handbook, prices, customization, achievements,
-  prestige, dialogue, the `menu`/`server`/`web` locale folders, and the side-specific trader suits.
+- **Not imported yet**: hideout, bots, locations, globals, settings, handbook, prices, achievements, prestige,
+  dialogue, the `menu`/`server`/`web` locale folders, the character template, and the side-specific trader suits.
 - **Nothing writes a mod change yet.** `mod_templates` and `mod_item_changes` are modelled, but the exporter that
   would fill them is not built.
 - **JSON columns are exposed as JSON text** in GraphQL (`props`, `data`, `base`, ...), not as a native JSON scalar.

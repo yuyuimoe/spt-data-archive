@@ -26,6 +26,8 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0018](0018-do-not-delete-mod-data-in-the-first-release.md) | Do not delete mod data in the first release | Accepted |
 | [0019](0019-reject-a-version-the-archive-does-not-hold.md) | Reject a server version that the archive does not hold | Accepted |
 | [0020](0020-export-mod-data-from-a-server-container.md) | Export mod data from a server container, without a Harmony patch | Proposed |
+| [0021](0021-archive-a-patch-mod-with-its-base.md) | Archive a patching mod together with the mod it patches | Proposed |
+| [0022](0022-archive-player-customization.md) | Archive player customization as a seventh dataset | Proposed |
 
 ## Status meanings
 

@@ -48,6 +48,34 @@ public sealed class Query
     [UseSorting]
     public IQueryable<ModItem> GetModItems(ArchiveDbContext db) => db.ModItems.OrderBy(x => x.DatasetId).ThenBy(x => x.Id);
 
+    // ---- Player customization (clothes) -------------------------------------------------------
+
+    /// <summary>
+    /// Clothes, optionally only those that one side may wear. "Sides" is an array, and the generic
+    /// list filter can only say "every element" or "no element" (HotChocolate has no "contains"
+    /// for a list), so the side is an argument of its own. It maps to one array containment
+    /// check, which the GIN index on the column serves.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<Customization> GetCustomizations(ArchiveDbContext db, string? side = null) =>
+        (side is null ? db.Customizations : db.Customizations.Where(row => row.Sides.Contains(side)))
+        .OrderBy(x => x.Id);
+
+    [GraphQLName("customization")]
+    public Task<Customization?> GetCustomizationAsync(string id, ArchiveDbContext db, CancellationToken cancellationToken) =>
+        db.Customizations.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModCustomization> GetModCustomizations(ArchiveDbContext db, string? side = null) =>
+        (side is null ? db.ModCustomizations : db.ModCustomizations.Where(row => row.Sides.Contains(side)))
+        .OrderBy(x => x.DatasetId).ThenBy(x => x.Id);
+
     // ---- Translations -------------------------------------------------------------------------------
 
     [UsePaging]

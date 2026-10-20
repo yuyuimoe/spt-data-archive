@@ -24,13 +24,14 @@ A low effort gives a high priority. The scores are estimates from the assistant.
 | TD-22 | Architecture | No run asserts that every mod dataset is pointed at by an observation (ADR-0018). | 2 | 3 | 1 | 25 | An orphan dataset is a bug. Silence hides it. |
 | TD-05 | Infrastructure | The Api has no rate limit of its own. The edge proxy is only planned. | 3 | 4 | 2 | 28 | A public API gets scraped. |
 | TD-26 | Code | The Archiver cannot read the server version from an installation. A run fails unless `Archive__SptVersion` is set by hand. | 3 | 4 | 2 | 28 | A wrong or missing version labels the data wrongly, or stops the run. |
-| TD-29 | Architecture | Nothing reads an export directory. The container writes `templates.json`, `traders.json` and `locales.json`, and the Archiver cannot load them (ADR-0020). | 4 | 4 | 3 | 24 | The mod half of the archive has no way in. The run model works and stores nothing. |
+| TD-29 | Architecture | Nothing reads an export directory. The container writes `templates.json`, `traders.json` and `locales.json`, and the Archiver cannot load them (ADR-0020). `templates.json` also holds the `customization` map, so a clothes-only mod looks empty until this lands (ADR-0022). | 4 | 4 | 3 | 24 | The mod half of the archive has no way in. The run model works and stores nothing. |
 | TD-27 | Architecture | The exporter does not dump bot tables. A mod that changes only bot behaviour exports the same bytes as the baseline (ADR-0020). | 3 | 3 | 2 | 24 | A voice mod then looks like it did nothing, and the archive cannot say what it changed. |
-| TD-28 | Architecture | A mod that builds its items from bundles produces no items when the run has no bundles. MassivesoftWeapons added 0 items and logged no error (ADR-0020). | 3 | 3 | 3 | 18 | A silent zero looks like a working run with an empty result. |
+| TD-28 | Architecture | A patch mod that is archived without the mod it patches changes nothing. MassivesoftWeapons 1.1.2 (mod 3127) added 0 items and logged no error, because the items come from the base mod (mod 2588, SPT 4.0.13) which was not in the dependency set (ADR-0021). | 3 | 3 | 3 | 18 | A silent zero looks like a working run with an empty result, and the Forge does not declare the base mod as a dependency. |
+| TD-31 | Architecture | Nothing stores the artifact hash of the target mod version. The Forge serves different content under one version number (TD-30), so a version alone cannot say which build a dataset came from (ADR-0021). | 3 | 3 | 1 | 30 | Two builds of one version look identical in the archive. |
 | TD-06 | Test | 34 xUnit tests exist, but no Reqnroll binding (ADR-0012), so no Gherkin scenario runs as a test. All scenarios are still `@unverified`. | 4 | 3 | 3 | 21 | Specs and code can drift apart without a test. |
 | TD-09 | Infrastructure | No CI pipeline. | 3 | 3 | 2 | 24 | Nothing builds or checks the docs on each change. |
 | TD-10 | Architecture | The query cache is safe only for anonymous access (ADR-0008). | 1 | 3 | 1 | 20 | Adding authentication would leak cached answers across users. |
-| TD-11 | Infrastructure | The project is not a git repository. | 2 | 2 | 1 | 20 | Branches, reviews and history need one. |
+| TD-30 | Data | The Forge download link can serve an artifact that is not the version the page names. Mod 3127 offers "2.0.1"; the archive it serves contains `MassivesoftWeapons.dll` version 1.1.2 with GUID `com.massivesoft.massivesoftweapons`, while the page states `com.massivesoft.massivesoftweapons.415`. | 3 | 4 | 3 | 21 | Keying a dataset by the page version files content under a version it does not have. Read the version and GUID from the DLL (ADR-0013, ADR-0021). |
 | TD-25 | Architecture | Nothing checks that the parent of an added item exists in the baseline (ADR-0017). | 2 | 2 | 1 | 20 | The archive stores an item that a player cannot reach in the tree. |
 | TD-24 | Architecture | The archive never learns whether an old mod version still works on a new server release (ADR-0016). | 2 | 1 | 2 | 12 | The most asked question about mods has no answer from the data. |
 | TD-13 | Architecture | No views that combine official and mod data. | 3 | 1 | 2 | 16 | Users must query two collections. |
@@ -49,6 +50,7 @@ A low effort gives a high priority. The scores are estimates from the assistant.
 | TD-04 | The item importer never ran on real data. | The local server clone `SPTarkov.Server.Assets/SPT_Data/database` was imported as release 4.0.13: 4,582 items, 528,577 translations, 558 quests, 12 traders and 5,790 assort rows in 26 seconds. A second run with the same release skipped on the source hash. The Api then answered `items`, `traders` and `translations` through `archive_reader`. |
 | TD-07 | NuGet package versions are floating (`10.0.*`, `16.*`, `*`). | `Directory.Packages.props` with central package management and transitive pinning. |
 | TD-08 | The archive scope is undecided. | ADR-0014. The work moved into TD-02 and TD-21. |
+| TD-11 | The project is not a git repository. | `git init` and a first commit `258411d` (92 files). A later commit `d27e75c` records the mod export pipeline. |
 | TD-12 | Mod ingestion is not built. | ADR-0013. The work is in its action items. |
 | TD-14 | Mods that change official items have no model. | ADR-0013 and ADR-0017. `mod_templates` holds the operation, `mod_item_changes` holds the paths. |
 | TD-23 | Nothing states the dependency set of a mod. | ADR-0013. The catalog supplies it, the metadata is the fallback, and the run freezes it on the observation. The choice of catalog remains open. |
@@ -62,7 +64,7 @@ Work on one phase at a time. Work on the phases beside feature work.
 - TD-01: Done. `dotnet build` passes with no warnings.
 - TD-02: Done. The first migration is applied and tested.
 - TD-07: Done. The versions are pinned in `Directory.Packages.props`.
-- TD-11: Run `git init` and make the first commit.
+- TD-11: Done. The repository is under git.
 
 Done when `dotnet build` passes and the first migration is committed.
 

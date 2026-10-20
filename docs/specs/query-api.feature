@@ -67,6 +67,13 @@ Feature: Query the archive through a read-only GraphQL API
     And the response has no errors
 
   @unverified
+  Scenario: Clothes can be filtered by the side that wears them
+    Given the official customizations "head_bear" for "Bear" and "head_usec" for "Usec"
+    When I query "customizations" with the side "Bear"
+    Then the result has "head_bear"
+    And the result does not have "head_usec"
+
+  @unverified
   Scenario: Translations are found by entity
     Given the locale entries of the entity "A1" in the languages "en" and "ru"
     When I query "translations" with the entity id "A1" and the language "en"

@@ -34,6 +34,7 @@ public sealed class SchemaTests
 
     [Theory]
     [InlineData("items")]
+    [InlineData("customizations")]
     [InlineData("locale_entries")]
     [InlineData("quests")]
     [InlineData("traders")]
@@ -50,6 +51,7 @@ public sealed class SchemaTests
 
     [Theory]
     [InlineData("mod_items")]
+    [InlineData("mod_customizations")]
     [InlineData("mod_locale_entries")]
     [InlineData("mod_quests")]
     [InlineData("mod_traders")]

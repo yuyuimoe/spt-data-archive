@@ -64,6 +64,76 @@ namespace SptArchive.Core.Migrations
                     b.ToTable("archive_runs", (string)null);
                 });
 
+            modelBuilder.Entity("SptArchive.Core.Entities.Customization", b =>
+                {
+                    b.Property<string>("SptVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("spt_version");
+
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AvailableAsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("available_as_default");
+
+                    b.Property<string>("BodyPart")
+                        .HasColumnType("text")
+                        .HasColumnName("body_part");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ParentId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("parent_id");
+
+                    b.Property<string>("PrefabPath")
+                        .HasColumnType("text")
+                        .HasColumnName("prefab_path");
+
+                    b.Property<string>("Props")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("props");
+
+                    b.PrimitiveCollection<string[]>("Sides")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("sides");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.HasKey("SptVersion", "Id")
+                        .HasName("pk_customizations");
+
+                    b.HasIndex("Props")
+                        .HasDatabaseName("ix_customizations_props");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Props"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Props"), new[] { "jsonb_path_ops" });
+
+                    b.HasIndex("Sides")
+                        .HasDatabaseName("ix_customizations_sides");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Sides"), "gin");
+
+                    b.HasIndex("SptVersion", "BodyPart")
+                        .HasDatabaseName("ix_customizations_spt_version_body_part");
+
+                    b.HasIndex("SptVersion", "Name")
+                        .HasDatabaseName("ix_customizations_spt_version_name");
+
+                    b.ToTable("customizations", (string)null);
+                });
+
             modelBuilder.Entity("SptArchive.Core.Entities.Item", b =>
                 {
                     b.Property<string>("SptVersion")
@@ -246,6 +316,73 @@ namespace SptArchive.Core.Migrations
                         .HasDatabaseName("ix_mods_mod_guid_version");
 
                     b.ToTable("mods", (string)null);
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModCustomization", b =>
+                {
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("Id")
+                        .HasColumnType("text")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AvailableAsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("available_as_default");
+
+                    b.Property<string>("BodyPart")
+                        .HasColumnType("text")
+                        .HasColumnName("body_part");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ParentId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("parent_id");
+
+                    b.Property<string>("PrefabPath")
+                        .HasColumnType("text")
+                        .HasColumnName("prefab_path");
+
+                    b.Property<string>("Props")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("props");
+
+                    b.PrimitiveCollection<string[]>("Sides")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("sides");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.HasKey("DatasetId", "Id")
+                        .HasName("pk_mod_customizations");
+
+                    b.HasIndex("Props")
+                        .HasDatabaseName("ix_mod_customizations_props");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Props"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Props"), new[] { "jsonb_path_ops" });
+
+                    b.HasIndex("Sides")
+                        .HasDatabaseName("ix_mod_customizations_sides");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Sides"), "gin");
+
+                    b.HasIndex("DatasetId", "BodyPart")
+                        .HasDatabaseName("ix_mod_customizations_dataset_id_body_part");
+
+                    b.ToTable("mod_customizations", (string)null);
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModDataObservation", b =>
@@ -598,7 +735,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_templates", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_templates_kind", "kind IN ('item', 'quest', 'trader')");
+                            t.HasCheckConstraint("ck_mod_templates_kind", "kind IN ('item', 'customization', 'quest', 'trader')");
 
                             t.HasCheckConstraint("ck_mod_templates_op", "op IN ('added', 'modified', 'removed')");
                         });
@@ -944,6 +1081,16 @@ namespace SptArchive.Core.Migrations
                     b.ToTable("trader_quest_assorts", (string)null);
                 });
 
+            modelBuilder.Entity("SptArchive.Core.Entities.Customization", b =>
+                {
+                    b.HasOne("SptArchive.Core.Entities.SptVersion", null)
+                        .WithMany()
+                        .HasForeignKey("SptVersion")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customizations_spt_versions_spt_version");
+                });
+
             modelBuilder.Entity("SptArchive.Core.Entities.Item", b =>
                 {
                     b.HasOne("SptArchive.Core.Entities.SptVersion", null)
@@ -969,6 +1116,18 @@ namespace SptArchive.Core.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_locale_entries_spt_versions_spt_version");
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModCustomization", b =>
+                {
+                    b.HasOne("SptArchive.Core.Entities.ModDataset", "Dataset")
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mod_customizations_mod_datasets_dataset_id");
+
+                    b.Navigation("Dataset");
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModDataObservation", b =>

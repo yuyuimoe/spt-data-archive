@@ -95,10 +95,14 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 ## Current state
 
 - **Done:** the solution builds, the initial migration is applied, and 34 tests pass (TD-01, TD-02, TD-04, TD-07).
-- **Next slice:** give the Api a server version argument (ADR-0014, ADR-0019; TD-21). Then bind the Gherkin
+- **Next slice:** read an export directory into the mod tables (TD-29), which also completes the mod half of
+  player customization (ADR-0022). Then give the Api a server version argument (TD-21) and bind the Gherkin
   scenarios with Reqnroll (TD-06).
-- **Open decisions:** none. ADR-0005 and ADR-0010 are superseded by ADR-0013 and ADR-0014.
-- **Not built:** the mod container runner, the exporter mod and the baseline cache (ADR-0013 action items).
+- **Open decisions:** ADR-0020, ADR-0021 and ADR-0022 are Proposed and need the driver. ADR-0005 and ADR-0010
+  are superseded by ADR-0013 and ADR-0014.
+- **Not built:** the Archiver importer for an export directory, the baseline cache, and the catalog (ADR-0013
+  action items). The container runner and the exporter mod exist and ran on six real mods
+  (`docs/runbooks/mod-export.md`).
 - **Environment:** NuGet is reachable and the packages are pinned. `items.json` is in Git LFS upstream; run
   `git lfs pull` in the server repository before you import. The Archiver cannot read the server version from
   the install, so a run must state it (`Archive__SptVersion`).

@@ -28,6 +28,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
     // Official data (comes straight from the server's own database files)
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<Customization> Customizations => Set<Customization>();
     public DbSet<LocaleEntry> LocaleEntries => Set<LocaleEntry>();
     public DbSet<Quest> Quests => Set<Quest>();
     public DbSet<Trader> Traders => Set<Trader>();
@@ -36,6 +37,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
     // Data added by mods
     public DbSet<ModItem> ModItems => Set<ModItem>();
+    public DbSet<ModCustomization> ModCustomizations => Set<ModCustomization>();
     public DbSet<ModLocaleEntry> ModLocaleEntries => Set<ModLocaleEntry>();
     public DbSet<ModQuest> ModQuests => Set<ModQuest>();
     public DbSet<ModTrader> ModTraders => Set<ModTrader>();
@@ -76,11 +78,13 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
         // ---- Official data: one row set per server release (ADR-0014) ------------------------------
         b.Entity<Item>().HasKey(x => new { x.SptVersion, x.Id });
+        b.Entity<Customization>().HasKey(x => new { x.SptVersion, x.Id });
         b.Entity<LocaleEntry>().HasKey(x => new { x.SptVersion, x.Scope, x.LanguageCode, x.Key });
         b.Entity<Quest>().HasKey(x => new { x.SptVersion, x.Id });
         b.Entity<Trader>().HasKey(x => new { x.SptVersion, x.Id });
 
         ConfigureItem<Item>(b);
+        ConfigureCustomization<Customization>(b);
         ConfigureLocaleEntry<LocaleEntry>(b);
         ConfigureQuest<Quest>(b);
         ConfigureTrader<Trader>(b);
@@ -89,6 +93,13 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
         {
             e.HasOne<SptVersion>().WithMany().HasForeignKey(x => x.SptVersion).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => new { x.SptVersion, x.ParentId });
+            e.HasIndex(x => new { x.SptVersion, x.Name });
+        });
+
+        b.Entity<Customization>(e =>
+        {
+            e.HasOne<SptVersion>().WithMany().HasForeignKey(x => x.SptVersion).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => new { x.SptVersion, x.BodyPart });
             e.HasIndex(x => new { x.SptVersion, x.Name });
         });
 
@@ -174,7 +185,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_kind",
-                "kind IN ('item', 'quest', 'trader')"));
+                "kind IN ('item', 'customization', 'quest', 'trader')"));
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_op",
@@ -198,11 +209,13 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
         // ---- Mod data: one row set per dataset ------------------------------------------------------
         b.Entity<ModItem>().HasKey(x => new { x.DatasetId, x.Id });
+        b.Entity<ModCustomization>().HasKey(x => new { x.DatasetId, x.Id });
         b.Entity<ModLocaleEntry>().HasKey(x => new { x.DatasetId, x.Scope, x.LanguageCode, x.Key });
         b.Entity<ModQuest>().HasKey(x => new { x.DatasetId, x.Id });
         b.Entity<ModTrader>().HasKey(x => new { x.DatasetId, x.Id });
 
         ConfigureItem<ModItem>(b);
+        ConfigureCustomization<ModCustomization>(b);
         ConfigureLocaleEntry<ModLocaleEntry>(b);
         ConfigureQuest<ModQuest>(b);
         ConfigureTrader<ModTrader>(b);
@@ -213,6 +226,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.HasIndex(x => new { x.DatasetId, x.Name });
         });
 
+        b.Entity<ModCustomization>(e => e.HasIndex(x => new { x.DatasetId, x.BodyPart }));
         b.Entity<ModLocaleEntry>(e => e.HasIndex(x => new { x.DatasetId, x.EntityId, x.LanguageCode }));
         b.Entity<ModQuest>(e => e.HasIndex(x => new { x.DatasetId, x.TraderId }));
 
@@ -228,6 +242,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
         // ---- Every mod-owned table: foreign key to mod_datasets --------------------------------------
         b.Entity<ModItem>().HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ModCustomization>().HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<ModLocaleEntry>().HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<ModQuest>().HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<ModTrader>().HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
@@ -241,6 +256,17 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.Property(x => x.Props).HasColumnType("jsonb");
 
             // Containment queries on the raw props ("Props @> '{...}'") without a column per property.
+            e.HasIndex(x => x.Props).HasMethod("gin").HasOperators("jsonb_path_ops");
+        });
+
+    private static void ConfigureCustomization<T>(ModelBuilder b) where T : CustomizationBase =>
+        b.Entity<T>(e =>
+        {
+            e.Property(x => x.Sides).HasColumnType("text[]");
+            e.Property(x => x.Props).HasColumnType("jsonb");
+
+            // "Which clothes may this side wear?" without scanning every row.
+            e.HasIndex(x => x.Sides).HasMethod("gin");
             e.HasIndex(x => x.Props).HasMethod("gin").HasOperators("jsonb_path_ops");
         });
 

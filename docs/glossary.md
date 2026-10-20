@@ -27,6 +27,8 @@ Use these words in code, specs and docs. Use the same word for the same thing.
 | **Barter scheme** | What the trader wants in exchange for an offer. A list of alternatives. Each alternative lists items and counts. |
 | **Loyalty level** | The level that a player needs before the trader sells the offer. |
 | **Quest assort** | A map that states which quest state unlocks which offer. |
+| **Customization** | One piece of clothing that a player can wear: a body, head, hands or feet. The server keeps them in `templates/customization.json`, apart from items. A customization names a client bundle but does not contain it (ADR-0022). |
+| **Sides** | The player sides that may wear a customization: `Usec`, `Bear` and `Savage`. |
 | **Archiver** | The job that reads the server database and writes the archive. It exits when the run ends. |
 | **Archive run** | One execution of the Archiver. It has a row in `archive_runs`. |
 | **Source hash** | A SHA-256 value over all source files. The Archiver uses it to skip unchanged data. |

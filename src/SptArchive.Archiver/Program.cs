@@ -40,6 +40,7 @@ else
 // Importers run in the order they are registered. Add new ones (hideout, bots, locations, mods, ...) here.
 builder.Services.AddSingleton<IImporter, LocaleImporter>();
 builder.Services.AddSingleton<IImporter, ItemImporter>();
+builder.Services.AddSingleton<IImporter, CustomizationImporter>();
 builder.Services.AddSingleton<IImporter, QuestImporter>();
 builder.Services.AddSingleton<IImporter, TraderImporter>();
 

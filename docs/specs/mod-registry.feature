@@ -130,6 +130,24 @@ Feature: Keep mod data apart from official data
       | crashed                |
       | timeout                |
 
+  # ADR-0021. A patch is a mod whose dependency set holds the mod it patches.
+  # The Forge does not declare that dependency, so a human curates it.
+
+  @backlog
+  Scenario: A patch is archived with its base in the dependency set
+    Given the base mod "com.example.weapons" in the version "1.1.2"
+    And the patch "com.example.weapons.415" in the version "1.1.2"
+    When the archive runs the patch with the base in its dependency set
+    Then the observation of the patch states the base in the dependency set
+    And the dataset of the patch holds only the rows the patch adds or changes
+
+  @backlog
+  Scenario: A run that changes nothing says so
+    Given the mod "com.example.weapons.415" in the version "1.1.2"
+    When the export of that mod version equals its baseline export
+    Then the run stores a dataset with no template rows
+    And the run logs that the mod version changed nothing
+
   @backlog
   Scenario: A mod that is silent is not a success
     Given the mod "com.example.mod" in the version "1.0.0"
