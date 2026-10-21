@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Seven migrations exist and are applied, and 258 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). Seven migrations exist and are applied, and 262 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 258 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 262 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,7 +94,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, seven migrations are applied, and 258 tests pass (TD-01, TD-02, TD-04, TD-07,
+- **Done:** the solution builds, seven migrations are applied, and 262 tests pass (TD-01, TD-02, TD-04, TD-07,
   TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-21, TD-15).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
@@ -112,9 +112,15 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   columns are `Any` values, so a client reads JSON as JSON (TD-15), and such a column offers comparison only,
   because the text operations would become `LIKE` against jsonb (TD-52). A request is bounded by 1 MB, depth
   10, 10 seconds and a cost limit that serves nine full pages and refuses eleven.
+- **The Api holds its measured load.** With Redis, a page of 200 items with all 11 fields answers in 1 ms
+  from the cache and in 35 ms from Postgres, and 100 concurrent clients get 2,723 answers per second at
+  p99 56 ms (ADR-0008). A cache that is down is skipped for 30 seconds after a failure, so it costs one slow
+  request and not every request. The dev server allowed 100 connections and the Api held 50 under 200
+  concurrent misses; `compose.yaml` allows 50, so the reader pool needs a cap (TD-53).
 - **Backups.** `scripts/backup.sh dump | verify FILE | restore FILE DBNAME` writes a custom-format dump with
-  a checksum, proves that it restores, and prunes old files; `docs/runbooks/backup.md` is the runbook
-  (ADR-0011). Nothing runs it on a schedule yet (TD-03).
+  a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
+  and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
+  on a schedule yet (TD-03).
 - **Next slice:** the Api surface for the mod tables (ADR-0032 action item 7), so a client reads a dataset, its
   change paths and its files. Then the Gherkin scenarios with Reqnroll (TD-06, ADR-0012), the rows of a
   location and a bot type (TD-45), JSON filtering by path (TD-52) and the baseline cache.

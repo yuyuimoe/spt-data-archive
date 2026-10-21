@@ -212,6 +212,27 @@ Feature: Query the archive through a read-only GraphQL API
     When I query "items" for "4.0.12" and then for "4.0.13"
     Then both responses have the header "X-Cache" with the value "MISS"
 
+  @unverified
+  Scenario: The same query twice is answered from the cache
+    Given the cache holds no answer for the query
+    When I send the same query twice
+    Then the first response has the header "X-Cache" with the value "MISS"
+    And the second response has the header "X-Cache" with the value "HIT"
+    And the second body is the same as the first body
+
+  @unverified
+  Scenario: An error is never cached
+    When I send a query that asks for a release the archive does not hold, twice
+    Then both responses have the header "X-Cache" with the value "MISS"
+
+  @unverified
+  Scenario: A cache that is down costs one slow request
+    Given the cache is not reachable
+    When I send five queries
+    Then every response is a successful answer
+    And no response has the header "X-Cache"
+    And only one of them waited for the cache
+
   # ----------------------------------------------------------------- Limits
 
   @unverified

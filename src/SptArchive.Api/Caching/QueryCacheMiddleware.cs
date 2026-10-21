@@ -21,6 +21,12 @@ public sealed class QueryCacheOptions
 
     /// <summary>Larger request bodies are never cached (and never buffered).</summary>
     public int MaxRequestBytes { get; set; } = 32 * 1024;
+
+    /// <summary>
+    /// How long the Api stops trying the cache after a failure. A cache that is down must cost one slow
+    /// request, not one for every request, so the wait is paid once and then skipped.
+    /// </summary>
+    public int DownSeconds { get; set; } = 30;
 }
 
 /// <summary>
@@ -41,9 +47,12 @@ public sealed class QueryCacheMiddleware(
 {
     private readonly QueryCacheOptions _options = options.Value;
 
+    /// <summary>Environment.TickCount64 until which the cache is skipped. Zero means "try it".</summary>
+    private long _downUntil;
+
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!IsCacheable(context.Request))
+        if (!IsCacheable(context.Request) || IsDown)
         {
             await next(context);
             return;
@@ -71,7 +80,7 @@ public sealed class QueryCacheMiddleware(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            logger.LogWarning(exception, "Query cache unavailable; serving uncached");
+            MarkDown(exception, "Query cache unavailable; serving uncached");
             context.Request.Body.Position = 0;
             await next(context);
             return;
@@ -105,12 +114,20 @@ public sealed class QueryCacheMiddleware(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                logger.LogWarning(exception, "Could not store query result in the cache");
+                MarkDown(exception, "Could not store query result in the cache");
             }
         }
 
         context.Response.Headers["X-Cache"] = "MISS";
         await originalBody.WriteAsync(bytes, context.RequestAborted);
+    }
+
+    private bool IsDown => Environment.TickCount64 < Volatile.Read(ref _downUntil);
+
+    private void MarkDown(Exception exception, string message)
+    {
+        Volatile.Write(ref _downUntil, Environment.TickCount64 + (_options.DownSeconds * 1000L));
+        logger.LogWarning(exception, "{Message}; skipping the cache for {Seconds} seconds", message, _options.DownSeconds);
     }
 
     private bool IsCacheable(HttpRequest request) =>

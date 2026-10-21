@@ -2,6 +2,7 @@ using Serilog;
 using SptArchive.Api.Caching;
 using SptArchive.Api.GraphQL;
 using SptArchive.Core;
+using SptArchive.Core.Caching;
 using SptArchive.Core.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,19 +19,7 @@ builder.Services.AddArchiveDatabase(
     readOnly: true);
 
 // ---- Cache: Redis when configured, otherwise a per-process memory cache. ----
-var redis = builder.Configuration.GetConnectionString("Redis");
-if (string.IsNullOrWhiteSpace(redis))
-{
-    builder.Services.AddDistributedMemoryCache();
-}
-else
-{
-    builder.Services.AddStackExchangeRedisCache(o =>
-    {
-        o.Configuration = redis;
-        o.InstanceName = CacheKeys.RedisInstanceName;
-    });
-}
+builder.Services.AddArchiveCache(builder.Configuration.GetConnectionString("Redis"));
 
 builder.Services.Configure<QueryCacheOptions>(builder.Configuration.GetSection(QueryCacheOptions.Section));
 

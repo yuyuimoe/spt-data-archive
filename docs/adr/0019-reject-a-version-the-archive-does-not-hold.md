@@ -135,7 +135,7 @@ Feature: The Api rejects a server version that the archive does not hold
    needs three or four numbers, and a key that the archive holds is always valid.
 5. [x] Return `SPT_ARCHIVE_EMPTY` when the archive holds no release and the query names none (the
    amendment of 2026-10-21). Done, with a scenario in `query-api.feature` and a test in `ApiTests`.
-   The driver has not confirmed this item yet.
+   The driver confirmed the amendment on 2026-10-21.
 
 ## Links
 

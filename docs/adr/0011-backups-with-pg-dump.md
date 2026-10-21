@@ -14,6 +14,8 @@ The archive can be rebuilt from the source files, but only while those files exi
 
 We will take a custom-format dump (`pg_dump -Fc`) after each successful run. We will store it on a different host or service than the database. We will test a restore on a regular basis.
 
+An amendment of 2026-10-21 covers compression. The dump is always compressed, with gzip level 6 or higher. `xz` at the same level is also acceptable. A plain custom-format dump of the development archive is 210 MB and the compressed one is 41 MB, so the choice is not cosmetic. The archive keeps every server release (ADR-0014) and grows. The driver asked for this floor. `scripts/backup.sh` refuses a level below 6.
+
 ## Options Considered
 
 | Dimension         | `pg_dump` after each run (chosen) | WAL archiving with pgBackRest | Volume snapshots   | No backup         |

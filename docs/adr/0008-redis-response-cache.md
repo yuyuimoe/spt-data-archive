@@ -16,6 +16,8 @@ We will cache complete GraphQL responses. The key is the SHA-256 of the request 
 
 Redis is the store. The Api and the Archiver fall back to an in-process memory cache when no Redis connection string exists.
 
+An amendment of 2026-10-21 covers a Redis that is down. StackExchange.Redis waits five seconds for a connection by default, so a dead Redis added that wait to every request: measured at 5.4 to 6.0 seconds per request, against 16 milliseconds with the cache simply skipped. Both applications now build their connection options in `ArchiveCache`: `AbortOnConnectFail = false`, a connect timeout of one second and one retry. The Api also skips the cache for 30 seconds after a failure (`QueryCacheOptions.DownSeconds`). A dead Redis now costs one slow request of 3.8 seconds per 30 seconds, and the requests in between answer in 55 milliseconds. The cache stays an optimization and never a dependency.
+
 ## Options Considered
 
 | Dimension               | Redis with version key (chosen) | In-process memory cache | HTTP or CDN cache (GET plus persisted queries) | No cache            |

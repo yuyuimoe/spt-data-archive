@@ -116,7 +116,7 @@ model {
 
     redis = cache 'Redis' {
       technology 'Redis 7'
-      description 'Response cache and the dataset version key. Bounded memory, no persistence.'
+      description 'Response cache and the dataset version key. Bounded memory (128 MB, LRU), no persistence. A cache that is down costs one slow request: the Api skips it for 30 seconds after a failure (ADR-0008).'
     }
   }
 

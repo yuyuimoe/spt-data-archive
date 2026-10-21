@@ -13,6 +13,7 @@ Set them in the shell or in `.env`. `.env.example` lists them. Never put the pas
 | `ARCHIVE_BACKUP_DIR` | ./backups | Local directory for dumps. |
 | `ARCHIVE_BACKUP_COPY_DIR` | empty | Second directory, for example a mounted share on another host. Empty means no copy. |
 | `ARCHIVE_BACKUP_KEEP_DAILY` | 7 | Keep the newest N dumps. |
+| `ARCHIVE_BACKUP_COMPRESSION` | 6 | The compression of the dump. `N` means gzip level N. `gzip:N`, `zstd:N` and `xz:N` name the method. A level below 6 is refused. |
 | `ARCHIVE_BACKUP_KEEP_WEEKLY` | 4 | Also keep the newest dump of each of the last M weeks. |
 
 ## Take a dump
@@ -54,6 +55,14 @@ and 7 mod datasets. `pg_dump` 18.6 against PostgreSQL 17 gave 43,490,841 bytes. 
 of the restored copy in 6.4 seconds and found the same count in all 25 tables. `restore` into a new
 database `archive_check` gave 9,255 items, and `archive_reader` read them and could not delete from them.
 
+The same database without the two datasets of the old path rule (5 datasets) gave 41,094,443 bytes at
+gzip level 6. The same dump at level 0 (no compression, a measurement only) gave 210,784,930 bytes. The
+compressed dump is 19% of the plain one. `verify` found the same count in all 25 tables in 6.6 seconds.
+`ARCHIVE_BACKUP_COMPRESSION=0` and `=none` are refused before `pg_dump` starts.
+
+The `pg_dump` 18.6 build on this machine has no `liblzma`, so `xz:6` fails with "unrecognized compression
+algorithm". `zstd:6` works. A host that wants xz needs a `pg_dump` built with it.
+
 ## Decisions
 
 - **The script does not run itself.** A systemd timer runs `dump` and `verify`, not the Archiver. An
@@ -62,6 +71,9 @@ database `archive_check` gave 9,255 items, and `archive_reader` read them and co
   `scp` can fill that mount. The script names no cloud service, because the deployment stack is not built.
 - **Retention is 7 daily dumps and the newest dump of each of the last 4 weeks**, as the scenario in
   `backup-and-restore.feature` states.
+- **The dump is compressed, with gzip level 6 or higher.** A plain dump grows with every release, and
+  the archive keeps every release (ADR-0014). The default level costs a second and saves four fifths of
+  the bytes. `backup.sh` refuses a lower level, so no one disables compression by accident.
 - **The dump is not encrypted.** It holds published game data and published mod data, so secrecy is not
   the risk and integrity is; the checksum covers integrity. Use TLS on the transport to the second host.
 - **Roles are not in the dump.** `docker/initdb/01-reader-role.sh` stays the only source of the roles.

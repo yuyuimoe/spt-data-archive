@@ -3,6 +3,7 @@ using SptArchive.Archiver;
 using SptArchive.Archiver.Importers;
 using SptArchive.Archiver.Runs;
 using SptArchive.Core;
+using SptArchive.Core.Caching;
 using SptArchive.Core.Data;
 
 Log.Logger = new LoggerConfiguration()
@@ -24,19 +25,7 @@ builder.Services.AddArchiveDatabase(
 
 // The cache is only used to tell the Api that a new dataset is live. Without Redis a local in-memory cache is used,
 // which makes the announcement a harmless no-op.
-var redis = builder.Configuration.GetConnectionString("Redis");
-if (string.IsNullOrWhiteSpace(redis))
-{
-    builder.Services.AddDistributedMemoryCache();
-}
-else
-{
-    builder.Services.AddStackExchangeRedisCache(o =>
-    {
-        o.Configuration = redis;
-        o.InstanceName = CacheKeys.RedisInstanceName;
-    });
-}
+builder.Services.AddArchiveCache(builder.Configuration.GetConnectionString("Redis"));
 
 // Importers run in the order they are registered. Add new ones (hideout, bots, locations, mods, ...) here.
 builder.Services.AddSingleton<IImporter, LocaleImporter>();

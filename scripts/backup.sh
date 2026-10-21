@@ -13,6 +13,7 @@ set -euo pipefail
 : "${ARCHIVE_DB_NAME:=archive}"
 : "${ARCHIVE_BACKUP_DIR:=./backups}"
 : "${ARCHIVE_BACKUP_COPY_DIR:=}"       # second location, for example a mounted share; empty = no copy
+: "${ARCHIVE_BACKUP_COMPRESSION:=6}"   # gzip level; 6 is the floor (ADR-0011, amendment of 2026-10-21)
 : "${ARCHIVE_BACKUP_KEEP_DAILY:=7}"
 : "${ARCHIVE_BACKUP_KEEP_WEEKLY:=4}"
 export PGHOST PGPORT PGUSER
@@ -21,6 +22,18 @@ export PGHOST PGPORT PGUSER
 die() { echo "backup: $*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null || die "$1 not found"; }
 need pg_dump; need pg_restore; need psql
+
+# A dump is never stored uncompressed (ADR-0011). The floor is level 6: a plain dump of the archive
+# grows with every release, and the compressed form is about a tenth of it.
+case "$ARCHIVE_BACKUP_COMPRESSION" in
+  [0-9]|1[0-9])              method=gzip; level=$ARCHIVE_BACKUP_COMPRESSION ;;
+  gzip:[0-9]|gzip:1[0-9])    method=gzip; level=${ARCHIVE_BACKUP_COMPRESSION#gzip:} ;;
+  zstd:[0-9]|zstd:1[0-9])    method=zstd; level=${ARCHIVE_BACKUP_COMPRESSION#zstd:} ;;
+  xz:[0-9]|xz:1[0-9])        method=xz;   level=${ARCHIVE_BACKUP_COMPRESSION#xz:} ;;
+  *) die "ARCHIVE_BACKUP_COMPRESSION takes a level as N, gzip:N, zstd:N or xz:N; got '$ARCHIVE_BACKUP_COMPRESSION'" ;;
+esac
+(( level >= 6 )) || die "compression level $level is below the floor of 6 (ADR-0011); raise ARCHIVE_BACKUP_COMPRESSION"
+export ARCHIVE_BACKUP_COMPRESSION
 
 # "table<TAB>count" for every user table, exact counts, sorted.
 row_counts() { # DBNAME
@@ -56,8 +69,9 @@ dump)
   mkdir -p "$ARCHIVE_BACKUP_DIR"
   stamp=$(date -u +%Y%m%dT%H%M%SZ)
   file="$ARCHIVE_BACKUP_DIR/archive-$stamp.dump"
-  # Write to a temp name, so a half-written file never looks like a backup.
-  pg_dump -Fc -d "$ARCHIVE_DB_NAME" -f "$file.partial" || { rm -f "$file.partial"; die "pg_dump failed"; }
+  # Write to a temp name, so a half-written file never looks like a backup. -Z keeps it compressed.
+  pg_dump -Fc -Z "$ARCHIVE_BACKUP_COMPRESSION" -d "$ARCHIVE_DB_NAME" -f "$file.partial" ||
+    { rm -f "$file.partial"; die "pg_dump failed"; }
   pg_restore --list "$file.partial" >/dev/null || { rm -f "$file.partial"; die "dump is unreadable"; }
   mv "$file.partial" "$file"
   ( cd "$ARCHIVE_BACKUP_DIR" && sha256sum "$(basename "$file")" > "$(basename "$file").sha256" )
@@ -83,7 +97,7 @@ dump)
     for f in "${all[@]}"; do [[ -n ${keep[$f]:-} ]] || rm -f "$dir/$f" "$dir/$f.sha256"; done
     unset keep seen all
   done
-  echo "backup: wrote $file ($(stat -c %s "$file") bytes)"
+  echo "backup: wrote $file ($(stat -c %s "$file") bytes, $method level $level)"
   ;;
 restore)
   [[ $# -eq 3 ]] || die "usage: backup.sh restore FILE DBNAME"

@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 258 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 262 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -168,6 +168,13 @@ The API is then at `http://localhost:8080/graphql`. Example:
 - **Caching.** Whole GraphQL responses are cached in Redis, keyed by the request body plus a dataset version that the
   Archiver changes after every run, so there is nothing to invalidate. Redis is capped at 128 MB with LRU eviction.
   Because the API is anonymous, identical requests always have identical answers; revisit this before adding auth.
+  Measured on the development archive (ADR-0008): a page of 200 items with all 11 fields, 518 KB, answers in 1 ms
+  from the cache and in 35 ms from Postgres, and 100 concurrent clients get 2,723 answers per second at p99 56 ms.
+  A Redis that is down is skipped for 30 seconds after a failure, so it costs one slow request (3.8 s) and not
+  every request. To try the cache locally, start one: `podman run -d --rm --name sptarchive-redis -p
+  127.0.0.1:6379:6379 docker.io/library/redis:7-alpine redis-server --maxmemory 128mb --maxmemory-policy
+  allkeys-lru --save "" --appendonly no`, and set `ConnectionStrings__Redis=127.0.0.1:6379` for both the Api and
+  the Archiver.
 - **Backups.** `scripts/backup.sh dump` writes a `pg_dump -Fc` with a checksum, copies it to
   `ARCHIVE_BACKUP_COPY_DIR` and proves that it restores (`scripts/backup.sh verify`). Keep the copy off the
   host. See `docs/runbooks/backup.md` (ADR-0011, TD-03 for the missing schedule).
@@ -177,7 +184,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 258 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 262 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
