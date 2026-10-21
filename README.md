@@ -184,6 +184,14 @@ answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
 }
 ```
 
+### Checking a branch
+
+`scripts/ci.sh` runs the build, the tests, the documentation check and the C4 validation, and stops at the first
+failure. It needs a throwaway PostgreSQL 17 with the roles of `docker/initdb`, and it reads the database from
+`ARCHIVE_TEST_CONNECTION` and `ARCHIVE_TEST_READER_CONNECTION`. It stops if either is unset, so a test run never
+falls back to port 5432 by accident. `.github/workflows/ci.yml` runs the same script on GitHub Actions. That file
+has never run, because the repository has no remote yet (TD-60).
+
 ## Operations
 
 - **Read-only by construction.** The API has no mutations, uses no-tracking queries, and connects as `archive_reader`,
@@ -236,6 +244,9 @@ answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
 - **No Gherkin runner yet.** 314 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
+- **The CI pipeline has never run, and a clean database fails one test.** `scripts/ci.sh` is proven locally; the
+  workflow file is not (TD-60). One test needs the archived release 4.0.13, so the tests pass 313 of 314 on a
+  database with no import (TD-61).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
   `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). The baseline cache
   and the catalog are still action items of ADR-0013, and a change to a map, a bot type or a price is hashed but

@@ -1,0 +1,69 @@
+# Runs scripts/ci.sh on every push and pull request. The list of checks lives in that script, not here.
+#
+# This file has never run: the repository has no remote yet (TD-60). Treat it as untested until
+# the first run on a real remote.
+#
+# It uses no secrets and needs no archive data. The passwords below belong to a throwaway
+# PostgreSQL that lives for the length of the job.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      db:
+        image: postgres:17
+        env:
+          POSTGRES_DB: archive
+          POSTGRES_USER: archive_owner
+          POSTGRES_PASSWORD: ci_owner_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U archive_owner -d archive"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      ARCHIVE_TEST_CONNECTION: Host=127.0.0.1;Port=5432;Database=archive;Username=archive_owner;Password=ci_owner_password
+      ARCHIVE_TEST_READER_CONNECTION: Host=127.0.0.1;Port=5432;Database=archive;Username=archive_reader;Password=ci_reader_password
+
+    steps:
+      # No Git LFS: this repository stores nothing in LFS (items.json is in the server repository).
+      - uses: actions/checkout@v4
+
+      # global.json pins no SDK version, so the major version of Directory.Build.props is named here.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+
+      - run: pip install --requirement scripts/requirements.txt
+
+      # The reader role of the Api, from the same script that the development database runs.
+      # The service container cannot mount it, so the job runs it against the database over TCP.
+      - name: Create the read-only role
+        env:
+          PGHOST: 127.0.0.1
+          PGPASSWORD: ci_owner_password
+          POSTGRES_USER: archive_owner
+          POSTGRES_DB: archive
+          ARCHIVE_READER_PASSWORD: ci_reader_password
+        run: sh docker/initdb/01-reader-role.sh
+
+      - run: scripts/ci.sh

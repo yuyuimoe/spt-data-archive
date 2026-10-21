@@ -31,6 +31,9 @@ docs/specs                 Gherkin feature files.
 docker/initdb              Creates the read-only database role.
 docker/compose.yml         Throwaway Postgres for local work (podman or docker). Not the deployment stack.
 scripts/check-docs.py      Checks Gherkin syntax, links and ADR structure.
+scripts/ci.sh              Runs every check below, in order. The one command that proves a branch is clean.
+scripts/requirements.txt   Python packages of check-docs.py (gherkin-official).
+.github/workflows          The pipeline: it calls scripts/ci.sh. Never run yet (TD-60).
 compose.yaml               PostgreSQL, Redis, Api, Archiver and Caddy (the one public door).
 ```
 
@@ -39,6 +42,18 @@ compose.yaml               PostgreSQL, Redis, Api, Archiver and Caddy (the one p
 `dotnet build` passes with no warnings. The other commands have not been run against a real environment.
 
 ```bash
+# Everything the repository checks, in order, stopping at the first failure (TD-09).
+# It needs a throwaway PostgreSQL 17 with the roles of docker/initdb, and it will not guess one:
+# it stops if the two variables are unset. Never point them at a database with archived data.
+export ARCHIVE_TEST_CONNECTION="Host=127.0.0.1;Port=5432;Database=archive;Username=archive_owner;Password=dev_owner_password"
+export ARCHIVE_TEST_READER_CONNECTION="Host=127.0.0.1;Port=5432;Database=archive;Username=archive_reader;Password=dev_reader_password"
+scripts/ci.sh
+
+# The docs check needs gherkin-official. ci.sh builds .venv from scripts/requirements.txt when
+# python3 cannot import it. To do it by hand (a system Python may be externally managed, PEP 668):
+python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
+
+# The same checks, one by one:
 dotnet build SptArchive.slnx
 dotnet test SptArchive.slnx             # 314 tests; needs the development database (below)
 
@@ -53,7 +68,7 @@ dotnet ef database update --project src/SptArchive.Core --startup-project src/Sp
 docker compose up -d db redis api caddy
 docker compose run --rm archiver        # one archive run; set Archive__SptVersion=4.0.13
 
-python3 scripts/check-docs.py           # needs: pip install gherkin-official
+python3 scripts/check-docs.py           # needs gherkin-official: see scripts/requirements.txt
 npx likec4 validate docs/architecture/c4
 ```
 
@@ -86,6 +101,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Definition of done
 
+- `scripts/ci.sh` passes. It runs the four checks below in one command. A check it does not cover is a gap to report.
 - `dotnet build` passes with no warnings you introduced.
 - Tests for the slice pass. No scenario of the slice has the tag `@unverified` or `@backlog`.
 - `python3 scripts/check-docs.py` passes.
@@ -94,6 +110,11 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
+- **CI is a script, and the pipeline has never run.** `scripts/ci.sh` runs the build, the tests, `check-docs.py` and
+  `likec4 validate`, and stops at the first failure (TD-09). `.github/workflows/ci.yml` calls it on a `postgres:17`
+  service container, but the repository has no remote, so that file is untested (TD-60). On an empty database the
+  script stops at `dotnet test` with 313 of 314 passed, because one test needs the archived release 4.0.13
+  (TD-61).
 - **Done:** the solution builds, seven migrations are applied, and 314 tests pass (TD-01, TD-02, TD-04, TD-05,
   TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-53, TD-54).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:

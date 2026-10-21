@@ -11,7 +11,7 @@ Warnings (exit code 0):
   * A prose sentence has more than 25 words (Simplified Technical English).
 
 Usage:   python3 scripts/check-docs.py
-Needs:   pip install gherkin-official
+Needs:   pip install -r scripts/requirements.txt
 """
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from pathlib import Path
 try:
     from gherkin.parser import Parser
 except ImportError:
-    sys.exit("Missing dependency: pip install gherkin-official")
+    sys.exit("Missing dependency: pip install -r scripts/requirements.txt")
 
 ROOT = Path(__file__).resolve().parent.parent
 MARKDOWN = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md")])
