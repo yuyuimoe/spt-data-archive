@@ -85,6 +85,26 @@ public sealed class Addressing
         return IdTokens.Addressed(tokens);
     }
 
+    /// <summary>Every id the run or the baseline knows, whatever the kind of its object.</summary>
+    public IEnumerable<string> KnownIds => _byRawId.Keys;
+
+    /// <summary>
+    /// The token of every known id, in the form <c>#address</c>, for the tables that have no row type of
+    /// their own: a bot type names an item by its id, so does a location, a price and a hideout recipe
+    /// (ADR-0041). The map is new on every call, because a caller adds its own ids to it.
+    /// </summary>
+    public Dictionary<string, string> AddressTokens()
+    {
+        var tokens = new Dictionary<string, string>(_byRawId.Count, StringComparer.Ordinal);
+
+        foreach (var (rawId, named) in _byRawId)
+        {
+            tokens[rawId] = "#" + named.Address;
+        }
+
+        return tokens;
+    }
+
     /// <summary>Names every object of a run, against the baseline of its release.</summary>
     public static Addressing Build(string runRoot, string baselineRoot)
     {

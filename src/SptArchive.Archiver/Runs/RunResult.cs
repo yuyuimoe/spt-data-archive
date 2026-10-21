@@ -26,6 +26,12 @@ public static class RunResult
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
+        // The locations, bot types, hideout parts, prices and handbook entries (ADR-0041), counted the same way.
+        var objects = plan.Contribution.Objects
+            .GroupBy(row => $"{row.Template.Kind}.{row.Template.Op}")
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
         var warnings = plan.Contribution.Warnings.Concat(plan.MintWarnings).ToArray();
 
         return JsonSerializer.Serialize(new
@@ -35,10 +41,12 @@ public static class RunResult
             contentHash = report.ContentHash,
             targetVerified = plan.TargetVerified,
             templates,
-            pathRows = plan.Contribution.Templates.Sum(template => template.Changes.Count),
+            pathRows = plan.Contribution.Templates.Sum(template => template.Changes.Count)
+                + plan.Contribution.Objects.Sum(row => row.Template.Changes.Count),
+            objects,
             localeRows = plan.Contribution.Locales.Count,
             files = plan.Files.Count,
-            unstoredFiles = plan.Contribution.UnstoredChanges.Keys.OrderBy(path => path, StringComparer.Ordinal).ToArray(),
+            unstoredFiles = plan.Contribution.FilesWithoutRows.ToArray(),
             warnings,
         });
     }

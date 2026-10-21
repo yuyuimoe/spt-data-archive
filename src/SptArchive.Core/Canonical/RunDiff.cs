@@ -55,6 +55,12 @@ public static class RunDiff
         CollectOffers(run, baseline, addressing, templates, hashes, idMap, warnings);
         CollectLocales(run, baseline, addressing, locales, hashes);
 
+        // A location, a bot type, a hideout part, a price and a handbook entry are rows in addition to the
+        // file hash below: they say what moved, and they are no input of the content hash (ADR-0041).
+        var objects = DatabaseObjects.Collect(run, baseline, addressing);
+        idMap.AddRange(objects.IdMap);
+        warnings.AddRange(objects.Warnings);
+
         // A file that changed and that no row type holds. Its canonical hash enters the dataset hash,
         // so two runs that differ only here are two datasets and not one (ADR-0029).
         foreach (var path in run.Keys.Union(baseline.Keys, StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal))
@@ -76,6 +82,11 @@ public static class RunDiff
 
         counts["locales"] = locales.Count;
 
+        foreach (var group in objects.Objects.GroupBy(row => row.Template.Kind, StringComparer.Ordinal))
+        {
+            counts[group.Key] = group.Count();
+        }
+
         return new RunContribution(
             Sort(templates),
             locales
@@ -89,7 +100,10 @@ public static class RunDiff
             idMap,
 
             // Both sides of a comparison state the same limit in the same words.
-            warnings.Distinct(StringComparer.Ordinal).ToArray());
+            warnings.Distinct(StringComparer.Ordinal).ToArray())
+        {
+            Objects = objects.Objects,
+        };
     }
 
     /// <summary>A stable order, so the same content always writes the same rows in the same order.</summary>
@@ -188,7 +202,7 @@ public static class RunDiff
             addressing.TokensFor(path)).Count > 0;
     }
 
-    private static bool SameBytes(string left, string right)
+    internal static bool SameBytes(string left, string right)
     {
         var leftInfo = new FileInfo(left);
         var rightInfo = new FileInfo(right);
@@ -681,7 +695,7 @@ public static class RunDiff
     /// the operation, and the value from each side in canonical form, so a value names an object by its
     /// address (ADR-0034, decision 6).
     /// </summary>
-    private static IReadOnlyList<PathContribution> ReadChanges(
+    internal static IReadOnlyList<PathContribution> ReadChanges(
         string relativePath,
         JsonElement baseline,
         JsonElement run,

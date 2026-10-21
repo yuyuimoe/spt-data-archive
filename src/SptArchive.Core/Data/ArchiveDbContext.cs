@@ -50,6 +50,9 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
     public DbSet<ModTemplate> ModTemplates => Set<ModTemplate>();
     public DbSet<ModChangePath> ModChangePaths => Set<ModChangePath>();
 
+    // The source of an added location, bot type, hideout part, price or handbook entry (ADR-0041)
+    public DbSet<ModDatabaseObject> ModDatabaseObjects => Set<ModDatabaseObject>();
+
     // The files a dataset loaded: the manifest of every mod, and the text of its configuration (ADR-0029)
     public DbSet<ModFile> ModFiles => Set<ModFile>();
 
@@ -239,7 +242,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_id_map_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader', 'assort')"));
+                "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')"));
         });
 
         b.Entity<ModTemplate>(e =>
@@ -252,11 +255,28 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader', 'assort')"));
+                "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')"));
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_op",
                 "op IN ('added', 'modified', 'removed')"));
+        });
+
+        b.Entity<ModDatabaseObject>(e =>
+        {
+            // A location holds one row for each of its files, so the part is part of the key.
+            e.HasKey(x => new { x.DatasetId, x.Kind, x.TemplateId, x.Part });
+            e.HasOne(x => x.Dataset).WithMany().HasForeignKey(x => x.DatasetId).OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(x => x.Template).WithMany()
+                .HasForeignKey(x => new { x.DatasetId, x.Kind, x.TemplateId })
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.Property(x => x.Data).HasColumnType("jsonb");
+
+            e.ToTable(t => t.HasCheckConstraint(
+                "ck_mod_database_objects_kind",
+                "kind IN ('location', 'bot', 'hideout', 'price', 'handbook')"));
         });
 
         b.Entity<ModChangePath>(e =>
@@ -273,7 +293,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             // Every kind of data states its paths (ADR-0032, decision 1), not only an item.
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_change_paths_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader', 'assort')"));
+                "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')"));
 
             e.ToTable(t => t.HasCheckConstraint("ck_mod_change_paths_op", "op IN ('set', 'remove')"));
         });

@@ -184,13 +184,20 @@ public sealed class JsonPathFilterTests
         string[] operations = ["and", "or", "eq", "neq", "pathEq", "pathNeq"];
         Assert.Equal(operations.Order(), types["JsonOperationFilterInput"].Select(f => f.GetProperty("name").GetString()!).Order());
 
-        // Every jsonb column of the model has a filter field of that type, so a new column cannot miss it.
+        // Every jsonb column of an exposed entity has a filter field of that type, so a new column cannot
+        // miss it. A table that the Api does not serve has no input type, and this test names it, so a table
+        // that leaves that state must leave the list (ADR-0041 waits for ADR-0032, action item 7).
         var columns = scope.Db.Model.GetEntityTypes()
             .SelectMany(e => e.GetProperties().Where(p => p.GetColumnType() == "jsonb").Select(p => (Entity: e.ClrType.Name, Property: p.Name)))
             .ToArray();
         Assert.NotEmpty(columns);
 
-        foreach (var (entity, property) in columns)
+        var exposed = columns.Where(c => types.ContainsKey($"{c.Entity}FilterInput")).ToArray();
+        Assert.Equal(
+            ["ModDatabaseObject"],
+            columns.Select(c => c.Entity).Except(exposed.Select(c => c.Entity)).Distinct().Order());
+
+        foreach (var (entity, property) in exposed)
         {
             var field = types[$"{entity}FilterInput"].SingleOrDefault(f => f.GetProperty("name").GetString() == char.ToLowerInvariant(property[0]) + property[1..]);
             Assert.True(field.ValueKind != JsonValueKind.Undefined, $"{entity}.{property} has no filter field.");

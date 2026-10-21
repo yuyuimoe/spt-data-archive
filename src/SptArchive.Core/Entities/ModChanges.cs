@@ -14,7 +14,7 @@ public class ModTemplate
 
     public ModDataset Dataset { get; set; } = null!;
 
-    /// <summary>"item", "quest" or "trader".</summary>
+    /// <summary>One of <see cref="ModTemplateKind.All"/>.</summary>
     public required string Kind { get; set; }
 
     /// <summary>The template id, the quest id or the trader id.</summary>
@@ -77,7 +77,28 @@ public static class ModTemplateKind
     /// </summary>
     public const string Assort = "assort";
 
-    public static readonly string[] All = [Item, Quest, Trader, Customization, Assort];
+    /// <summary>
+    /// A map of the server database: <c>locations/&lt;map&gt;/*.json</c>, named by its directory (ADR-0041).
+    /// A path under it starts with the part, the file of the map, such as <c>/base/Insurance</c>.
+    /// </summary>
+    public const string Location = "location";
+
+    /// <summary>A bot type, or one of the two bot files, named by its path under <c>bots/</c> (ADR-0041).</summary>
+    public const string Bot = "bot";
+
+    /// <summary>One area, recipe or slot of the hideout, or the hideout settings (ADR-0041).</summary>
+    public const string Hideout = "hideout";
+
+    /// <summary>The price of one item in <c>templates/prices.json</c>, named by the address of the item (ADR-0041).</summary>
+    public const string Price = "price";
+
+    /// <summary>One category or one item entry of <c>templates/handbook.json</c> (ADR-0041).</summary>
+    public const string Handbook = "handbook";
+
+    public static readonly string[] All = [Item, Quest, Trader, Customization, Assort, Location, Bot, Hideout, Price, Handbook];
+
+    /// <summary>The kinds whose source is an object of the server database that has no table of its own (ADR-0041).</summary>
+    public static readonly string[] DatabaseObjects = [Location, Bot, Hideout, Price, Handbook];
 }
 
 /// <summary>The operation of one template under a dataset (ADR-0017).</summary>

@@ -399,7 +399,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_change_paths", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_change_paths_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort')");
+                            t.HasCheckConstraint("ck_mod_change_paths_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')");
 
                             t.HasCheckConstraint("ck_mod_change_paths_op", "op IN ('set', 'remove')");
                         });
@@ -543,6 +543,38 @@ namespace SptArchive.Core.Migrations
                             t.HasCheckConstraint("ck_mod_data_observations_kind", "kind IN ('archive', 'probe')");
 
                             t.HasCheckConstraint("ck_mod_data_observations_outcome", "outcome IN ('archived', 'not_loaded', 'dependency_unresolved', 'outside_declared_range', 'crashed', 'timeout', 'no_server_data', 'loaded_but_disabled')");
+                        });
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModDatabaseObject", b =>
+                {
+                    b.Property<Guid>("DatasetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dataset_id");
+
+                    b.Property<string>("Kind")
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("TemplateId")
+                        .HasColumnType("text")
+                        .HasColumnName("template_id");
+
+                    b.Property<string>("Part")
+                        .HasColumnType("text")
+                        .HasColumnName("part");
+
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("data");
+
+                    b.HasKey("DatasetId", "Kind", "TemplateId", "Part")
+                        .HasName("pk_mod_database_objects");
+
+                    b.ToTable("mod_database_objects", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_mod_database_objects_kind", "kind IN ('location', 'bot', 'hideout', 'price', 'handbook')");
                         });
                 });
 
@@ -691,7 +723,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_id_maps", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_id_map_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort')");
+                            t.HasCheckConstraint("ck_mod_id_map_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')");
                         });
                 });
 
@@ -895,7 +927,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_templates", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_templates_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort')");
+                            t.HasCheckConstraint("ck_mod_templates_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')");
 
                             t.HasCheckConstraint("ck_mod_templates_op", "op IN ('added', 'modified', 'removed')");
                         });
@@ -1334,6 +1366,27 @@ namespace SptArchive.Core.Migrations
                     b.Navigation("Dataset");
 
                     b.Navigation("Mod");
+                });
+
+            modelBuilder.Entity("SptArchive.Core.Entities.ModDatabaseObject", b =>
+                {
+                    b.HasOne("SptArchive.Core.Entities.ModDataset", "Dataset")
+                        .WithMany()
+                        .HasForeignKey("DatasetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mod_database_objects_mod_datasets_dataset_id");
+
+                    b.HasOne("SptArchive.Core.Entities.ModTemplate", "Template")
+                        .WithMany()
+                        .HasForeignKey("DatasetId", "Kind", "TemplateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mod_database_objects_mod_templates_dataset_id_kind_template");
+
+                    b.Navigation("Dataset");
+
+                    b.Navigation("Template");
                 });
 
             modelBuilder.Entity("SptArchive.Core.Entities.ModDataset", b =>

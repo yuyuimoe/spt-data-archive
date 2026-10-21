@@ -27,7 +27,22 @@ public sealed record RunContribution(
     public bool IsEmpty => Templates.Count == 0 && Locales.Count == 0 && UnstoredChanges.Count == 0;
 
     /// <summary>True when the run changed a table that no row type of this archive holds.</summary>
-    public bool HasUnstoredChanges => UnstoredChanges.Count > 0;
+    public bool HasUnstoredChanges => FilesWithoutRows.Any();
+
+    /// <summary>
+    /// The objects of the server database that have no table of their own: locations, bot types, hideout
+    /// parts, prices and handbook entries (ADR-0041). They are rows in addition to the canonical hash of
+    /// their files, which stays in <see cref="UnstoredChanges"/>, so they are not an input of
+    /// <see cref="DatasetHash"/> and a dataset keeps the hash it had.
+    /// </summary>
+    public IReadOnlyList<ObjectContribution> Objects { get; init; } = [];
+
+    /// <summary>
+    /// The changed files that still have no row: the hash of each is all the archive keeps of the change
+    /// (TD-45, TD-60). A file of the five tables of ADR-0041 is not among them.
+    /// </summary>
+    public IEnumerable<string> FilesWithoutRows =>
+        UnstoredChanges.Keys.Where(path => !DatabaseObjects.HoldsRows(path)).OrderBy(path => path, StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -60,8 +75,9 @@ public sealed record PathContribution(string Path, string Op, string? OldValue, 
 public sealed record LocaleContribution(string Scope, string LanguageCode, string Key, string Value, string? OldValue);
 
 /// <summary>
-/// One file that changed and that no row type holds: a trader assort, a location, a price table.
-/// Its canonical hash keeps two datasets apart when the only difference between them is such a file.
+/// One file that changed and that no template or locale row holds: a location, a price table, a global
+/// setting. Its canonical hash keeps two datasets apart when the only difference between them is such a
+/// file. A file of the five tables of ADR-0041 also has rows, and stays here so the hash does not move.
 /// </summary>
 public sealed record UnstoredChange(string Path, string CanonicalHash);
 

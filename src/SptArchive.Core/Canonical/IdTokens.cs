@@ -17,11 +17,19 @@ public sealed class IdTokens
 
     private readonly IReadOnlyDictionary<string, string> _byRawId;
 
-    private IdTokens(string selfToken, IReadOnlyDictionary<string, string> byRawId)
+    private IdTokens(string selfToken, IReadOnlyDictionary<string, string> byRawId, bool namesKeys)
     {
         OwnIdToken = selfToken;
         _byRawId = byRawId;
+        NamesKeys = namesKeys;
     }
+
+    /// <summary>
+    /// True when an object key that is a known id is written as its token too. A table of templates always
+    /// does. A bot type or a location is keyed by item ids as well, such as the weight of each backpack in
+    /// <c>inventory.items.Backpack</c> (ADR-0041).
+    /// </summary>
+    public bool NamesKeys { get; }
 
     /// <summary>What the own id of an object becomes.</summary>
     public string OwnIdToken { get; }
@@ -43,12 +51,42 @@ public sealed class IdTokens
             tokens[id] = AnonymousToken;
         }
 
-        return new IdTokens(AnonymousToken, tokens);
+        return new IdTokens(AnonymousToken, tokens, namesKeys: false);
     }
 
     /// <summary>A form that names every object by its address: the own id becomes <see cref="SelfToken"/>.</summary>
     public static IdTokens Addressed(IReadOnlyDictionary<string, string> addressByRawId) =>
-        new(SelfToken, addressByRawId);
+        new(SelfToken, addressByRawId, namesKeys: false);
+
+    /// <summary>
+    /// A form that names every object by its address, in keys as well as in values. It is the form of the
+    /// rows of an object of the server database, whose keys are ids (ADR-0041). It is never the form of a
+    /// hash: the hash of ADR-0029 is the one of <see cref="Addressed"/> and <see cref="Blank"/>.
+    /// </summary>
+    public static IdTokens AddressedKeysAndValues(IReadOnlyDictionary<string, string> addressByRawId) =>
+        new(SelfToken, addressByRawId, namesKeys: true);
+
+    /// <summary>
+    /// A seed form: every known id is anonymous except the own id of the object, if it has one, which is <see cref="SelfToken"/>.
+    /// An address is derived from content, and content that held the id the run minted for the object would
+    /// make the address depend on that id (ADR-0034, decision 5).
+    /// </summary>
+    public static IdTokens Seed(IEnumerable<string> knownIds, string? ownId)
+    {
+        var tokens = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var id in knownIds)
+        {
+            tokens[id] = AnonymousToken;
+        }
+
+        if (ownId is not null)
+        {
+            tokens[ownId] = SelfToken;
+        }
+
+        return new IdTokens(SelfToken, tokens, namesKeys: true);
+    }
 
     /// <summary>The token of a value, or null when the value is not a known id and must stay as it is.</summary>
     public string? Token(string value) => _byRawId.TryGetValue(value, out var token) ? token : null;

@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 354 tests (335 xUnit tests and 19 Gherkin scenarios). Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 393 tests (374 xUnit tests and 19 Gherkin scenarios). Eight migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -250,16 +250,17 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 
 - **One feature file runs as a test.** Reqnroll runs the 19 scenarios of `docs/specs/mod-api.feature` inside
   `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
-  (TD-62). The 335 xUnit tests check the schema, the import path, the canonical form and the run import.
+  (TD-62). The 374 xUnit tests check the schema, the import path, the canonical form and the run import.
 - **The CI pipeline runs on GitHub.** A push to `master` runs `scripts/ci.sh` on a `postgres:17` service container
   in 89 seconds, and the run of `02a976c` passed every step (run `39647853715`, TD-09). The workflow is one job and
   one script, so a check added to `scripts/ci.sh` reaches the pipeline with no second edit (TD-63: the actions still
   target Node.js 20).
 =======
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
-  `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). The baseline cache
-  and the catalog are still action items of ADR-0013, and a change to a map, a bot type or a price is hashed but
-  stored as no row (TD-45).
+  `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). A change to a map, a
+  bot type, a hideout part, a price or a handbook entry is a template, its changed values and the source of an
+  added object, kept file by file (TD-45, ADR-0041). The baseline cache and the catalog are still action items of
+  ADR-0013.
 - **`items.json` is stored in Git LFS** upstream. The Archiver stops with a clear message if it finds the pointer
   file instead of the data.
 - **Not imported yet**: bots, locations, globals, hideout, settings, match, server, handbook, prices,
@@ -273,7 +274,9 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
   Forces ships 270 files with no server part. They get catalog rows and no dataset (ADR-0023).
 - **An offer, an item, a quest, a customization and a trader are rows.** An assort file is read as offers, and an
   offer is named by its trader, its item and what the player pays with (ADR-0032, ADR-0034 decision 8).
-- **A change to a table without a `mod_*` row is not stored.** A location, a bot type, a price and a handbook file
-  leave no row; the canonical hash of the changed file keeps two datasets apart (TD-45).
+- **A change to a table without a `mod_*` row is a row.** A location, a bot type, a hideout part, a price and a
+  handbook entry join the templates and the changed values, and the source of an added one is kept file by file
+  ([ADR-0041](docs/adr/0041-give-a-change-to-data-that-has-no-mod-table-a-row.md)). The canonical hash of the file
+  stays in the content hash, so these rows move no dataset.
 - **JSON columns are `Any` values** in GraphQL (`props`, `data`, `base`, ...), not a typed JSON scalar (TD-15). A client
   filters one by path, and reads the value at a path as JSON (ADR-0040); it cannot select a sub-field.

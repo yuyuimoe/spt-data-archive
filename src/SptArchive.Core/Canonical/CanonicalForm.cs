@@ -319,9 +319,9 @@ public static class CanonicalForm
             return path.MatchesAny(_selfPaths) ? _tokens.OwnIdToken : _tokens.Token(value);
         }
 
-        /// <summary>The key of a table of templates, which is an id.</summary>
+        /// <summary>The key of a table of templates, which is an id, or any key when the tokens name keys.</summary>
         public string MapName(PathCursor path, string name) =>
-            _tokens is not null && path.MatchesAny(_namePaths) ? _tokens.Map(name) : name;
+            _tokens is not null && (_tokens.NamesKeys || path.MatchesAny(_namePaths)) ? _tokens.Map(name) : name;
     }
 
     /// <summary>The position in a document while it is written, as segments that a pattern can match.</summary>

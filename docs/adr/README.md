@@ -46,6 +46,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0038](0038-refuse-a-flood-and-compress-an-answer.md) | Refuse a flood at the Api, and compress what it answers | Proposed |
 | [0039](0039-terminate-tls-at-a-proxy.md) | Terminate TLS at a proxy, and name the client there | Proposed |
 | [0040](0040-filter-a-jsonb-column-by-path.md) | Filter a jsonb column by the value at a path | Proposed |
+| [0041](0041-give-a-change-to-data-that-has-no-mod-table-a-row.md) | Give a change to data that has no mod table a row | Proposed |
 
 ## Status meanings
 

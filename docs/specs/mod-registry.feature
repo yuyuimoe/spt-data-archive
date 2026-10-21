@@ -214,6 +214,106 @@ Feature: Keep mod data apart from official data
     Then the template row of "B1" states the parent "node-weapons"
     And the archive answers that the parent does not resolve for a lone install
 
+  # ------------------------------------- Change to data that has no mod table
+  # ADR-0041. A location, a bot type, a hideout part, a price and a handbook entry are objects of
+  # the server database that have no mod_* table. A change to one is a template row, its path
+  # rows, and (for an added object) its source in "mod_database_objects". The rows come in addition
+  # to the canonical hash of the file (ADR-0029, amendment 4), so the content hash does not move.
+
+  @unverified
+  Scenario: A change to an old location names the map and the value
+    Given the baseline holds the location "woods" with "Insurance" true in its base file
+    And a mod run sets "Insurance" to false
+    When the Archiver archives that run
+    Then the table "mod_templates" has one row of the kind "location" for "woods" with the operation "modified"
+    And the table "mod_change_paths" states the path "/base/Insurance" for it
+    And that row states the old value "true" and the new value "false"
+
+  @unverified
+  Scenario: A boss chance that rotates on every boot is not a change
+    Given the baseline holds the location "woods" with a boss chance of 35
+    And a mod run holds the boss chance 0 and changes nothing else of that map
+    When the Archiver archives that run
+    Then no row of the kind "location" exists for "woods"
+
+  @unverified
+  Scenario: A map that a mod adds is a location with its files
+    Given a mod run holds the location "arena_airpit" and the baseline does not
+    When the Archiver archives that run
+    Then the table "mod_templates" has one row of the kind "location" with the operation "added"
+    And its template id is a content ULID of the kind "location" and the name "arena_airpit"
+    And the table "mod_database_objects" holds one row for each file of the map, named by its part
+    And the table "mod_id_maps" pairs "arena_airpit" with that address
+
+  @unverified
+  Scenario: A change to a bot type names the file and the value
+    Given the baseline holds the bot type "assault" with "mod_scope" 50
+    And a mod run sets "mod_scope" to 80
+    When the Archiver archives that run
+    Then the table "mod_templates" has one row of the kind "bot" for "types/assault" with the operation "modified"
+    And the table "mod_change_paths" states the path "/chances/weaponMods/mod_scope" with the old value 50 and the new value 80
+
+  @unverified
+  Scenario: A hideout part is named by its id when the baseline holds it
+    Given the baseline holds the hideout recipe "R1" that asks for 2 of an item
+    And a mod run asks for 3
+    When the Archiver archives that run
+    Then the table "mod_templates" has one row of the kind "hideout" for "R1" with the operation "modified"
+    And the table "mod_change_paths" states the path "/requirements/0/count" with the old value 2 and the new value 3
+
+  @unverified
+  Scenario: A hideout part that a mod adds is named by what it is
+    Given a mod run adds a hideout recipe and the id of that recipe is minted at boot
+    When I archive two runs of that mod, and the second run mints another id
+    Then both runs name the recipe with one content ULID
+    And the id map of each run pairs its own raw id with that address
+
+  @unverified
+  Scenario: A price is named by the item it prices
+    Given the baseline prices the item "A1" at 1000
+    And a mod run prices it at 1200 and prices the added item "B1" at 4000
+    When the Archiver archives that run
+    Then the table "mod_templates" has one row of the kind "price" for "A1" with the operation "modified"
+    And its path row is the whole value, with the old value 1000 and the new value 1200
+    And the price of "B1" is named by the address of the item "B1"
+
+  @unverified
+  Scenario: A handbook entry names its category by address
+    Given a mod run adds the handbook category "K2" and the handbook entry of the added item "B1" under it
+    When the Archiver archives that run
+    Then the table "mod_templates" has one row of the kind "handbook" for the entry of "B1"
+    And that row states the address of "K2" as its parent
+    And "mod_database_objects" holds the entry as the run wrote it
+
+  @unverified
+  Scenario: An item that the run minted is named by its address in every changed value
+    Given a mod run adds the item "B1" with an id that the run minted
+    And a bot type of that run holds the id of "B1" as a key and as a value
+    When the Archiver archives that run
+    Then the path of that key and the new value name the address of "B1"
+    And a second run that mints another id for "B1" writes the same paths and the same values
+
+  @unverified
+  Scenario: The rows of these objects do not move the content hash
+    Given a mod run that changes a location, a bot type, a hideout part, a price and a handbook entry
+    When I compute the content hash of that run
+    Then the hash equals the hash that the same run had before these objects had rows
+    And the hash is the same with and without the object rows
+
+  @unverified
+  Scenario: A changed file that holds no row is still reported
+    Given a mod run that changes "globals.json" and nothing that has a row
+    When the Archiver archives that run
+    Then the canonical hash of "globals.json" is part of the content hash
+    And the result of the run names "globals.json" as a file with no row
+
+  @unverified
+  Scenario: An object row belongs to the dataset and never to an official table
+    Given a mod run that adds the location "arena_airpit"
+    When the Archiver archives that run
+    Then the row of "arena_airpit" is keyed by the dataset id
+    And no official table holds a row of that location
+
   # ------------------------------------------------ Dependency set and baseline
   # ADR-0013. The catalog states the dependencies. The metadata is the fallback.
   # The chosen set is frozen on the observation.

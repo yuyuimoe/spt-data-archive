@@ -236,7 +236,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
                 dataset.Id);
         }
 
-        foreach (var path in plan.Contribution.UnstoredChanges.Keys)
+        foreach (var path in plan.Contribution.FilesWithoutRows)
         {
             logger.LogWarning(
                 "{Path} changed and the archive stores no row for it yet (docs/tech-debt.md): its canonical " +
@@ -256,7 +256,10 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             plan.Contribution.Templates.Count,
             plan.Contribution.Locales.Count,
             plan.Files.Count,
-            plan.Contribution.UnstoredChanges.Keys.ToArray());
+            plan.Contribution.FilesWithoutRows.ToArray())
+        {
+            ObjectCount = plan.Contribution.Objects.Count,
+        };
     }
 
     private async Task<Mod> EnsureModAsync(ArchiveDbContext db, LoadedMod target, CancellationToken cancellationToken)
@@ -328,7 +331,12 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
         var templates = new List<ModTemplate>();
         var changes = new List<ModChangePath>();
 
-        foreach (var template in plan.Contribution.Templates)
+        // An object of the server database is a template too (ADR-0041). Its rows are written beside the
+        // others, and are no input of the content hash.
+        var everyTemplate = plan.Contribution.Templates
+            .Concat(plan.Contribution.Objects.Select(row => row.Template));
+
+        foreach (var template in everyTemplate)
         {
             templates.Add(new ModTemplate
             {
@@ -387,6 +395,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             .Select(row => TemplateMapper.ModTrader(ReadTrader(plan, row), datasetId)), cancellationToken);
 
         await WriteOffersAsync(db, datasetId, rows, cancellationToken);
+        await WriteObjectsAsync(db, datasetId, plan, cancellationToken);
         await WriteLocalesAsync(db, datasetId, plan, cancellationToken);
         await WriteFilesAsync(db, datasetId, plan, cancellationToken);
         await WriteIdMapAsync(db, datasetId, plan, cancellationToken);
@@ -455,6 +464,36 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             await AddAllAsync(db, quests, cancellationToken);
             logger.LogInformation("Quest unlocks: {Count}", quests.Count);
         }
+    }
+
+    /// <summary>
+    /// The source of every location, bot type, hideout part, price and handbook entry that the run adds
+    /// (ADR-0041). A modified object has its paths and no row here, the way a modified item does.
+    /// </summary>
+    private async Task WriteObjectsAsync(
+        ArchiveDbContext db,
+        Guid datasetId,
+        RunImportPlan plan,
+        CancellationToken cancellationToken)
+    {
+        var sources = plan.Contribution.Objects
+            .SelectMany(row => row.Parts.Select(part => new ModDatabaseObject
+            {
+                DatasetId = datasetId,
+                Kind = row.Template.Kind,
+                TemplateId = row.Template.TemplateId,
+                Part = part.Part,
+                Data = part.Data,
+            }))
+            .ToList();
+
+        if (plan.Contribution.Objects.Count == 0)
+        {
+            return;
+        }
+
+        await AddAllAsync(db, sources, cancellationToken);
+        logger.LogInformation("Objects: {Count} templates, {Rows} source rows", plan.Contribution.Objects.Count, sources.Count);
     }
 
     /// <summary>
@@ -678,4 +717,8 @@ public sealed record RunImportReport(
     int TemplateCount,
     int LocaleCount,
     int FileCount,
-    IReadOnlyList<string> UnstoredChanges);
+    IReadOnlyList<string> UnstoredChanges)
+{
+    /// <summary>How many locations, bot types, hideout parts, prices and handbook entries the run changed (ADR-0041).</summary>
+    public int ObjectCount { get; init; }
+}

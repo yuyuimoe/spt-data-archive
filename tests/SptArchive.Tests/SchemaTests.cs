@@ -122,6 +122,11 @@ public sealed class SchemaTests
     [Theory]
     [InlineData("item")]
     [InlineData("assort")]
+    [InlineData("location")]
+    [InlineData("bot")]
+    [InlineData("hideout")]
+    [InlineData("price")]
+    [InlineData("handbook")]
     public async Task A_change_path_states_a_kind_the_archive_holds(string kind)
     {
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
@@ -158,7 +163,7 @@ public sealed class SchemaTests
         var error = await Assert.ThrowsAsync<PostgresException>(() => scope.ExecuteAsync(
             """
             insert into mod_change_paths (dataset_id, kind, template_id, path, op, old_value, new_value)
-            values ($1, 'location', 'T1', '/_props/Weight', 'set', '1', '2')
+            values ($1, 'spawnpoint', 'T1', '/_props/Weight', 'set', '1', '2')
             """,
             dataset));
 
