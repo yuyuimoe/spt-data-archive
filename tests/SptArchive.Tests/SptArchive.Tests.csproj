@@ -3,12 +3,22 @@
   <!--
     The first tests of the archive (TD-06). They run against the development database of
     docker/compose.yml, so they check the real Postgres schema and not an in-memory substitute.
-    ADR-0012 plans Reqnroll on top of xUnit; the Gherkin bindings come in their own slice.
+    Reqnroll runs the scenarios of docs/specs on top of xUnit (ADR-0012). The feature files stay where they
+    are: they are the documentation and the tests at once.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- The generated code of a scenario goes to obj/, never next to the feature file in docs/specs. -->
+    <ReqnrollUseIntermediateOutputPathForCodeBehind>true</ReqnrollUseIntermediateOutputPathForCodeBehind>
+    <!--
+      Directory.Build.props turns invariant globalization on. Reqnroll asks for the culture "en-US" when it
+      starts, and the runtime refuses that name while only predefined cultures are allowed, so every test of
+      the assembly failed in its fixture. With this switch off the name resolves to the invariant data, and
+      the tests keep the invariant culture.
+    -->
+    <PredefinedCulturesOnly>false</PredefinedCulturesOnly>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Reqnroll.xunit.v3" />
     <PackageReference Include="Npgsql" />
     <!-- EdgeTests: starts the Api in the test process and reads the answers as a client would. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
@@ -27,6 +38,11 @@
     <ProjectReference Include="../../src/SptArchive.Core/SptArchive.Core.csproj" />
     <ProjectReference Include="../../src/SptArchive.Archiver/SptArchive.Archiver.csproj" />
     <ProjectReference Include="../../src/SptArchive.Api/SptArchive.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One line for each feature file whose scenarios are bound. A file that is not listed here does not run. -->
+    <ReqnrollFeatureFiles Include="../../docs/specs/mod-api.feature" Link="Specs/mod-api.feature" />
   </ItemGroup>
 
   <ItemGroup>

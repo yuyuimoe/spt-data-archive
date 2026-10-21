@@ -36,12 +36,14 @@
     <PackageVersion Include="HotChocolate.Data.EntityFramework" Version="16.6.9" />
   </ItemGroup>
 
-  <!-- Tests (ADR-0012: Reqnroll runs on xUnit; these are the first tests, see TD-06) -->
+  <!-- Tests (ADR-0012: Reqnroll runs on xUnit v3) -->
   <ItemGroup>
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <!-- Starts the Api in the test process, so a test can check the pipeline the deployment runs. -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
+    <!-- Runs the Gherkin scenarios of docs/specs as xUnit tests (ADR-0012). -->
+    <PackageVersion Include="Reqnroll.xunit.v3" Version="3.3.4" />
   </ItemGroup>
 
   <!-- Logging -->

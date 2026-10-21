@@ -228,7 +228,7 @@ Feature: Answer what a mod changed, value by value
      (9 items and 18 offers, named by their address), 12,129 id map rows and its configuration text;
      WTT-Armory answers 2,792 change paths with their old and new values; `startsWith` on `tableHashes` is
      refused by the schema and `eq` compares two documents.
-   - The scenarios are in `docs/specs/mod-api.feature` (19 scenarios, all `@unverified` until Reqnroll).
+   - The scenarios are in `docs/specs/mod-api.feature` (19 scenarios, bound with Reqnroll and passing since ADR-0012, amendment of 2026-10-21).
 
 ## Links
 

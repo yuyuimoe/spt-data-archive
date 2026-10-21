@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Seven migrations exist and are applied, and 314 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet (TD-06).
+The code compiles (TD-01 is done). Seven migrations exist and are applied, and 333 tests pass against a real Postgres: 314 xUnit tests and the 19 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 314 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 333 tests (19 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -113,9 +113,12 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **CI is a script, and the pipeline has never run.** `scripts/ci.sh` runs the build, the tests, `check-docs.py` and
   `likec4 validate`, and stops at the first failure (TD-09). `.github/workflows/ci.yml` calls it on a `postgres:17`
   service container, but the repository has no remote, so that file is untested (TD-60). On an empty database every
-  step passes and 314 of 314 tests pass, so a clean machine and an archive machine now agree.
-- **Done:** the solution builds, seven migrations are applied, and 314 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-53, TD-54).
+  step passes and 314 of the same 333 tests pass, so a clean machine and an archive machine agree.
+- **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
+  inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
+- **Done:** the solution builds, seven migrations are applied, and 333 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-53, TD-54), 314 xUnit tests and
+  19 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -170,8 +173,10 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
   and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
   on a schedule yet (TD-03).
-- **Next slice:** the Gherkin scenarios bound with Reqnroll (TD-06, ADR-0012), so a scenario runs as a test.
-  Then the rows of a location and a bot type (TD-45), JSON filtering by path (TD-52) and the baseline cache.
+- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 19 scenarios of
+  `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
+  each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
+- **Next slice:** the rows of a location and a bot type (TD-45), JSON filtering by path (TD-52) and the baseline cache.
 - **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api) and ADR-0039 (TLS at a
   proxy) are Proposed and await Yui. ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export
   and import), ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
