@@ -18,7 +18,10 @@ public sealed class ModSurfaceTests
     // A content ULID, the address of an object that the run made (ADR-0034).
     private const string Address = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 
-    private static readonly DateTimeOffset Start = new(2026, 10, 21, 12, 0, 0, TimeSpan.Zero);
+    // Far in the future, so the two runs of this transaction are the newest rows even when the database
+    // holds archived runs of its own: a run history sorted by start time must not depend on the day the
+    // suite runs. The year matches Release, which is higher than any real release for the same reason.
+    private static readonly DateTimeOffset Start = new(2999, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     private static readonly Guid Items = Guid.Parse("01a15b00-0000-7000-8000-000000000001");
     private static readonly Guid Behaviour = Guid.Parse("01a15b00-0000-7000-8000-000000000002");
