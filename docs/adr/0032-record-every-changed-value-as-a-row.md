@@ -217,7 +217,18 @@ Feature: Answer what a mod changed, value by value
    - The same baseline has 4 groups of offers that share a preset, so their order names them: three groups of two and one of three, nine offers of 6,131. The decision predicted three groups.
 5. [x] Extend the content hash input list in ADR-0029 amendment 4 when a hash-only kind becomes a row (no hash change expected: the rows replace the hash of the same file). Checked: an assort file keeps its canonical hash in `table_hashes`. Its offers also enter the hash as rows, so a change is content twice and never drops out.
 6. [x] Close TD-45 for the kinds that now have rows; keep the open part for locations and bots. Done for the assort: `ECOTI` no longer stores its two assort files as files with no row. TD-45 keeps the locations, bots, hideout, prices and handbook.
-7. [ ] Update the API surface and the query spec once the rows exist.
+7. [x] Update the API surface and the query spec once the rows exist. Done: `Query` serves `modDatasets`,
+   `modDataset`, `modTemplates`, `modChangePaths`, `modFiles`, `modFile`, `modIdMaps` and
+   `modDataObservations` with paging, filtering and sorting, and every jsonb column of those rows reaches a
+   client as JSON and offers comparison only, like the official ones (TD-15, TD-52).
+   - The collections are flat: a client filters `modTemplates` and `modChangePaths` by `datasetId`. A field
+     that holds the rows of one dataset was not built, because a nested list needs a navigation property on
+     the entity and a second paging surface, and two queries answer the same question.
+   - Measured live on 2026-10-21 against the development archive: 5 datasets; ECOTI answers 27 templates
+     (9 items and 18 offers, named by their address), 12,129 id map rows and its configuration text;
+     WTT-Armory answers 2,792 change paths with their old and new values; `startsWith` on `tableHashes` is
+     refused by the schema and `eq` compares two documents.
+   - The scenarios are in `docs/specs/mod-api.feature` (19 scenarios, all `@unverified` until Reqnroll).
 
 ## Links
 

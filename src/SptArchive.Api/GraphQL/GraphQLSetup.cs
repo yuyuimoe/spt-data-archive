@@ -27,6 +27,11 @@ public static class GraphQLSetup
             .AddTypeExtension<TraderAssortItemJson>()
             .AddTypeExtension<ModTraderAssortItemJson>()
             .AddTypeExtension<ModJson>()
+            .AddTypeExtension<ModDatasetJson>()
+            .AddTypeExtension<ModChangePathJson>()
+            .AddTypeExtension<ModFileJson>()
+            .AddTypeExtension<ModDataObservationJson>()
+            .AddTypeExtension<ArchiveRunJson>()
             // A jsonb column offers comparison only: the text operations a string filter announces fail in
             // Postgres against jsonb (JsonFilter.cs).
             .AddType<ItemFilter>()
@@ -40,6 +45,11 @@ public static class GraphQLSetup
             .AddType<TraderAssortItemFilter>()
             .AddType<ModTraderAssortItemFilter>()
             .AddType<ModFilter>()
+            .AddType<ModDatasetFilter>()
+            .AddType<ModChangePathFilter>()
+            .AddType<ModFileFilter>()
+            .AddType<ModDataObservationFilter>()
+            .AddType<ArchiveRunFilter>()
             // The default security policy switches introspection off outside Development. A public data browser
             // needs the schema, so it stays on.
             .DisableIntrospection(false)

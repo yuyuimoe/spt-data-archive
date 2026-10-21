@@ -13,9 +13,12 @@ namespace SptArchive.Api.GraphQL;
 /// <remarks>
 /// Official data and mod data are separate collections (<c>items</c> / <c>modItems</c>, ...). Every list supports
 /// paging, filtering and sorting, and only the columns a query selects are read from the database.
-/// Fields holding raw JSON (<c>props</c>, <c>data</c>, <c>base</c>, ...) are returned as <c>JSON</c> values (TD-15).
-/// Every official field takes an optional <c>sptVersion</c>: one exact archived release, or the latest when it is
-/// left out (ADR-0014, ADR-0019). Each official row states its release in its <c>sptVersion</c> field.
+/// Fields holding raw JSON (<c>props</c>, <c>data</c>, <c>base</c>, <c>tableHashes</c>, <c>result</c>, ...) are
+/// returned as <c>JSON</c> values (TD-15).
+/// Every official field takes an optional <c>sptVersion</c>: one exact archived release, or the latest when it
+/// is left out (ADR-0014, ADR-0019). Each official row states its release in its <c>sptVersion</c> field.
+/// A mod field takes no release: a dataset carries none, and an observation states the release it ran on
+/// (ADR-0013).
 /// </remarks>
 public sealed class Query
 {
@@ -40,6 +43,101 @@ public sealed class Query
     [UseFiltering]
     [UseSorting]
     public IQueryable<Language> GetLanguages(ArchiveDbContext db) => db.Languages.OrderBy(x => x.Code);
+
+    // ---- Mod datasets, their content and their provenance (ADR-0013, ADR-0029, ADR-0032, ADR-0033) -------
+
+    /// <summary>
+    /// The datasets that the archive holds, newest first. A dataset is the content of one mod version and
+    /// carries no server release: an observation states the releases it ran on, so these fields take no
+    /// <c>sptVersion</c> argument.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModDataset> GetModDatasets(ArchiveDbContext db) =>
+        db.ModDatasets.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id);
+
+    [GraphQLName("modDataset")]
+    public async Task<ModDataset?> GetModDatasetAsync(Guid id, ArchiveDbContext db, CancellationToken cancellationToken) =>
+        await db.ModDatasets.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    /// <summary>
+    /// One row for each object that a dataset touched, with the operation that the mod applies to it
+    /// (ADR-0017). An offer is a template of its own kind, named by its address (ADR-0032).
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModTemplate> GetModTemplates(ArchiveDbContext db) =>
+        db.ModTemplates.OrderBy(x => x.DatasetId).ThenBy(x => x.Kind).ThenBy(x => x.TemplateId);
+
+    /// <summary>
+    /// One row for each changed value under a template, with the value before the mod and the value after
+    /// it (ADR-0032). The path is an RFC 6901 JSON pointer.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModChangePath> GetModChangePaths(ArchiveDbContext db) =>
+        db.ModChangePaths.OrderBy(x => x.DatasetId).ThenBy(x => x.Kind).ThenBy(x => x.TemplateId).ThenBy(x => x.Path);
+
+    /// <summary>
+    /// The files that a dataset loaded, with the manifest entry of each and the text of a configuration
+    /// file (ADR-0029). The path starts with the mod directory.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModFile> GetModFiles(ArchiveDbContext db) =>
+        db.ModFiles.OrderBy(x => x.DatasetId).ThenBy(x => x.Path);
+
+    [GraphQLName("modFile")]
+    public async Task<ModFile?> GetModFileAsync(
+        Guid datasetId, string path, ArchiveDbContext db, CancellationToken cancellationToken) =>
+        await db.ModFiles.FirstOrDefaultAsync(x => x.DatasetId == datasetId && x.Path == path, cancellationToken);
+
+    /// <summary>
+    /// The map from an id that a run gave an object to the address that the archive gave it (ADR-0034).
+    /// A reader that holds an id from the run, from a log or from the game finds the object here.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModIdMap> GetModIdMaps(ArchiveDbContext db) =>
+        db.ModIdMaps.OrderBy(x => x.DatasetId).ThenBy(x => x.Kind).ThenBy(x => x.RawId);
+
+    /// <summary>
+    /// Every attempt to load one mod version on one server release, with the outcome and the release
+    /// (ADR-0013). A dataset is found from a mod version here.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModDataObservation> GetModDataObservations(ArchiveDbContext db) =>
+        db.ModDataObservations.OrderByDescending(x => x.ObservedAt).ThenByDescending(x => x.Id);
+
+    // ---- Runs (ADR-0033) ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// The history of the Archiver, newest first. Each run states why it happened, what it was about and
+    /// what came out, as JSON.
+    /// </summary>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ArchiveRun> GetArchiveRuns(ArchiveDbContext db) =>
+        db.ArchiveRuns.OrderByDescending(x => x.StartedAt).ThenByDescending(x => x.Id);
+
+    [GraphQLName("archiveRun")]
+    public async Task<ArchiveRun?> GetArchiveRunAsync(Guid id, ArchiveDbContext db, CancellationToken cancellationToken) =>
+        await db.ArchiveRuns.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
     // ---- Items --------------------------------------------------------------------------------------
 

@@ -153,7 +153,10 @@ Feature: Keep a record of every run and why it happened
 2. [x] The Archiver writes the run row before the work starts. It sets the status and the result after the transaction ends, in both the success path and the failure path (`RunRecordTests`). The result is not inside the import transaction, because a failed import rolls that transaction back and the failure must still be recorded. A mod run records itself before it reads the export; an official import records itself after the config checks and the skip test.
 3. [x] The importer reads `run/target.json`, refuses a mismatch and marks an observation unverified when the file is absent. Reader side only, tested with fixtures.
 4. [x] The exporter writes `run/target.json` from `SPT_ARCHIVE_TARGET_MOD_GUID` and `SPT_ARCHIVE_TARGET_REASON` (decision 3, amended; exporter 1.5.0). The version comes from the mod that loaded, and a target that did not load writes no file.
-5. [ ] A `runs` verb or an Api field lists the history.
+5. [x] A `runs` verb or an Api field lists the history. Done: `archiveRuns` lists it with paging, filtering
+   and sorting, newest first by `startedAt`, and `archiveRun(id)` reads one. A run states its kind, purpose,
+   status, release, target mod GUID and version, baseline release and hash, and its result as JSON. Measured
+   on 2026-10-21 against the development archive: 19 runs, 17 of them mod runs.
 6. [ ] Decide whether the 16 unimported run directories of the export campaign are re-imported to appear in the history.
 
 ## Links

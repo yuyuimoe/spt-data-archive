@@ -74,6 +74,14 @@ official data), `mod_files` (the manifest of every file a dataset loaded, with t
 files, ADR-0029), `languages`, and `archive_runs` (one row per Archiver execution, with the source hash and
 the release).
 
+The Api serves that shape as flat collections: `modDatasets` (the content of one mod version), and under it
+`modTemplates` (the operation of each touched object), `modChangePaths` (one row per changed value, with the
+old and the new value), `modFiles` and `modFile` (the manifest, and the text of a configuration file),
+`modIdMaps` (an id of the run and the address the archive derived for the object) and `modDataObservations`
+(the releases a mod version ran on). Each is paged, filtered and sorted, and a client narrows it with
+`datasetId`. `archiveRuns` and `archiveRun` serve the history. A mod field takes no `sptVersion`, because a
+dataset carries no release.
+
 Design decisions:
 
 - **Hybrid columns + jsonb.** An item's `_props` has hundreds of optional fields that differ per item type, so
@@ -163,6 +171,16 @@ answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
   translations(where: { entityId: { eq: "5422acb9af1c889c16000029" }, languageCode: { eq: "en" } }) {
     nodes { field value }
   }
+  modDatasets {
+    nodes { id modGuid configOrigin rowCounts }
+  }
+  modTemplates(where: { kind: { eq: "item" } }, first: 10) {
+    nodes { datasetId templateId op parentId }
+  }
+  modChangePaths(first: 10) {
+    totalCount
+    nodes { datasetId kind templateId path op oldValue newValue }
+  }
 }
 ```
 
@@ -215,7 +233,7 @@ answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 297 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 314 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one

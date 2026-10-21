@@ -50,7 +50,7 @@ model {
 
       graphql = component 'GraphQL Query' {
         technology 'HotChocolate'
-        description 'One Query type. Paging, filtering and sorting for official and mod collections. Every official field takes one archived release and answers from the latest when it is left out (ADR-0014, ADR-0019). A request is bounded by size, depth, time and cost.'
+        description 'One Query type. Paging, filtering and sorting for official and mod collections, and for a mod dataset with its templates, change paths, files, addresses and the run history (ADR-0032, ADR-0033). Every official field takes one archived release and answers from the latest when it is left out (ADR-0014, ADR-0019); a mod field takes no release, because a dataset carries none (ADR-0013). A request is bounded by size, depth, time and cost.'
       }
 
       apiDbAccess = component 'ArchiveDbContext (Api)' {

@@ -101,3 +101,36 @@ public sealed class ModJson : ObjectTypeExtension<Mod>
 {
     protected override void Configure(IObjectTypeDescriptor<Mod> d) => d.Json(x => x.Metadata);
 }
+
+public sealed class ModDatasetJson : ObjectTypeExtension<ModDataset>
+{
+    protected override void Configure(IObjectTypeDescriptor<ModDataset> d)
+    {
+        d.Json(x => x.TableHashes, required: true);
+        d.Json(x => x.RowCounts, required: true);
+    }
+}
+
+public sealed class ModChangePathJson : ObjectTypeExtension<ModChangePath>
+{
+    protected override void Configure(IObjectTypeDescriptor<ModChangePath> d)
+    {
+        d.Json(x => x.OldValue);
+        d.Json(x => x.NewValue);
+    }
+}
+
+public sealed class ModFileJson : ObjectTypeExtension<ModFile>
+{
+    protected override void Configure(IObjectTypeDescriptor<ModFile> d) => d.Json(x => x.Content);
+}
+
+public sealed class ModDataObservationJson : ObjectTypeExtension<ModDataObservation>
+{
+    protected override void Configure(IObjectTypeDescriptor<ModDataObservation> d) => d.Json(x => x.DependencySet);
+}
+
+public sealed class ArchiveRunJson : ObjectTypeExtension<ArchiveRun>
+{
+    protected override void Configure(IObjectTypeDescriptor<ArchiveRun> d) => d.Json(x => x.Result);
+}

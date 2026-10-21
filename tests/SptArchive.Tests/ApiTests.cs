@@ -1,7 +1,4 @@
 using System.Text.Json;
-using HotChocolate.Execution;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using SptArchive.Api.GraphQL;
 using SptArchive.Core.Data;
 using SptArchive.Core.Entities;
@@ -41,40 +38,8 @@ public sealed class ApiTests
         Props = """{"Weight":0.5,"Nested":{"list":[1,2]}}""",
     };
 
-    private static async Task<string> RunAsync(TestScope scope, string query)
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton<IDbContextFactory<ArchiveDbContext>>(new ScopeFactory(scope));
-        services.AddArchiveGraphQL();
-
-        await using var provider = services.BuildServiceProvider();
-        var executor = await provider.GetRequiredService<IRequestExecutorProvider>().GetExecutorAsync(cancellationToken: TestContext.Current.CancellationToken);
-
-        var result = await executor.ExecuteAsync(query, TestContext.Current.CancellationToken);
-
-        // The wire format of the Api: the same formatter that answers an HTTP request.
-        using var stream = new MemoryStream();
-        var writer = System.IO.Pipelines.PipeWriter.Create(stream);
-        await new HotChocolate.Transport.Formatters.JsonResultFormatter(indented: false)
-            .FormatAsync(result, writer, default, TestContext.Current.CancellationToken);
-        await writer.CompleteAsync();
-        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
-    }
-
-    private static async Task<JsonElement> JsonAsync(TestScope scope, string query)
-    {
-        var result = await RunAsync(scope, query);
-        return JsonDocument.Parse(result).RootElement.Clone();
-    }
-
     private static string[] Names(JsonElement response) =>
         [.. response.GetProperty("data").GetProperty("items").GetProperty("nodes").EnumerateArray().Select(n => n.GetProperty("name").GetString()!)];
-
-    private static (string Code, string Message) Error(JsonElement response)
-    {
-        var error = response.GetProperty("errors")[0];
-        return (error.GetProperty("extensions").GetProperty("code").GetString()!, error.GetProperty("message").GetString()!);
-    }
 
     [Fact]
     public async Task A_jsonb_column_offers_comparison_only()
@@ -84,19 +49,19 @@ public sealed class ApiTests
 
         // A text operation on a jsonb column becomes LIKE, which Postgres refuses; the schema must not
         // announce it at all, so the client learns at query validation instead of from a failed request.
-        var refused = await JsonAsync(scope, """{ items(where: { props: { startsWith: "{" } }) { nodes { name } } }""");
+        var refused = await ApiHarness.JsonAsync(scope, """{ items(where: { props: { startsWith: "{" } }) { nodes { name } } }""");
         var message = refused.GetProperty("errors")[0].GetProperty("message").GetString()!;
         Assert.Contains("startsWith", message);
         Assert.Contains("does not exist", message);
 
         // Comparison does work, and compares the content of the documents, not their text.
-        var matched = await JsonAsync(
+        var matched = await ApiHarness.JsonAsync(
             scope,
             """{ items(where: { props: { eq: "{\"Nested\":{\"list\":[1,2]},\"Weight\":0.5}" } }) { nodes { name } } }""");
         Assert.Equal(["NewOnly"], Names(matched));
 
         // A text column keeps every operation, including the pattern ones.
-        var text = await JsonAsync(scope, """{ items(where: { name: { contains: "New" } }) { nodes { name } } }""");
+        var text = await ApiHarness.JsonAsync(scope, """{ items(where: { name: { contains: "New" } }) { nodes { name } } }""");
         Assert.Equal(["NewOnly"], Names(text));
     }
 
@@ -106,7 +71,7 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, "{ items { nodes { name sptVersion } } }");
+        var response = await ApiHarness.JsonAsync(scope, "{ items { nodes { name sptVersion } } }");
 
         Assert.Equal(["NewOnly"], Names(response));
         Assert.Equal(New, response.GetProperty("data").GetProperty("items").GetProperty("nodes")[0].GetProperty("sptVersion").GetString());
@@ -118,7 +83,7 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, $$"""{ items(sptVersion: "{{Old}}") { nodes { name sptVersion } } }""");
+        var response = await ApiHarness.JsonAsync(scope, $$"""{ items(sptVersion: "{{Old}}") { nodes { name sptVersion } } }""");
 
         Assert.Equal(["OldOnly"], Names(response));
         Assert.Equal(Old, response.GetProperty("data").GetProperty("items").GetProperty("nodes")[0].GetProperty("sptVersion").GetString());
@@ -130,7 +95,7 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, $$"""{ item(id: "000000000000000000000001", sptVersion: "{{New}}") { name } }""");
+        var response = await ApiHarness.JsonAsync(scope, $$"""{ item(id: "000000000000000000000001", sptVersion: "{{New}}") { name } }""");
 
         Assert.Equal(JsonValueKind.Null, response.GetProperty("data").GetProperty("item").ValueKind);
     }
@@ -141,9 +106,9 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, """{ items(sptVersion: "9999.9.9") { nodes { name } } }""");
+        var response = await ApiHarness.JsonAsync(scope, """{ items(sptVersion: "9999.9.9") { nodes { name } } }""");
 
-        var (code, message) = Error(response);
+        var (code, message) = ApiHarness.Error(response);
         Assert.Equal(Releases.UnknownCode, code);
         Assert.Contains("'9999.9.9'", message);
         Assert.Contains($"'{New}'", message);
@@ -161,9 +126,9 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, $$"""{ items(sptVersion: "{{value}}") { nodes { name } } }""");
+        var response = await ApiHarness.JsonAsync(scope, $$"""{ items(sptVersion: "{{value}}") { nodes { name } } }""");
 
-        var (code, message) = Error(response);
+        var (code, message) = ApiHarness.Error(response);
         Assert.Equal(Releases.MalformedCode, code);
         Assert.NotEqual(Releases.UnknownCode, code);
         Assert.Contains($"'{value}'", message);
@@ -176,7 +141,7 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, "{ sptVersions { version } }");
+        var response = await ApiHarness.JsonAsync(scope, "{ sptVersions { version } }");
 
         var versions = response.GetProperty("data").GetProperty("sptVersions").EnumerateArray().Select(v => v.GetProperty("version").GetString()).ToList();
         Assert.Equal([New, Old], versions.Take(2));
@@ -188,26 +153,11 @@ public sealed class ApiTests
         await using var scope = await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
         await SeedAsync(scope);
 
-        var response = await JsonAsync(scope, "{ items { nodes { props } } }");
+        var response = await ApiHarness.JsonAsync(scope, "{ items { nodes { props } } }");
 
         var props = response.GetProperty("data").GetProperty("items").GetProperty("nodes")[0].GetProperty("props");
         Assert.Equal(JsonValueKind.Object, props.ValueKind);
         Assert.Equal(0.5, props.GetProperty("Weight").GetDouble());
         Assert.Equal(2, props.GetProperty("Nested").GetProperty("list")[1].GetInt32());
-    }
-
-    private sealed class ScopeFactory(TestScope scope) : IDbContextFactory<ArchiveDbContext>
-    {
-        public ArchiveDbContext CreateDbContext()
-        {
-            var options = new DbContextOptionsBuilder<ArchiveDbContext>()
-                .UseNpgsql(scope.Connection)
-                .UseSnakeCaseNamingConvention()
-                .Options;
-
-            var db = new ArchiveDbContext(options);
-            db.Database.UseTransaction(scope.Transaction);
-            return db;
-        }
     }
 }

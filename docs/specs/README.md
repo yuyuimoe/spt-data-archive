@@ -8,6 +8,7 @@ The `.feature` files in this folder describe what the system does. They are writ
 |------|---------|
 | [archive-official-data.feature](archive-official-data.feature) | The Archiver copies the server data into PostgreSQL |
 | [query-api.feature](query-api.feature) | The public read-only GraphQL API, its limits and its cache |
+| [mod-api.feature](mod-api.feature) | The Api surface of a mod dataset: its templates, change paths, files, addresses and runs |
 | [mod-registry.feature](mod-registry.feature) | Mod data stays apart from official data |
 | [backup-and-restore.feature](backup-and-restore.feature) | Dumps and restores |
 
@@ -32,7 +33,8 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 
 ## Slice to work on next
 
-Record the path of every changed value of a quest, a trader and a customization (ADR-0032, action item 3).
-The `@unverified` scenarios of `mod-registry.feature` that name a change path are the behavior of that slice.
-After it: the Api server version argument (ADR-0014, ADR-0019; TD-21), then the Gherkin scenarios bound
-with Reqnroll (TD-06). Scenarios outside the slice stay `@unverified` or `@backlog`.
+Read a mod dataset through the Api (ADR-0032, action item 7, and ADR-0033, action item 5).
+The scenarios of `mod-api.feature` are the behavior of that slice.
+After it: the Gherkin scenarios bound with Reqnroll (TD-06), the rows of a location and a bot type (TD-45),
+a JSON filter by path (TD-52), and the baseline cache (ADR-0013).
+Scenarios outside the slice stay `@unverified` or `@backlog`.

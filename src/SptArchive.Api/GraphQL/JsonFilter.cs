@@ -100,6 +100,39 @@ public sealed class ModFilter : FilterInputType<Mod>
     protected override void Configure(IFilterInputTypeDescriptor<Mod> d) => d.Json(x => x.Metadata);
 }
 
+public sealed class ModDatasetFilter : FilterInputType<ModDataset>
+{
+    protected override void Configure(IFilterInputTypeDescriptor<ModDataset> d)
+    {
+        d.Json(x => x.TableHashes);
+        d.Json(x => x.RowCounts);
+    }
+}
+
+public sealed class ModChangePathFilter : FilterInputType<ModChangePath>
+{
+    protected override void Configure(IFilterInputTypeDescriptor<ModChangePath> d)
+    {
+        d.Json(x => x.OldValue);
+        d.Json(x => x.NewValue);
+    }
+}
+
+public sealed class ModFileFilter : FilterInputType<ModFile>
+{
+    protected override void Configure(IFilterInputTypeDescriptor<ModFile> d) => d.Json(x => x.Content);
+}
+
+public sealed class ModDataObservationFilter : FilterInputType<ModDataObservation>
+{
+    protected override void Configure(IFilterInputTypeDescriptor<ModDataObservation> d) => d.Json(x => x.DependencySet);
+}
+
+public sealed class ArchiveRunFilter : FilterInputType<ArchiveRun>
+{
+    protected override void Configure(IFilterInputTypeDescriptor<ArchiveRun> d) => d.Json(x => x.Result);
+}
+
 internal static class JsonFilterExtensions
 {
     public static void Json<T>(this IFilterInputTypeDescriptor<T> descriptor, System.Linq.Expressions.Expression<Func<T, string?>> column)
