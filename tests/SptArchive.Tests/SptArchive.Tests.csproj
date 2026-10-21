@@ -18,7 +18,10 @@
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Npgsql" />
+    <!-- EdgeTests: starts the Api in the test process and reads the answers as a client would. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
   </ItemGroup>
+
 
   <ItemGroup>
     <ProjectReference Include="../../src/SptArchive.Core/SptArchive.Core.csproj" />

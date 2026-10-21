@@ -26,7 +26,7 @@ model {
 
   edge = softwareSystem 'Edge proxy' {
     #planned
-    description 'Rate limiting and TLS in front of the Api. The Api has no rate limit of its own.'
+    description 'TLS in front of the Api, and a rate limit that the whole deployment shares. The Api keeps a limit of its own per client (ADR-0038).'
   }
 
   // ------------------------------------------------------------ The system
@@ -37,6 +37,11 @@ model {
     api = container 'Api' {
       technology 'ASP.NET Core, HotChocolate'
       description 'Public read-only GraphQL endpoint. It has no mutations.'
+
+      edgeGuard = component 'Edge Guard' {
+        technology 'ASP.NET Core middleware, System.Threading.RateLimiting'
+        description 'A token bucket per client address, so one client cannot hold the pool or the link. Brotli and gzip compression, outside the cache so one answer is stored for everyone. Three security headers on every answer (ADR-0038).'
+      }
 
       queryCache = component 'Query Cache Middleware' {
         technology 'ASP.NET Core middleware'
@@ -149,6 +154,8 @@ model {
 
   // -------------------------------------------- Relationships: components
 
+  archive.api.edgeGuard -> archive.api.queryCache 'Passes a request inside the limit, and compresses the answer on the way out'
+  archive.api.edgeGuard -> consumer 'Refuses a flood with 429 and Retry-After (ADR-0038)'
   archive.api.queryCache -> archive.api.graphql 'Passes cache misses'
   archive.api.queryCache -> archive.redis 'Reads the dataset version, reads and stores responses'
   archive.api.graphql -> archive.api.apiDbAccess 'Builds queries'

@@ -1,6 +1,6 @@
 # ADR-0037: Survive a burst on one answer, and let a client repeat a request
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
 **Deciders:** Yui
 

@@ -173,24 +173,35 @@ The API is then at `http://localhost:8080/graphql`. Example:
   A Redis that is down is skipped for 30 seconds after a failure, so it costs one slow request (3.8 s) and not
   every request. An answer lives one minute, spread by 10 % so answers stored together do not expire together.
   The requests that miss one answer at the same time share a single query, and the header `X-Cache` says
-  `SHARED` for them (ADR-0037). A client may send an `Idempotency-Key` to replay a request later (ADR-0037).
+  `SHARED` for them (ADR-0037). A client may send an `Idempotency-Key` to replay a request later (ADR-0037),
+  and an answer above 2 MB is answered but never stored.
+- **A guard in front of the Api.** Each client address gets a token bucket: a burst of 100 requests, refilled at
+  100 per 10 seconds (ADR-0038). A client that asks more gets `429` with `Retry-After` and the code
+  `RATE_LIMITED`; `/healthz` is never charged. Answers are compressed with brotli or gzip when the client asks
+  for it, and the compression sits outside the cache, so one uncompressed answer is stored for everyone.
+  Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
+  `X-Frame-Options: DENY`. The Api asks Postgres for at most 30 connections, below the 50 that
+  `compose.yaml` allows, so a burst waits instead of failing.
   To try the cache locally, start one: `podman run -d --rm --name sptarchive-redis -p
   127.0.0.1:6379:6379 docker.io/library/redis:7-alpine redis-server --maxmemory 128mb --maxmemory-policy
   allkeys-lru --save "" --appendonly no`, and set `ConnectionStrings__Redis=127.0.0.1:6379` for both the Api and
   the Archiver.
 - **Load tests.** `tests/load` holds three k6 scripts: `steady.js` (a hot answer at a fixed rate),
   `stampede.js` (200 clients that miss one answer together) and `ttl.js` (when an answer expires). Install k6 and
-  run them against a running Api, for example `RATE=100 k6 run tests/load/steady.js`.
+  run them against a running Api, for example `RATE=100 k6 run tests/load/steady.js`. A load test must raise
+  the rate limit first (`TOKENS=100000` or `RATELIMIT_ENABLED=false` in `/tmp/api_load.sh`), or it measures
+  the limiter instead of the Api.
 - **Backups.** `scripts/backup.sh dump` writes a `pg_dump -Fc` with a checksum, copies it to
   `ARCHIVE_BACKUP_COPY_DIR` and proves that it restores (`scripts/backup.sh verify`). Keep the copy off the
   host. See `docs/runbooks/backup.md` (ADR-0011, TD-03 for the missing schedule).
 - **Limits.** Page size is capped at 200, a request body at 1 MB, and a query at depth 10, 10 seconds and a
   cost limit of 20,000 field cost and 2,000 objects — nine full pages of rows with every field. A JSON column
-  offers comparison only. Put the API behind a rate limiter (Cloudflare, Traefik) as well.
+  offers comparison only. The Api keeps its own rate limit per client (ADR-0038); a limit that a whole
+  deployment shares still belongs to the edge proxy (Cloudflare, Traefik).
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 272 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 280 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one

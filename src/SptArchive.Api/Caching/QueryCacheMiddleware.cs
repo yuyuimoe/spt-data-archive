@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using SptArchive.Core;
@@ -161,9 +162,13 @@ public sealed class QueryCacheMiddleware(
     /// </summary>
     private async Task<QueryAnswer> ExecuteAsync(HttpContext context, string key, byte[] bodyHash, string idempotencyKey)
     {
+        // The body feature is swapped, not the stream, so a middleware that wrapped the feature before
+        // this one (response compression, ADR-0038) is put back exactly as it was. Setting Response.Body
+        // would replace that feature and the answer would leave uncompressed.
+        var originalFeature = context.Features.Get<IHttpResponseBodyFeature>();
         var originalBody = context.Response.Body;
         await using var captured = new MemoryStream();
-        context.Response.Body = captured;
+        context.Features.Set<IHttpResponseBodyFeature>(new StreamResponseBodyFeature(captured));
 
         try
         {
@@ -171,12 +176,21 @@ public sealed class QueryCacheMiddleware(
         }
         finally
         {
-            context.Response.Body = originalBody;
+            if (originalFeature is not null)
+            {
+                context.Features.Set(originalFeature);
+            }
+            else
+            {
+                context.Response.Body = originalBody;
+            }
         }
 
         var answer = new QueryAnswer(context.Response.StatusCode, context.Response.ContentType, captured.ToArray());
 
-        if (answer.StatusCode == StatusCodes.Status200OK && IsCleanSuccess(answer.Bytes))
+        if (answer.StatusCode == StatusCodes.Status200OK
+            && IsCleanSuccess(answer.Bytes)
+            && answer.Bytes.Length <= _options.MaxResponseBytes)
         {
             var replayable = idempotencyKey.Length > 0;
             try

@@ -40,6 +40,8 @@
   <ItemGroup>
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <!-- Starts the Api in the test process, so a test can check the pipeline the deployment runs. -->
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
   </ItemGroup>
 
   <!-- Logging -->

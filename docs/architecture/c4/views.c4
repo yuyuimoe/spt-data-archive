@@ -64,7 +64,8 @@ views {
   dynamic view queryCacheMiss {
     title 'Dynamic: Query, cache miss'
 
-    consumer -> archive.api.queryCache 'POST /graphql'
+    consumer -> archive.api.edgeGuard 'POST /graphql'
+    archive.api.edgeGuard -> archive.api.queryCache 'Inside the limit: charges one token'
     archive.api.queryCache -> archive.redis 'Reads the dataset version and looks up the response'
     archive.api.queryCache -> archive.api.graphql 'No entry found: runs the query'
     archive.api.graphql -> archive.api.apiDbAccess 'Builds the query'
@@ -75,7 +76,8 @@ views {
   dynamic view queryCacheHit {
     title 'Dynamic: Query, cache hit'
 
-    consumer -> archive.api.queryCache 'POST /graphql'
+    consumer -> archive.api.edgeGuard 'POST /graphql'
+    archive.api.edgeGuard -> archive.api.queryCache 'Inside the limit: charges one token'
     archive.api.queryCache -> archive.redis 'Reads the dataset version and looks up the response'
     archive.redis -> archive.api.queryCache 'Returns the stored response'
     archive.api.queryCache -> consumer 'Answers with X-Cache: HIT. The database is not used.'

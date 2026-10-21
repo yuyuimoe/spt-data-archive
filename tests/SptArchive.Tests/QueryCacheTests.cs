@@ -245,6 +245,27 @@ public sealed class QueryCacheTests
     }
 
     [Fact]
+    public async Task An_answer_above_the_ceiling_is_served_and_not_stored()
+    {
+        var cache = new FakeCache();
+        var big = "{\"data\":{\"text\":\"" + new string('x', 4096) + "\"}}";
+        var options = new QueryCacheOptions { MaxResponseBytes = 1024 };
+        var middleware = new QueryCacheMiddleware(
+            async context => await context.Response.WriteAsync(big),
+            cache,
+            Options.Create(options),
+            NullLogger<QueryCacheMiddleware>.Instance);
+
+        var context = Request();
+        await middleware.InvokeAsync(context);
+
+        // The client still gets the whole answer. Only the cache is skipped, because every stored answer
+        // is held in memory and an answer has no upper bound of its own (ADR-0038, F-06).
+        Assert.Equal("MISS", context.Response.Headers["X-Cache"]);
+        Assert.Empty(cache.Entries);
+    }
+
+    [Fact]
     public void The_lifetime_of_an_answer_is_one_minute_by_default()
     {
         var options = new QueryCacheOptions();

@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Seven migrations exist and are applied, and 272 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
+The code compiles (TD-01 is done). Seven migrations exist and are applied, and 280 tests pass against a real Postgres (TD-02, and the first half of TD-06). No Gherkin scenario runs as a test yet, and the Api has no server version argument (TD-06, TD-21).
 
 ## Read first
 
@@ -40,7 +40,7 @@ compose.yaml               PostgreSQL, Redis, Api and the Archiver.
 
 ```bash
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 272 tests; needs the development database (below)
+dotnet test SptArchive.slnx             # 280 tests; needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -94,8 +94,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **Done:** the solution builds, seven migrations are applied, and 272 tests pass (TD-01, TD-02, TD-04, TD-07,
-  TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-21, TD-15).
+- **Done:** the solution builds, seven migrations are applied, and 280 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-53, TD-54).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -117,8 +117,15 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   p99 56 ms (ADR-0008). `tests/load` holds the k6 scripts: a hot answer at 100 requests per second answers at
   p95 11 ms, 200 clients that miss one answer together run one query (ADR-0037), and an answer expires after
   60 to 65 seconds. A cache that is down is skipped for 30 seconds, so it costs one slow request and not every
-  request. The dev server allowed 100 connections and the Api held 50 under 200 concurrent misses;
-  `compose.yaml` allows 50, so the reader pool needs a cap (TD-53).
+  request. The Api asks Postgres for at most 30 connections (`Database:MaxPoolSize`), below the 50 that
+  `compose.yaml` allows: 60 concurrent distinct queries all answered and the role never held more than 30
+  connections (TD-53 is done).
+- **The edge is guarded.** A token bucket per client address allows a burst of 100 and then 10 requests per
+  second, and answers `429` with `Retry-After` and the code `RATE_LIMITED` beyond that; `/healthz` is never
+  charged. A bucket map is bounded, and only `/graphql` costs a token (ADR-0038). Answers are compressed with
+  brotli or gzip, and the compression sits outside the cache, so one uncompressed answer is stored for every
+  client: a 514 KB page leaves as 109 KB with gzip and 59 KB with brotli. Every answer carries `nosniff`,
+  `no-referrer` and `X-Frame-Options: DENY`. A limit that a whole deployment shares is still the proxy's job.
 - **Backups.** `scripts/backup.sh dump | verify FILE | restore FILE DBNAME` writes a custom-format dump with
   a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
   and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
@@ -126,9 +133,10 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Next slice:** the Api surface for the mod tables (ADR-0032 action item 7), so a client reads a dataset, its
   change paths and its files. Then the Gherkin scenarios with Reqnroll (TD-06, ADR-0012), the rows of a
   location and a bot type (TD-45), JSON filtering by path (TD-52) and the baseline cache.
-- **Open decisions:** none. ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export and
-  import) and ADR-0036 (several imports at the same time) are Accepted. ADR-0005 and ADR-0010 are
-  superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0035 are Accepted.
+- **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api) is Proposed and awaits
+  Yui. ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export and import), ADR-0036 (several
+  imports at the same time) and ADR-0037 (one query per answer, an idempotency key) are Accepted. ADR-0005 and
+  ADR-0010 are superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0037 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
   and the importer exist and ran on nineteen real mod runs (`docs/runbooks/mod-export.md`), including a curated
   run of one mod (ADR-0029).

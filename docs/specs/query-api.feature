@@ -295,6 +295,43 @@ Feature: Query the archive through a read-only GraphQL API
     When I request "/healthz"
     Then the response status is 200
 
+  # ------------------------------------------------------------ The guard
+
+  @unverified
+  Scenario: A client that asks too often is refused
+    Given the Api allows a burst of two requests
+    When one client sends three requests in a row
+    Then the third response status is 429
+    And the error code is "RATE_LIMITED"
+    And the response has the header "Retry-After"
+
+  @unverified
+  Scenario: The health check is never refused
+    Given the Api allows a burst of two requests
+    When one client sends ten requests to "/healthz"
+    Then every response status is 200
+
+  @unverified
+  Scenario: An answer is compressed when the client asks for it
+    Given a client accepts "gzip"
+    When the client sends a query
+    Then the response has the header "Content-Encoding: gzip"
+    And it decodes to the same JSON as the uncompressed answer
+
+  @unverified
+  Scenario: The cache stores one answer for every client
+    Given a client asked for a query with "Accept-Encoding: gzip"
+    When another client asks for the same query without accepting compression
+    Then the answer is readable without decoding
+    And the response has the header "X-Cache: HIT"
+
+  @unverified
+  Scenario: Every answer carries the security headers
+    When a client sends a query
+    Then the response has the header "X-Content-Type-Options: nosniff"
+    And it has the header "Referrer-Policy: no-referrer"
+    And it has the header "X-Frame-Options: DENY"
+
   # ---------------------------------------------------------- Not built yet
 
   @backlog

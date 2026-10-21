@@ -35,6 +35,13 @@ public sealed class QueryCacheOptions
     public int MaxRequestBytes { get; set; } = 32 * 1024;
 
     /// <summary>
+    /// Larger answers are answered uncached. Every cacheable request holds its whole answer in memory
+    /// until the query finishes, so this ceiling bounds that memory too (ADR-0038). The largest legal
+    /// answer today is 1.15 MB.
+    /// </summary>
+    public int MaxResponseBytes { get; set; } = 2 * 1024 * 1024;
+
+    /// <summary>
     /// The most requests that may wait for one query. Beyond this the Api stops collapsing and serves
     /// each request on its own, so a flood of distinct keys cannot grow the map with no bound.
     /// </summary>
