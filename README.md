@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 333 tests (314 xUnit tests and 19 Gherkin scenarios). Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 316 tests (297 xUnit tests and 19 Gherkin scenarios). Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -243,7 +243,7 @@ has never run, because the repository has no remote yet (TD-60).
 
 - **One feature file runs as a test.** Reqnroll runs the 19 scenarios of `docs/specs/mod-api.feature` inside
   `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
-  (TD-62). The 314 xUnit tests check the schema, the import path, the canonical form and the run import.
+  (TD-62). The 297 xUnit tests check the schema, the import path, the canonical form and the run import.
 - **The CI pipeline has never run.** `scripts/ci.sh` is proven on a clean database and on the archive database, and
   every step passes on both; the workflow file is not (TD-60).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one

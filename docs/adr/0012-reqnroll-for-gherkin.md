@@ -56,8 +56,9 @@ Feature: Specs are executable
 3. [x] Bind `mod-api.feature` (19 scenarios).
 4. [ ] Bind the other feature files, one slice at a time. Their scenarios keep `@unverified` or `@backlog`
    until then (TD-62).
-5. [ ] Decide whether `ModSurfaceTests` stays. It asserts the same facts as `mod-api.feature` in plain xUnit
-   (the driver decides; nothing was removed).
+5. [x] Decide whether `ModSurfaceTests` stays. It asserted the same facts as `mod-api.feature` in plain
+   xUnit. The driver decided on 2026-10-21: a duplicated test has no value. The file is removed (amendment
+   of 2026-10-21, second).
 
 ## Amendment of 2026-10-21: what was built
 
@@ -101,6 +102,19 @@ change the decision: Reqnroll on xUnit, against a real PostgreSQL.
 9. **Result.** 19 of 19 scenarios of `mod-api.feature` pass and carry no `@unverified` tag, and the 314 other
    tests are unchanged. Two changes of a step made two scenarios fail (a wrong new value, a pinned address), so the
    assertions are not empty.
+
+## Amendment of 2026-10-21 (second): the duplicated test is removed
+
+`tests/SptArchive.Tests/ModSurfaceTests.cs` is deleted. It held 17 plain xUnit tests of the mod Api surface,
+and every one of them asserted a fact that `docs/specs/mod-api.feature` already asserts, so it was a second
+copy of the same test and it could not fail alone. The driver's decision: a duplicated test has no value.
+
+- **What keeps the coverage.** The 19 scenarios of `mod-api.feature` (Reqnroll) assert the same facts, and
+they run in the same `dotnet test`. No scenario changed.
+- **What is lost.** A test of that surface that runs without Reqnroll. Nothing else: any red scenario fails
+the same suite.
+- **Counts.** The suite holds 316 tests: 297 xUnit tests and 19 scenarios. The numbers in the first amendment
+(314 xUnit, 333 total) describe the suite before this removal.
 
 ## Links
 
