@@ -10,6 +10,7 @@
 | [tech-debt.md](tech-debt.md) | Known problems, scores and the fix order |
 | [runbooks/mod-export.md](runbooks/mod-export.md) | How to export mod data from a server container |
 | [glossary.md](glossary.md) | The terms of the project |
+| [security/audit-2026-10-21.md](security/audit-2026-10-21.md) | The security audit of the Api: findings, severity and fixes |
 
 ## Reading order
 

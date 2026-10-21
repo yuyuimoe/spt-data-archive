@@ -103,6 +103,167 @@ public sealed class QueryCacheTests
         Assert.Equal(1, cache.Attempts);
     }
 
+    [Fact]
+    public async Task Requests_that_miss_together_run_one_query()
+    {
+        var cache = new FakeCache();
+        var gate = new TaskCompletionSource();
+        var calls = 0;
+        var middleware = Middleware(cache, next: async context =>
+        {
+            Interlocked.Increment(ref calls);
+            await gate.Task;
+            await context.Response.WriteAsync("{\"data\":{\"fresh\":true}}");
+        });
+
+        // The first request parks inside the query, so every request below arrives before it finishes:
+        // a cache stampede, if the cache had no protection.
+        var contexts = new List<DefaultHttpContext>();
+        var requests = new List<Task>();
+        for (var i = 0; i < 20; i++)
+        {
+            var context = Request();
+            contexts.Add(context);
+            requests.Add(middleware.InvokeAsync(context));
+        }
+
+        gate.SetResult();
+        await Task.WhenAll(requests);
+
+        Assert.Equal(1, calls);                                    // one query, not twenty
+        Assert.Equal(1, contexts.Count(c => c.Response.Headers["X-Cache"] == "MISS"));
+        Assert.Equal(19, contexts.Count(c => c.Response.Headers["X-Cache"] == "SHARED"));
+        Assert.All(contexts, c => Assert.Equal("{\"data\":{\"fresh\":true}}", Read(c.Response)));
+    }
+
+    [Fact]
+    public async Task An_idempotency_key_replays_the_answer()
+    {
+        var cache = new FakeCache();
+        var calls = 0;
+        var middleware = Middleware(cache, next: async context =>
+        {
+            calls++;
+            await context.Response.WriteAsync("{\"data\":{\"fresh\":true}}");
+        });
+
+        var first = Request(idempotencyKey: "order-42-abc");
+        await middleware.InvokeAsync(first);
+
+        var replay = Request(idempotencyKey: "order-42-abc");
+        await middleware.InvokeAsync(replay);
+
+        Assert.Equal(1, calls);                                    // the query ran once
+        Assert.Equal("HIT", replay.Response.Headers["X-Cache"]);
+        Assert.Equal("true", replay.Response.Headers["Idempotency-Replayed"]);
+        Assert.Equal("{\"data\":{\"fresh\":true}}", Read(replay.Response));
+        Assert.Equal(QueryCacheMiddleware.IdempotencyHeader, "Idempotency-Key");
+    }
+
+    [Fact]
+    public async Task A_replayed_answer_lives_longer_than_a_plain_one()
+    {
+        var cache = new FakeCache();
+        var middleware = Middleware(cache, next: async context =>
+            await context.Response.WriteAsync("{\"data\":{\"fresh\":true}}"));
+
+        await middleware.InvokeAsync(Request());
+
+        var lifetime = cache.LastOptions!.AbsoluteExpirationRelativeToNow!.Value.TotalSeconds;
+
+        // One minute, spread by the jitter so that keys stored together do not expire together.
+        Assert.InRange(lifetime, 54, 66);
+    }
+
+    [Fact]
+    public async Task Two_requests_that_share_a_key_do_not_share_an_answer()
+    {
+        var cache = new FakeCache();
+        var gate = new TaskCompletionSource();
+        var first = true;
+        var middleware = Middleware(cache, next: async context =>
+        {
+            // The first request parks inside its query, so the second arrives while it runs.
+            if (first)
+            {
+                first = false;
+                await gate.Task;
+                await context.Response.WriteAsync("{\"data\":{\"answer\":\"first\"}}");
+                return;
+            }
+
+            await context.Response.WriteAsync("{\"data\":{\"answer\":\"second\"}}");
+        });
+
+        var leader = Request("{\"query\":\"{ items(first: 1) { totalCount } }\"}", idempotencyKey: "order-42-abc");
+        var leaderRun = middleware.InvokeAsync(leader);
+
+        var other = Request("{\"query\":\"{ items(first: 2) { totalCount } }\"}", idempotencyKey: "order-42-abc");
+        await middleware.InvokeAsync(other);
+
+        gate.SetResult();
+        await leaderRun;
+
+        // The second request answers its own question. It never receives the answer of the first one,
+        // even though both named the same idempotency key.
+        Assert.Contains("second", Read(other.Response));
+        Assert.DoesNotContain("first", Read(other.Response));
+    }
+
+    [Fact]
+    public async Task A_key_reused_for_another_request_is_refused()
+    {
+        var cache = new FakeCache();
+        var middleware = Middleware(cache, next: async context =>
+            await context.Response.WriteAsync("{\"data\":{\"fresh\":true}}"));
+
+        await middleware.InvokeAsync(Request(idempotencyKey: "order-42-abc"));
+
+        var other = Request("{\"query\":\"{ items(first: 2) { totalCount } }\"}", idempotencyKey: "order-42-abc");
+        await middleware.InvokeAsync(other);
+
+        Assert.Equal(StatusCodes.Status409Conflict, other.Response.StatusCode);
+        Assert.Contains("IDEMPOTENCY_KEY_REUSED", Read(other.Response));
+    }
+
+    [Theory]
+    [InlineData("short")]                                     // under eight characters
+    [InlineData("/../../etc/passwd")]                         // an arbitrary string would become a cache key
+    [InlineData("space in key")]
+    public async Task A_malformed_idempotency_key_is_refused(string key)
+    {
+        var cache = new FakeCache();
+        var middleware = Middleware(cache, next: async context =>
+            await context.Response.WriteAsync("{\"data\":{}}"));
+
+        var context = Request(idempotencyKey: key);
+        await middleware.InvokeAsync(context);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
+        Assert.Contains("IDEMPOTENCY_KEY_INVALID", Read(context.Response));
+        Assert.Empty(cache.Entries);
+    }
+
+    [Fact]
+    public void The_lifetime_of_an_answer_is_one_minute_by_default()
+    {
+        var options = new QueryCacheOptions();
+
+        Assert.Equal(60, options.TtlSeconds);
+        Assert.Equal(300, options.IdempotencySeconds);
+        Assert.InRange(options.Ttl().TotalSeconds, 54, 66);        // 60 s spread by 10 %
+        Assert.InRange(options.IdempotencyTtl().TotalSeconds, 270, 330);
+    }
+
+    [Fact]
+    public void The_jitter_can_be_switched_off()
+    {
+        var options = new QueryCacheOptions { TtlJitterPercent = 0 };
+
+        Assert.Equal(TimeSpan.FromSeconds(60), options.Ttl());
+        Assert.Equal(TimeSpan.FromSeconds(300), options.IdempotencyTtl());
+    }
+
     private static QueryCacheMiddleware Middleware(IDistributedCache cache, RequestDelegate next) =>
         new(next, cache, Options.Create(new QueryCacheOptions()), NullLogger<QueryCacheMiddleware>.Instance);
 
@@ -113,10 +274,15 @@ public sealed class QueryCacheTests
         return context.Response.Headers["X-Cache"];
     }
 
-    private static DefaultHttpContext Request(string? body = null)
+    private static DefaultHttpContext Request(string? body = null, string? idempotencyKey = null)
     {
         var bytes = Encoding.UTF8.GetBytes(body ?? Query);
         var context = new DefaultHttpContext();
+        if (idempotencyKey is not null)
+        {
+            context.Request.Headers[QueryCacheMiddleware.IdempotencyHeader] = idempotencyKey;
+        }
+
         context.Request.Method = HttpMethods.Post;
         context.Request.Path = "/graphql";
         context.Request.ContentType = "application/json";
@@ -138,6 +304,7 @@ public sealed class QueryCacheTests
         public Dictionary<string, byte[]> Entries { get; } = [];
         public bool Fail { get; init; }
         public int Attempts { get; private set; }
+        public DistributedCacheEntryOptions? LastOptions { get; private set; }
 
         public byte[]? Get(string key)
         {
@@ -154,6 +321,7 @@ public sealed class QueryCacheTests
             Attempts++;
             if (Fail) throw new InvalidOperationException("Redis is down");
             Entries[key] = value;
+            LastOptions = options;
         }
 
         public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)

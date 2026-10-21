@@ -8,7 +8,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 262 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 272 tests. Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -171,10 +171,16 @@ The API is then at `http://localhost:8080/graphql`. Example:
   Measured on the development archive (ADR-0008): a page of 200 items with all 11 fields, 518 KB, answers in 1 ms
   from the cache and in 35 ms from Postgres, and 100 concurrent clients get 2,723 answers per second at p99 56 ms.
   A Redis that is down is skipped for 30 seconds after a failure, so it costs one slow request (3.8 s) and not
-  every request. To try the cache locally, start one: `podman run -d --rm --name sptarchive-redis -p
+  every request. An answer lives one minute, spread by 10 % so answers stored together do not expire together.
+  The requests that miss one answer at the same time share a single query, and the header `X-Cache` says
+  `SHARED` for them (ADR-0037). A client may send an `Idempotency-Key` to replay a request later (ADR-0037).
+  To try the cache locally, start one: `podman run -d --rm --name sptarchive-redis -p
   127.0.0.1:6379:6379 docker.io/library/redis:7-alpine redis-server --maxmemory 128mb --maxmemory-policy
   allkeys-lru --save "" --appendonly no`, and set `ConnectionStrings__Redis=127.0.0.1:6379` for both the Api and
   the Archiver.
+- **Load tests.** `tests/load` holds three k6 scripts: `steady.js` (a hot answer at a fixed rate),
+  `stampede.js` (200 clients that miss one answer together) and `ttl.js` (when an answer expires). Install k6 and
+  run them against a running Api, for example `RATE=100 k6 run tests/load/steady.js`.
 - **Backups.** `scripts/backup.sh dump` writes a `pg_dump -Fc` with a checksum, copies it to
   `ARCHIVE_BACKUP_COPY_DIR` and proves that it restores (`scripts/backup.sh verify`). Keep the copy off the
   host. See `docs/runbooks/backup.md` (ADR-0011, TD-03 for the missing schedule).
@@ -184,7 +190,7 @@ The API is then at `http://localhost:8080/graphql`. Example:
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 262 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 272 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one

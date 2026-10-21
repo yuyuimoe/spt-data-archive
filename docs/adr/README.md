@@ -42,6 +42,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0034](0034-name-an-object-by-what-it-is.md) | Name an object by what it is | Accepted |
 | [0035](0035-take-official-data-from-a-mod-free-installation.md) | Take official data from an installation that loaded no mod | Accepted |
 | [0036](0036-let-several-imports-run-at-the-same-time.md) | Let several imports run at the same time | Accepted |
+| [0037](0037-survive-a-burst-on-one-answer.md) | Survive a burst on one answer, and let a client repeat a request | Proposed |
 
 ## Status meanings
 

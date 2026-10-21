@@ -233,6 +233,34 @@ Feature: Query the archive through a read-only GraphQL API
     And no response has the header "X-Cache"
     And only one of them waited for the cache
 
+  @unverified
+  Scenario: Requests that miss together run one query
+    Given the cache holds no answer for the query
+    When twenty clients send the same query at the same time
+    Then one query runs
+    And one response has the header "X-Cache" with the value "MISS"
+    And the other responses have the header "X-Cache" with the value "SHARED"
+
+  @unverified
+  Scenario: A client repeats a request with an idempotency key
+    When I send a query with the idempotency key "order-42-abc"
+    And I send the same query with the same idempotency key
+    Then the second response has the same body as the first
+    And it has the header "Idempotency-Replayed" with the value "true"
+
+  @unverified
+  Scenario: An idempotency key cannot answer a different request
+    When I send a query with the idempotency key "order-42-abc"
+    And I send another query with the same idempotency key
+    Then the response is a "409"
+    And the error code is "IDEMPOTENCY_KEY_REUSED"
+
+  @unverified
+  Scenario: A malformed idempotency key is refused
+    When I send a query with the idempotency key "short"
+    Then the response is a "400"
+    And the error code is "IDEMPOTENCY_KEY_INVALID"
+
   # ----------------------------------------------------------------- Limits
 
   @unverified
