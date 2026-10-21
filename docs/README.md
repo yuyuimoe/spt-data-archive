@@ -13,6 +13,7 @@
 | [security/audit-2026-10-21.md](security/audit-2026-10-21.md) | The security audit of the Api: findings, severity and fixes |
 | [load/capacity-2026-10-21.html](load/capacity-2026-10-21.html) | How much load the stack holds: the curve, the CPU, the pool, and what breaks first (ADR-0039) |
 | [research/document-store.md](research/document-store.md) | Whether DocumentDB and a `bson` column belong in our PostgreSQL, what they would cost, and what we do instead |
+| [research/storage-engine.md](research/storage-engine.md) | PostgreSQL against CouchDB and Cassandra on the same 132 MB file: storage, read time, the filters each one refuses, and why the disk really grows (TD-71) |
 
 ## Reading order
 

@@ -145,6 +145,25 @@ Three answers follow, and this ADR takes the first.
 The cluster setting `default_toast_compression = lz4` belongs with answer 1 and costs nothing: here it stored
 4% fewer bytes and read 2.5 times faster than pglz.
 
+### The driver ratified answer 1 with lz4, 2026-10-21
+
+The driver chose lz4. The migration `20261021225723_SetToastCompressionLz4` sets it on the 27 jsonb columns
+of the model, `compose.yaml` sets `default_toast_compression=lz4` for the column that a later migration
+adds, and `ToastCompressionTests` proves both halves: that every jsonb column asks for lz4, and that a
+value which does not fit in its row is really stored that way. The second test exists because the first is
+not enough. A server accepts `SET COMPRESSION lz4`, records it in `pg_attribute.attcompression`, and can
+still write pglz; and a value that is copied from another toasted column keeps the pointer of the source,
+so a careless probe reports the method of the source whatever the target asked for.
+
+Measured a second time on the same day, with `pg_total_relation_size` on the TOAST relation of a table that
+`COPY` loaded from the real file: **47,300,608 bytes with pglz and 45,400,064 with lz4**, and a read of one
+subfield took **127 ms and 36 ms**. The two runs agree within one page of 8 kB.
+
+The other two answers were compared against CouchDB 3.4.3 and Cassandra 5.0.9 on the same file, and neither
+one stores it smaller: CouchDB wrote 45,080,614 bytes and Cassandra 48,010,591, against the 45,400,064 of
+lz4, and each of them takes 2.0 seconds and 10.5 seconds to answer what PostgreSQL answers in 36 ms. The
+measurements and the verdict are in [docs/research/storage-engine.md](../research/storage-engine.md).
+
 ## Consequences
 
 - **Easier:** "What did this map mod change on woods?" has an answer with the old value and the new value.
@@ -222,4 +241,8 @@ Feature: A change to data that has no mod table becomes a row
 - Code: `src/SptArchive.Core/Canonical/DatabaseObjects.cs`,
   `src/SptArchive.Core/Entities/ModDatabaseObject.cs`, `src/SptArchive.Archiver/Runs/RunImporter.cs`.
 - Tech debt: TD-45 (this decision), TD-47 (the hash of an unheld file), TD-52 (a filter on a jsonb column),
-  TD-67 (the import of a real map is unmeasured), TD-69 (the storage of a large file).
+  TD-67 (the import of a real map is unmeasured), TD-69 (the storage of a large file), TD-71 (an official
+  release is stored as a full copy again).
+- Research: [docs/research/storage-engine.md](../research/storage-engine.md) (PostgreSQL against CouchDB and
+  Cassandra on the same 132 MB file), [docs/research/document-store.md](../research/document-store.md)
+  (`bson` through DocumentDB).

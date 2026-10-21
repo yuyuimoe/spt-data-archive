@@ -15,8 +15,11 @@ services:
       POSTGRES_USER: archive_owner
       POSTGRES_PASSWORD: ${ARCHIVE_OWNER_PASSWORD:?set ARCHIVE_OWNER_PASSWORD in .env}
       ARCHIVE_READER_PASSWORD: ${ARCHIVE_READER_PASSWORD:?set ARCHIVE_READER_PASSWORD in .env}
-    # Modest memory settings; raise shared_buffers if the host has room to spare.
-    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "work_mem=16MB", "-c", "max_connections=50"]
+    # Modest memory settings; raise shared_buffers if the host has room to spare. A jsonb value that does
+    # not fit in its row is stored with lz4 (ADR-0041): the same value in a few percent fewer bytes, read
+    # about two and a half times faster. The migration SetToastCompressionLz4 sets it on the columns that
+    # exist; this line sets it on any column that a later migration adds.
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "work_mem=16MB", "-c", "max_connections=50", "-c", "default_toast_compression=lz4"]
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro

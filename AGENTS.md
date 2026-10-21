@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Nine migrations exist and are applied, and 403 tests pass against a real Postgres: 381 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Ten migrations exist and are applied, and 406 tests pass against a real Postgres: 384 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 403 tests (22 are scenarios); needs the development database (below)
+dotnet test SptArchive.slnx             # 406 tests (22 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -117,8 +117,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, nine migrations are applied, and 403 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 381 xUnit
+- **Done:** the solution builds, ten migrations are applied, and 406 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 384 xUnit
   tests and 22 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
@@ -194,6 +194,15 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Next slice:** the baseline cache and the catalogue of the paths inside a jsonb document (TD-68). No map mod
   is imported since ADR-0041, so the dataset of one is a projection (TD-67), and a path filter over those rows
   reads every document of the table (TD-70).
+- **Storage is jsonb with lz4, and three engines were compared.** The migration `SetToastCompressionLz4` sets
+  lz4 on the 27 jsonb columns and `compose.yaml` sets it for the columns a later migration adds
+  (ADR-0041, ratified 2026-10-21). Measured against CouchDB 3.4.3 and Cassandra 5.0.9 on the same 132 MB map
+  file: PostgreSQL stores it in 45,400,064 bytes against 45,080,614 and 48,010,591, reads one subfield in 36 ms
+  against 2.0 s and 10.5 s, and is the only one of the three that answers an arbitrary filter, an order, an
+  offset page and a join, and writes 200 rows and a counter in one transaction. Each of the three wrote exactly
+  20.0 copies for 20 versions, so no engine deduplicates and TD-71 is the real disk cost: 97.7% of the locale
+  entries of 4.1.6 are byte-identical to one of 4.0.13, and `locale_entries` is 448 MB of the 609 MB of the
+  development archive. The measurements are in [docs/research/storage-engine.md](docs/research/storage-engine.md).
 - **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
   proxy), ADR-0040 (a jsonb filter by path, the whole-document field and its limits; the form of `eq` stays
   open, TD-65) and ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
