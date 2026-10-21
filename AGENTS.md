@@ -112,9 +112,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 - **CI is a script, and the pipeline has never run.** `scripts/ci.sh` runs the build, the tests, `check-docs.py` and
   `likec4 validate`, and stops at the first failure (TD-09). `.github/workflows/ci.yml` calls it on a `postgres:17`
-  service container, but the repository has no remote, so that file is untested (TD-60). On an empty database the
-  script stops at `dotnet test` with 313 of 314 passed, because one test needs the archived release 4.0.13
-  (TD-61).
+  service container, but the repository has no remote, so that file is untested (TD-60). On an empty database every
+  step passes and 314 of 314 tests pass, so a clean machine and an archive machine now agree.
 - **Done:** the solution builds, seven migrations are applied, and 314 tests pass (TD-01, TD-02, TD-04, TD-05,
   TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-53, TD-54).
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
