@@ -15,10 +15,14 @@ namespace SptArchive.Tests;
 /// </summary>
 public static class ApiHarness
 {
-    public static async Task<string> RunAsync(TestScope scope, string query)
+    public static async Task<string> RunAsync(TestScope scope, string query, List<string>? commands = null) =>
+        await RunAsync(scope, new OperationRequestBuilder().SetDocument(query).Build(), commands);
+
+    /// <summary>Runs a request that carries variables. <paramref name="commands"/> collects the SQL that the query ran.</summary>
+    public static async Task<string> RunAsync(TestScope scope, IOperationRequest request, List<string>? commands = null)
     {
         var services = new ServiceCollection();
-        services.AddSingleton<IDbContextFactory<ArchiveDbContext>>(new ScopeFactory(scope));
+        services.AddSingleton<IDbContextFactory<ArchiveDbContext>>(new ScopeFactory(scope, commands));
 
         // A failure that says only "Unexpected Execution Error" names no cause. The tests see the exception;
         // a client of the Api does not.
@@ -28,7 +32,7 @@ public static class ApiHarness
         var executor = await provider.GetRequiredService<IRequestExecutorProvider>()
             .GetExecutorAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await executor.ExecuteAsync(query, TestContext.Current.CancellationToken);
+        var result = await executor.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
         using var stream = new MemoryStream();
         var writer = System.IO.Pipelines.PipeWriter.Create(stream);
@@ -38,9 +42,9 @@ public static class ApiHarness
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    public static async Task<JsonElement> JsonAsync(TestScope scope, string query)
+    public static async Task<JsonElement> JsonAsync(TestScope scope, string query, List<string>? commands = null)
     {
-        var result = await RunAsync(scope, query);
+        var result = await RunAsync(scope, query, commands);
         return JsonDocument.Parse(result).RootElement.Clone();
     }
 
@@ -54,14 +58,22 @@ public static class ApiHarness
         return (error.GetProperty("extensions").GetProperty("code").GetString()!, error.GetProperty("message").GetString()!);
     }
 
-    private sealed class ScopeFactory(TestScope scope) : IDbContextFactory<ArchiveDbContext>
+    private sealed class ScopeFactory(TestScope scope, List<string>? commands) : IDbContextFactory<ArchiveDbContext>
     {
         public ArchiveDbContext CreateDbContext()
         {
-            var options = new DbContextOptionsBuilder<ArchiveDbContext>()
+            var builder = new DbContextOptionsBuilder<ArchiveDbContext>()
                 .UseNpgsql(scope.Connection)
-                .UseSnakeCaseNamingConvention()
-                .Options;
+                .UseSnakeCaseNamingConvention();
+
+            if (commands is not null)
+            {
+                builder.LogTo(
+                    (eventId, _) => eventId == Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.CommandExecuted,
+                    data => commands.Add(((Microsoft.EntityFrameworkCore.Diagnostics.CommandExecutedEventData)data).Command.CommandText));
+            }
+
+            var options = builder.Options;
 
             var db = new ArchiveDbContext(options);
             db.Database.UseTransaction(scope.Transaction);

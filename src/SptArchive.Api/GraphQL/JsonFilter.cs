@@ -5,19 +5,38 @@ using SptArchive.Core.Entities;
 namespace SptArchive.Api.GraphQL;
 
 /// <summary>
-/// A filter over a jsonb column offers comparison only. The column is jsonb, so Postgres refuses the
-/// text operations that <c>StringOperationFilterInput</c> announces: <c>contains</c> would become
-/// <c>LIKE</c> on a jsonb value, which has no such operator, and the request fails in the database.
-/// Equality and inequality work, because Postgres compares two jsonb values by their content, so the
-/// key order and the spacing of the text do not matter. Filtering by a path inside the document is
-/// not built yet (TD-52).
+/// A filter over a jsonb column (ADR-0040). The column is jsonb, so Postgres refuses the text operations that
+/// <c>StringOperationFilterInputType</c> announces: <c>contains</c> would become <c>LIKE</c> on a jsonb value,
+/// which has no such operator, and the request fails in the database. The type offers only operations that
+/// <see cref="JsonOperationHandler"/> translates to jsonb operators:
+/// <c>eq</c> and <c>neq</c> compare the whole document, as JSON text (a string needs its quotes); <c>pathEq</c> and
+/// <c>pathNeq</c> compare the value at a path inside the document, as a JSON value.
 /// </summary>
-public sealed class JsonOperationFilterInputType : StringOperationFilterInputType
+public sealed class JsonOperationFilterInputType : FilterInputType
 {
     protected override void Configure(IFilterInputTypeDescriptor descriptor)
     {
-        descriptor.Operation(DefaultFilterOperations.Equals).Type<StringType>();
-        descriptor.Operation(DefaultFilterOperations.NotEquals).Type<StringType>();
+        descriptor.Operation(JsonFilterOperations.DocumentEquals).Type<StringType>()
+            .Description("The whole document equals this JSON text. A string is written with its quotes: \"\\\"Bear\\\"\".");
+        descriptor.Operation(JsonFilterOperations.DocumentNotEquals).Type<StringType>()
+            .Description("The whole document differs from this JSON text.");
+        descriptor.Operation(JsonFilterOperations.PathEquals).Type<JsonPathConditionType>()
+            .Description("The document holds this JSON value at this path.");
+        descriptor.Operation(JsonFilterOperations.PathNotEquals).Type<JsonPathConditionType>()
+            .Description("The document holds another value at this path, or nothing at it.");
+    }
+}
+
+/// <summary>The input of <c>pathEq</c> and <c>pathNeq</c>. <see cref="JsonOperationHandler"/> reads it from the query document.</summary>
+public sealed class JsonPathConditionType : InputObjectType
+{
+    protected override void Configure(IInputObjectTypeDescriptor descriptor)
+    {
+        descriptor.Name("JsonPathConditionInput");
+        descriptor.Field("path").Type<NonNullType<ListType<NonNullType<StringType>>>>()
+            .Description("The object keys and array indexes from the root of the document, as text, for example [\"Nested\", \"list\", \"1\"]. 1 to 10 segments.");
+        descriptor.Field("value").Type<AnyType>()
+            .Description("Any JSON value. Write null to compare with JSON null. A number, a string, a list and an object compare by content.");
     }
 }
 

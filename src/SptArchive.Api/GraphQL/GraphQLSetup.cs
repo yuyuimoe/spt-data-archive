@@ -1,3 +1,4 @@
+using HotChocolate.Data.Filters.Expressions;
 using HotChocolate.Execution.Configuration;
 using SptArchive.Core.Data;
 
@@ -32,8 +33,8 @@ public static class GraphQLSetup
             .AddTypeExtension<ModFileJson>()
             .AddTypeExtension<ModDataObservationJson>()
             .AddTypeExtension<ArchiveRunJson>()
-            // A jsonb column offers comparison only: the text operations a string filter announces fail in
-            // Postgres against jsonb (JsonFilter.cs).
+            // A jsonb column offers comparison, whole or by path, and no text matching: the text operations a
+            // string filter announces fail in Postgres against jsonb (JsonFilter.cs, ADR-0040).
             .AddType<ItemFilter>()
             .AddType<ModItemFilter>()
             .AddType<CustomizationFilter>()
@@ -50,11 +51,22 @@ public static class GraphQLSetup
             .AddType<ModFileFilter>()
             .AddType<ModDataObservationFilter>()
             .AddType<ArchiveRunFilter>()
+            // A JSON value that the shape check passes and PostgreSQL refuses is an error with a code (ADR-0040).
+            .AddErrorFilter<JsonValueErrorFilter>()
             // The default security policy switches introspection off outside Development. A public data browser
             // needs the schema, so it stays on.
             .DisableIntrospection(false)
             .AddProjections()
-            .AddFiltering()
+            .AddFiltering(filtering =>
+            {
+                filtering.AddDefaults();
+                filtering.Operation(JsonFilterOperations.DocumentEquals).Name("eq");
+                filtering.Operation(JsonFilterOperations.DocumentNotEquals).Name("neq");
+                filtering.Operation(JsonFilterOperations.PathEquals).Name("pathEq");
+                filtering.Operation(JsonFilterOperations.PathNotEquals).Name("pathNeq");
+                filtering.AddProviderExtension(new QueryableFilterProviderExtension(provider =>
+                    provider.AddFieldHandler(new JsonOperationHandler())));
+            })
             .AddSorting()
             .ModifyPagingOptions(o =>
             {

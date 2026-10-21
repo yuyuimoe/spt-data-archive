@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 316 tests (297 xUnit tests and 19 Gherkin scenarios). Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 354 tests (335 xUnit tests and 19 Gherkin scenarios). Seven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -183,6 +183,10 @@ answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
     totalCount
     nodes { datasetId kind templateId path op oldValue newValue }
   }
+  # The value at a path inside a JSON column. A position in a list is a segment written as text (ADR-0040).
+  slotted: items(where: { props: { pathEq: { path: ["Slots"], value: 5 } } }, first: 10) {
+    nodes { id name }
+  }
 }
 ```
 
@@ -237,7 +241,8 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
   host. See `docs/runbooks/backup.md` (ADR-0011, TD-03 for the missing schedule).
 - **Limits.** Page size is capped at 200, a request body at 1 MB, and a query at depth 10, 10 seconds and a
   cost limit of 20,000 field cost and 2,000 objects — nine full pages of rows with every field. A JSON column
-  offers comparison only. The Api keeps its own rate limit per client (ADR-0038) and TLS ends at the proxy in
+  is filtered whole (`eq`, `neq`, as JSON text) or by the value at a path (`pathEq`, `pathNeq`, ADR-0040); it
+  offers no text matching. The Api keeps its own rate limit per client (ADR-0038) and TLS ends at the proxy in
   front of it (ADR-0039); a limit that a whole deployment shares still belongs to the edge in front of that
   (Pangolin in production).
 
@@ -245,11 +250,12 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 
 - **One feature file runs as a test.** Reqnroll runs the 19 scenarios of `docs/specs/mod-api.feature` inside
   `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
-  (TD-62). The 297 xUnit tests check the schema, the import path, the canonical form and the run import.
+  (TD-62). The 335 xUnit tests check the schema, the import path, the canonical form and the run import.
 - **The CI pipeline runs on GitHub.** A push to `master` runs `scripts/ci.sh` on a `postgres:17` service container
   in 89 seconds, and the run of `02a976c` passed every step (run `39647853715`, TD-09). The workflow is one job and
   one script, so a check added to `scripts/ci.sh` reaches the pipeline with no second edit (TD-63: the actions still
   target Node.js 20).
+=======
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
   `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). The baseline cache
   and the catalog are still action items of ADR-0013, and a change to a map, a bot type or a price is hashed but
@@ -269,4 +275,5 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
   offer is named by its trader, its item and what the player pays with (ADR-0032, ADR-0034 decision 8).
 - **A change to a table without a `mod_*` row is not stored.** A location, a bot type, a price and a handbook file
   leave no row; the canonical hash of the changed file keeps two datasets apart (TD-45).
-- **JSON columns are exposed as JSON text** in GraphQL (`props`, `data`, `base`, ...), not as a native JSON scalar.
+- **JSON columns are `Any` values** in GraphQL (`props`, `data`, `base`, ...), not a typed JSON scalar (TD-15). A client
+  filters one by path, and reads the value at a path as JSON (ADR-0040); it cannot select a sub-field.

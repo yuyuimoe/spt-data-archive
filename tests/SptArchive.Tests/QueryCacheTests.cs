@@ -34,6 +34,23 @@ public sealed class QueryCacheTests
     }
 
     [Fact]
+    public async Task A_filter_on_another_path_or_value_does_not_share_an_answer()
+    {
+        var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));
+        var middleware = Middleware(cache, next: async context => await context.Response.WriteAsync("{\"data\":{}}"));
+
+        static string Filter(string path, string value) =>
+            $$"""{ items(where: { props: { pathEq: { path: ["{{path}}"], value: {{value}} } } }) { nodes { id } } }""";
+
+        var slotsFive = await SendAsync(middleware, Filter("Slots", "5"));
+        var slotsThree = await SendAsync(middleware, Filter("Slots", "3"));
+        var weightFive = await SendAsync(middleware, Filter("Weight", "5"));
+        var again = await SendAsync(middleware, Filter("Slots", "5"));
+
+        Assert.Equal(["MISS", "MISS", "MISS", "HIT"], [slotsFive, slotsThree, weightFive, again]);
+    }
+
+    [Fact]
     public async Task A_stored_answer_is_served_without_running_the_query()
     {
         var cache = new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()));

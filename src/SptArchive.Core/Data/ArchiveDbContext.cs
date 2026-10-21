@@ -58,6 +58,8 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
     protected override void OnModelCreating(ModelBuilder b)
     {
+        JsonPathFunctions.Register(b);
+
         // ---- Server releases and runs -------------------------------------------------------------
         b.Entity<SptVersion>(e =>
         {

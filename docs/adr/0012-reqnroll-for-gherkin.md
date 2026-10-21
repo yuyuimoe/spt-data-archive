@@ -113,8 +113,9 @@ copy of the same test and it could not fail alone. The driver's decision: a dupl
 they run in the same `dotnet test`. No scenario changed.
 - **What is lost.** A test of that surface that runs without Reqnroll. Nothing else: any red scenario fails
 the same suite.
-- **Counts.** The suite holds 316 tests: 297 xUnit tests and 19 scenarios. The numbers in the first amendment
-(314 xUnit, 333 total) describe the suite before this removal.
+- **Counts.** The suite held 316 tests when this amendment was written: 297 xUnit tests and 19 scenarios, 354
+after ADR-0040 added 38. The numbers in the first amendment (314 xUnit, 333 total) describe the suite before
+this removal.
 
 ## Links
 

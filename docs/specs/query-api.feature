@@ -352,6 +352,173 @@ Feature: Query the archive through a read-only GraphQL API
     And the answer names no server
     And a plain request is answered with a redirect to HTTPS
 
+  # ------------------------------------------- Filter by a path (ADR-0040)
+
+  Scenario: A client finds the rows whose JSON document holds a value at a path
+    Given the item "A1" has the property "Slots" 5 in its "props" column
+    And the item "B1" has the property "Slots" 3 in its "props" column
+    When I query "items" where "props" has the value 5 at the path "Slots"
+    Then the answer has the item "A1"
+    And the answer does not have the item "B1"
+
+  Scenario: A path reaches into an object and an array
+    Given the item "A1" has the property "Nested" with the list [1, 2] in its "props" column
+    When I query "items" where "props" has the value 2 at the path "Nested", "list", "1"
+    Then the answer has the item "A1"
+    When I query "items" where "props" has the value 2 at the path "Nested", "list", "0"
+    Then the answer does not have the item "A1"
+
+  Scenario Outline: A path filter compares a JSON value of any type
+    Given the item "A1" has the property "<property>" with the JSON value <json> in its "props" column
+    When I query "items" where "props" has the value <json> at the path "<property>"
+    Then the answer has the item "A1"
+
+    Examples:
+      | property | json    |
+      | Slots    | 5       |
+      | Weight   | 0.5     |
+      | Name     | "Bear"  |
+      | Flag     | true    |
+      | Nothing  | null    |
+
+  Scenario: A path filter compares an object or a list by its content
+    Given the item "A1" has the property "Nested" with the object {"a": 1, "b": [1, 2]} in its "props" column
+    When I query "items" where "props" has the object {b: [1, 2], a: 1} at the path "Nested"
+    Then the answer has the item "A1"
+    When I query "items" where "props" has the list [2, 1] at the path "Nested", "b"
+    Then the answer does not have the item "A1"
+
+  Scenario: A path filter does not mistake one JSON type for another
+    Given the item "A1" has the property "Slots" 5 in its "props" column
+    When I query "items" where "props" has the string "5" at the path "Slots"
+    Then the answer does not have the item "A1"
+
+  Scenario: A number is compared by its value and not by its spelling
+    Given the item "A1" has the property "Slots" 5.0 in its "props" column
+    When I query "items" where "props" has the value 5 at the path "Slots"
+    Then the answer has the item "A1"
+
+  Scenario: A large integer is not rounded
+    Given the item "A1" has the property "Id" 12345678901234567890 in its "props" column
+    And the item "B1" has the property "Id" 12345678901234567891 in its "props" column
+    When I query "items" where "props" has the value 12345678901234567890 at the path "Id"
+    Then the answer has the item "A1"
+    And the answer does not have the item "B1"
+
+  Scenario: The negation keeps the rows that lack the path
+    Given the item "A1" has the property "Slots" 5 in its "props" column
+    And the item "B1" has the property "Slots" 3 in its "props" column
+    And the item "C1" has no property "Slots" in its "props" column
+    When I query "items" where "props" has not the value 5 at the path "Slots"
+    Then the answer has the items "B1" and "C1"
+    And the answer does not have the item "A1"
+
+  Scenario: Two path filters narrow one answer
+    Given the item "A1" has the properties "Slots" 5 and "Weight" 0.5 in its "props" column
+    And the item "B1" has the properties "Slots" 5 and "Weight" 2 in its "props" column
+    When I query "items" where "props" has the value 5 at the path "Slots" and the value 0.5 at the path "Weight"
+    Then the answer has the item "A1"
+    And the answer does not have the item "B1"
+
+  Scenario: A path filter reads its path and value from variables
+    Given the item "A1" has the property "Slots" 5 in its "props" column
+    When I query "items" with the path and the value in variables
+    Then the answer has the item "A1"
+
+  Scenario: A path segment is data and never part of the statement
+    Given the item "A1" has a property whose name holds quotes, commas, braces and "--"
+    When I query "items" where "props" has its value at the path of that name
+    Then the answer has the item "A1"
+    And the database statement does not contain the name
+
+  Scenario: Every JSON column offers the same filter
+    When I read the GraphQL schema
+    Then the type "JsonOperationFilterInput" has the operations "eq", "neq", "pathEq" and "pathNeq"
+    And every jsonb column of the model has a filter field of that type
+
+  Scenario: A path filter extracts the path in the database and never matches text
+    When I query "items" where "props" has the value 5 at the path "Slots", "x"
+    Then the database runs one "jsonb_extract_path" over the column
+    And the database runs no "LIKE" on the column
+
+  Scenario Outline: A bad path is refused with its own error code
+    When I query "items" where "props" has the value 5 at the path <path>
+    Then the response has the error code "JSON_PATH_MALFORMED"
+    And the response has no empty list
+
+    Examples:
+      | path                                |
+      | no segment                          |
+      | an empty segment                    |
+      | a segment of more than 256 chars    |
+      | more than 10 segments               |
+      | a segment with a NUL character      |
+
+  Scenario: The longest accepted path is 10 segments of 256 characters
+    When I query "items" where "props" has the value 5 at a path of 10 segments
+    And I query "items" where "props" has the value 5 at a path of one segment of 256 characters
+    Then neither response has an error
+
+  Scenario: A path filter without a value is refused
+    When I query "items" where "props" has a path and no value
+    Then the response has the error code "JSON_VALUE_MALFORMED"
+
+  Scenario: A value nested too deep is refused
+    When I query "items" where "props" has a list nested 64 levels deep at the path "Slots"
+    Then the response has the error code "JSON_VALUE_MALFORMED"
+
+  Scenario Outline: A value the database refuses is an error and not an internal error
+    When I query "items" where "props" has the value <value> at the path "Slots"
+    Then the response has the error code "JSON_VALUE_REJECTED"
+    And the response is not "Unexpected Execution Error"
+
+    Examples:
+      | value       |
+      | 1e999999    |
+      | "a\u0000b"  |
+
+  Scenario: A whole-document comparison with text that is not JSON is refused
+    When I query "items" where "props" equals the text "x"
+    Then the response has the error code "JSON_VALUE_MALFORMED"
+    And the error says that the value is JSON text and shows the quoted form
+    And the response is not "Unexpected Execution Error"
+
+  Scenario Outline: A whole-document comparison takes a JSON scalar written as JSON text
+    Given the item "A1" has the JSON document <document> in its "props" column
+    And the item "B1" has the JSON document {"Slots": 5} in its "props" column
+    When I query "items" where "props" equals the text <text>
+    Then the answer has the item "A1"
+    When I query "items" where "props" differs from the text <text>
+    Then the answer has the item "B1"
+    And the answer does not have the item "A1"
+
+    Examples:
+      | document | text     |
+      | "x"      | "\"x\""  |
+      | 5        | "5"      |
+      | true     | "true"   |
+      | null     | "null"   |
+
+  Scenario: A filter term on a JSON column keeps the other filters
+    Given the items "A1" and "A2" have the property "Slots" 5 in their "props" column
+    And the item "B1" has the property "Slots" 3 in its "props" column
+    When I query "items" where the name starts with "A" and "props" has the value 5 at the path "Slots"
+    Then the answer has the items "A1" and "A2"
+
+  Scenario: A filtered answer is cached like any other
+    When I send a path filter for the value 5 and then for the value 3
+    Then both responses have the header "X-Cache" with the value "MISS"
+    When I send the filter for the value 5 again
+    Then the response has the header "X-Cache" with the value "HIT"
+
+  Scenario: A path filter on a full page is inside the cost limit
+    When I query one page of 200 rows with a path filter and select every field of a row
+    Then the response has no cost error
+
+  Scenario: A filter with thousands of terms is refused by the cost limit
+    When I send a query with 3000 path filters joined by "or"
+    Then the response has the error "HC0047"
+
   # ---------------------------------------------------------- Not built yet
 
   @backlog

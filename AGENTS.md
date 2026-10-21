@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Seven migrations exist and are applied, and 316 tests pass against a real Postgres: 297 xUnit tests and the 19 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Seven migrations exist and are applied, and 354 tests pass against a real Postgres: 335 xUnit tests and the 19 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 316 tests (19 are scenarios); needs the development database (below)
+dotnet test SptArchive.slnx             # 354 tests (19 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -113,13 +113,13 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **CI is a script, and the pipeline runs it.** `scripts/ci.sh` runs the build, the tests, `check-docs.py` and
   `likec4 validate`, and stops at the first failure (TD-09). `.github/workflows/ci.yml` calls it on a `postgres:17`
   service container; the run of `02a976c` on `github.com/yuyuimoe/spt-data-archive` passed every step in 89 seconds
-  (run `39647853715`, TD-60). On an empty database every step passes and all 316 tests pass, so a clean machine and
+  (run `39647853715`, TD-60). On an empty database every step passes and every test passes, so a clean machine and
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, seven migrations are applied, and 316 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-53, TD-54), 297 xUnit tests and
-  19 Gherkin scenarios.
+- **Done:** the solution builds, seven migrations are applied, and 354 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 335 xUnit
+  tests and 19 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -133,9 +133,14 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   answer comes from the latest archived release when the argument is left out (ADR-0014, ADR-0019). A bad
   value is an error with its own code and never an empty list: `SPT_VERSION_UNKNOWN`,
   `SPT_VERSION_MALFORMED`, and `SPT_ARCHIVE_EMPTY` when the archive holds no release at all. The jsonb
-  columns are `Any` values, so a client reads JSON as JSON (TD-15), and such a column offers comparison only,
-  because the text operations would become `LIKE` against jsonb (TD-52). A request is bounded by 1 MB, depth
-  10, 10 seconds and a cost limit that serves nine full pages and refuses eleven.
+  columns are `Any` values, so a client reads JSON as JSON (TD-15). A client filters such a column whole
+  (`eq`, `neq`, as JSON text) or by the value at a path: `props: { pathEq: { path: ["Slots"], value: 5 } }`
+  (ADR-0040, TD-52). The path filter becomes `jsonb_extract_path(doc, segment, ...) = value` with every segment
+  and the value as a parameter, and a column offers no text matching, because that would become `LIKE` against
+  jsonb. A bad path or value is an error with its own code and never an empty list: `JSON_PATH_MALFORMED`,
+  `JSON_VALUE_MALFORMED` and `JSON_VALUE_REJECTED` (TD-55). A path filter has no index and no timing yet
+  (TD-64). A request is bounded by 1 MB, depth 10, 10 seconds and a cost limit that serves nine full pages and
+  refuses eleven.
 - **The Api reads a mod dataset.** `modDatasets` and `modDataset` serve the content of one mod version, with
   `modTemplates` (the operation of each touched object), `modChangePaths` (one row per changed value, with the
   old and the new value as JSON), `modFiles` and `modFile` (the manifest and the text of a configuration file),
@@ -177,10 +182,11 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 19 scenarios of
   `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
   each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
-- **Next slice:** the rows of a location and a bot type (TD-45), JSON filtering by path (TD-52) and the baseline cache.
-- **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api) and ADR-0039 (TLS at a
-  proxy) are Proposed and await Yui. ADR-0012 (Reqnroll for Gherkin), ADR-0030 (one .NET tool for run, export
-  and import), ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
+- **Next slice:** the rows of a location and a bot type (TD-45) and the baseline cache.
+- **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
+  proxy) and ADR-0040 (a jsonb filter by path; the form of `eq` stays open, TD-65) are Proposed and await Yui.
+  ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
+  ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0005 and ADR-0010 are superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031
   to 0037 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
