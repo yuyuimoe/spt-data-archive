@@ -43,6 +43,7 @@ public sealed class ModApiSteps
         ["modDataObservations"] = "sptVersion outcome kind datasetId",
         ["archiveRuns"] = "id kind purpose status sptVersion result startedAt targetModGuid targetVersion",
         ["archiveRun"] = "id kind purpose status sptVersion result startedAt targetModGuid targetVersion baselineRelease",
+        ["modDatabaseObjects"] = "datasetId kind templateId part bytes",
     };
 
     private readonly Dictionary<string, Guid> _datasets = [];
@@ -52,6 +53,7 @@ public sealed class ModApiSteps
     private readonly Dictionary<string, JsonElement> _responses = [];
 
     private TestScope? _scope;
+    private int? _maxDocumentBytes;
     private ArchiveRun? _runOfD1;
     private ArchiveRun? _officialRun;
     private string _lastField = "";
@@ -155,6 +157,38 @@ public sealed class ModApiSteps
             dataset, address, "/_props/Weight", ModChangePathOperation.Set, Number(from), Number(to)));
         await scope.Db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
+
+    [Given("the dataset {string} adds the location {string} with the file {string} holding:")]
+    public async Task GivenTheDatasetAddsTheLocation(string dataset, string location, string part, string data)
+    {
+        var scope = await ScopeAsync();
+        var ct = TestContext.Current.CancellationToken;
+        var datasetId = _datasets[dataset];
+
+        // ADR-0041: the template says that the object exists, and one row keeps the source of one file.
+        scope.Db.ModTemplates.Add(new ModTemplate
+        {
+            DatasetId = datasetId,
+            Kind = ModTemplateKind.Location,
+            TemplateId = location,
+            Op = ModTemplateOperation.Added,
+        });
+
+        scope.Db.ModDatabaseObjects.Add(new ModDatabaseObject
+        {
+            DatasetId = datasetId,
+            Kind = ModTemplateKind.Location,
+            TemplateId = location,
+            Part = part,
+            Data = data,
+            Bytes = Encoding.UTF8.GetByteCount(data),
+        });
+
+        await scope.Db.SaveChangesAsync(ct);
+    }
+
+    [Given("the Api serves at most {int} bytes of one document")]
+    public void GivenTheApiServesAtMostBytesOfOneDocument(int bytes) => _maxDocumentBytes = bytes;
 
     [Given("the dataset {string} holds the file {string}")]
     public async Task GivenTheDatasetHoldsTheFile(string dataset, string path)
@@ -289,6 +323,14 @@ public sealed class ModApiSteps
 
     [When("I query {string}")]
     public Task WhenIQuery(string field) => QueryAsync(field, null);
+
+    [When("I ask for the whole document of {string} in the dataset {string}")]
+    public Task WhenIAskForTheWholeDocument(string location, string dataset) =>
+        RunAsync("modDatabaseObjects", $$"""
+            { modDatabaseObjects(first: 10, where: { datasetId: { eq: "{{_datasets[dataset]}}" }, templateId: { eq: {{Literal(location)}} } }) {
+                nodes { part bytes rawJson }
+              } }
+            """);
 
     [When("I query {string} with the text operation {string} on {string}")]
     public Task WhenIQueryWithTheTextOperation(string field, string operation, string column) =>
@@ -552,7 +594,36 @@ public sealed class ModApiSteps
         Assert.Equal(run.TargetVersion, Row().GetProperty("targetVersion").GetString());
     }
 
+    // ------------------------------------------------------- Objects that have no table of their own
+
+    [Then("the answer has one object row for the part {string} of {int} bytes")]
+    public void ThenTheAnswerHasOneObjectRowForThePartOfBytes(string part, int bytes)
+    {
+        var row = Assert.Single(Nodes().EnumerateArray());
+        Assert.Equal(part, row.GetProperty("part").GetString());
+        Assert.Equal("location", row.GetProperty("kind").GetString());
+
+        // The size is a field and not a length that the client counts: it decides, before a byte of the
+        // document is read, whether the Api serves it.
+        Assert.Equal(bytes, row.GetProperty("bytes").GetInt64());
+    }
+
+    [Then("the whole document is the object that the run wrote")]
+    public void ThenTheWholeDocumentIsTheObjectThatTheRunWrote()
+    {
+        var row = Assert.Single(Nodes().EnumerateArray());
+        Assert.Equal("lighthouse", row.GetProperty("rawJson").GetProperty("Id").GetString());
+    }
+
     // ------------------------------------------------------------------------------------- Limits
+
+    [Then("the answer is the error {string}")]
+    public void ThenTheAnswerIsTheError(string code)
+    {
+        var (answer, message) = ApiHarness.Error(Response());
+        Assert.Equal(code, answer);
+        Assert.Contains("bytes", message);
+    }
 
     [Then("the response has an error that names {string}")]
     public void ThenTheResponseHasAnErrorThatNames(string name)
@@ -596,7 +667,10 @@ public sealed class ModApiSteps
         // One root field per request: two root fields of one document run at the same time, and the test
         // transaction holds one connection. A real request opens a connection of its own.
         _lastField = field;
-        _responses[field] = await ApiHarness.JsonAsync(await ScopeAsync(), query);
+        _responses[field] = await ApiHarness.JsonAsync(
+            await ScopeAsync(),
+            query,
+            rawJson: _maxDocumentBytes is { } bytes ? limits => limits.MaxValueBytes = bytes : null);
     }
 
     private JsonElement Response() => _responses[_lastField];

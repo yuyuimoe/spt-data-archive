@@ -37,11 +37,15 @@ source of an added object in a new table.**
    `price` and `handbook`. The three kind checks widen. No table is renamed and no row is copied
    (migration `20261021180615_AddDatabaseObjects`).
 
-2. **`mod_database_objects` holds the source of an added object, one row for each file.** Its key is
-   `(dataset_id, kind, template_id, part)`. `part` names the file of a location (`base`, `looseLoot`), and
-   it is empty for the four kinds that have one file. A row is therefore never larger than one file. The
-   row holds the object as the run wrote it, in `jsonb` (ADR-0002). The table cascades from the dataset and
-   from the template row.
+2. **`mod_database_objects` holds the source of an added object.** Its key is
+   `(dataset_id, kind, template_id, part)`. A location is a directory, so it holds one row for each of its
+   files and `part` names the file (`base`, `looseLoot`). The other four kinds have one file and one value,
+   so their `part` is empty and the row holds that value: the document of a bot type, the object of a
+   hideout part, the number of a price, the entry of a handbook. No row holds more than one file, and no row
+   holds a directory. The row keeps the source as the run wrote it, in `jsonb` (ADR-0002), and it states the
+   size of that source in `bytes`, a column of its own, because the Api decides with it whether it may read
+   the document at all (ADR-0040, amendment 1, and the measurement below). The table cascades from the
+   dataset and from the template row.
 
 3. **A modified or a removed object has no row in `mod_database_objects`.** Its changed values are rows of
    `mod_change_paths`, one row for each leaf, as for an item (ADR-0032, decision 1). A path starts with the
@@ -73,8 +77,10 @@ source of an added object in a new table.**
 9. **No official table is touched** (ADR-0003). Every row is keyed by the dataset id, and no official table
    holds a location, a bot type, a hideout part, a price or a handbook entry (ADR-0035).
 
-10. **The Api does not expose these rows yet.** That is ADR-0032 action item 7. The read-only role can read
-    the table, and it cannot write it.
+10. **The Api exposes these rows as a view** (ADR-0032 action item 7). `modDatabaseObjects` and
+    `modDatabaseObject` serve one row, its small facts as fields, `pathEq` over its document, and the whole
+    document as `rawJson`, which costs a hundred times a small field and is refused above a limit of bytes
+    (ADR-0040, amendment 1). The read-only role can read the table, and it cannot write it.
 
 ## Options Considered
 
@@ -102,11 +108,51 @@ The second trade-off is that one file becomes one row. A 126 MB `jsonb` value is
 the cost of a reader that must reassemble it. The archive keeps the file whole, so a later split is a
 change to the importer alone.
 
+### What a document of that size costs, measured on 2026-10-21
+
+PostgreSQL 17.11, `default_toast_compression = pglz`. The export of WTT-Armory holds 562 MB under
+`locations/`, and its largest file, `lighthouse/looseLoot.json`, is 132,164,983 bytes (126 MiB).
+
+| Form | Bytes | Note |
+|------|-------|------|
+| the file on disk | 132,164,983 | what the run wrote |
+| `jsonb`, stored with pglz | 47,308,800 | the default, TOAST compresses every value above 2 KB |
+| `jsonb`, stored with lz4 | 45,408,256 | `ALTER COLUMN … SET COMPRESSION lz4` |
+| `text`, stored with pglz | 43,335,680 | a text column compresses a little better than jsonb |
+| `jsonb` in memory | 174,699,552 | what one read assembles |
+| gzip -6 of the file | 24,546,959 | 5.4 times the file |
+| zstd -3 of the file | 14,267,278 | 9.3 times the file |
+
+So **PostgreSQL does compress a jsonb column by default**, at about 2.8 times the file, and the answer to
+"is it 126 MB in the row" is no: it is 45 MB of storage and 175 MB of memory per read.
+
+Reading costs more than storing. On that row, `data -> 'spawnpointCount'` takes 138 ms with pglz and 56 ms
+with lz4, and one `pathEq` filter over it 166 ms, because PostgreSQL detoasts the whole value for any part
+of it. Casting the stored text back to jsonb costs 1,265 ms. The cast at import runs at about 70 MB/s, so the
+562 MB of a map directory is roughly eight seconds of parsing, well inside the 120 seconds of lease silence
+(ADR-0036), but no map run has been imported since the decision, so that number is a projection (TD-67).
+
+Three answers follow, and this ADR takes the first.
+
+1. **Keep `jsonb` and pay about twice the storage of gzip.** It is the only form in which `pathEq` is a
+   database question with an error code, and the price of the other two answers is a filter that moves into
+   the application.
+2. **Store the file as a compressed `bytea` and decompress it in the request, with a cache of decompressed
+   files on disk.** It halves the bytes and loses every filter, and it adds a second cache to invalidate on a
+   container that writes nothing today (TD-69).
+3. **Keep the file outside PostgreSQL**, in an object store, and keep the rows that name it.
+
+The cluster setting `default_toast_compression = lz4` belongs with answer 1 and costs nothing: here it stored
+4% fewer bytes and read 2.5 times faster than pglz.
+
 ## Consequences
 
 - **Easier:** "What did this map mod change on woods?" has an answer with the old value and the new value.
   A map mod no longer stores a dataset with no row. A price and a handbook entry follow the same rule as an
   item, so a client learns one shape. An id that a run mints does not make a new dataset.
+- **Easier:** The Api serves the rows, so "what did this map mod change on woods" is one GraphQL query.
+- **Harder:** The archive keeps 45 MB where gzip would keep 24 MB, for every map file that a mod adds, because
+  a filter is worth more than the bytes (TD-69).
 - **Harder:** A dataset of a map mod grows by the size of the files it adds. A location is a directory, so
   the importer reads every file of a changed map even when one file changed. No index serves a query on
   `mod_change_paths` by path yet (TD-45 predecessor, TD-52).
@@ -156,15 +202,24 @@ Feature: A change to data that has no mod table becomes a row
 3. [x] Write the templates, the paths, the source rows and the id map in the import transaction
    (`RunImporter`).
 4. [x] Count the five kinds in the result of a run (`RunResult`).
-5. [ ] Expose the rows in the Api (ADR-0032 action item 7).
-6. [ ] Measure the size of the dataset of a real map mod, and the time to import it.
+5. [x] Expose the rows in the Api (ADR-0032 action item 7): `modDatabaseObjects`, `modDatabaseObject`,
+   `pathEq` and `rawJson`, with the scenarios under "Objects that have no table of their own" in
+   `docs/specs/mod-api.feature` and `ObjectApiTests`.
+6. [x] Promote the size of the source to `mod_database_objects.bytes` (`20261021213335_AddObjectRowSize`).
+7. [ ] Import one real map mod and measure the dataset, the storage and the time (TD-67). The sizes of the
+   files are measured; the import is not.
+8. [ ] Decide whether a large file leaves `jsonb` for a compressed value (TD-69), and whether the cluster
+   sets `default_toast_compression = lz4`.
 
 ## Links
 
-- Specs: `docs/specs/mod-registry.feature`, section "Change to data that has no mod table".
-- ADR-0002 (the source is kept whole), ADR-0003 (official data and mod data stay apart), ADR-0028
+- Specs: `docs/specs/mod-registry.feature`, section "Change to data that has no mod table", and
+  `docs/specs/mod-api.feature`, section "Objects that have no table of their own" (these run as tests).
+- ADR-0002 (the source is kept whole), ADR-0003 (official data and mod data stay apart), ADR-0040 (a filter by
+  path, and the whole-document field), ADR-0028
   (canonical form and volatile paths), ADR-0029 (the content hash), ADR-0032 (one row for each changed
   value), ADR-0034 (an object is named by what it is), ADR-0035 (official data comes from a mod-free run).
 - Code: `src/SptArchive.Core/Canonical/DatabaseObjects.cs`,
   `src/SptArchive.Core/Entities/ModDatabaseObject.cs`, `src/SptArchive.Archiver/Runs/RunImporter.cs`.
-- Tech debt: TD-45 (this decision), TD-47 (the hash of an unheld file), TD-52 (a filter on a jsonb column).
+- Tech debt: TD-45 (this decision), TD-47 (the hash of an unheld file), TD-52 (a filter on a jsonb column),
+  TD-67 (the import of a real map is unmeasured), TD-69 (the storage of a large file).

@@ -34,5 +34,14 @@ public class ModDatabaseObject
     /// <summary>The object as the run wrote it, as JSON.</summary>
     public required string Data { get; set; }
 
+    /// <summary>
+    /// The size of <see cref="Data" /> in bytes, as the run wrote it. It is a fact of its own and not a length
+    /// that a reader derives from the document: PostgreSQL stores a large value outside the row and compressed,
+    /// so reading the size of the value costs 138 ms and 175 MB of memory on the 132 MB loose loot file of
+    /// lighthouse, while reading this column costs nothing. The Api refuses a document that is too large to
+    /// serve, and it decides with this number, before it reads a byte of the document (ADR-0041).
+    /// </summary>
+    public long Bytes { get; set; }
+
     public ModTemplate Template { get; set; } = null!;
 }

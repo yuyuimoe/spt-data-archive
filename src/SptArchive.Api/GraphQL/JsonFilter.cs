@@ -152,6 +152,11 @@ public sealed class ArchiveRunFilter : FilterInputType<ArchiveRun>
     protected override void Configure(IFilterInputTypeDescriptor<ArchiveRun> d) => d.Json(x => x.Result);
 }
 
+public sealed class ModDatabaseObjectFilter : FilterInputType<ModDatabaseObject>
+{
+    protected override void Configure(IFilterInputTypeDescriptor<ModDatabaseObject> d) => d.Json(x => x.Data);
+}
+
 internal static class JsonFilterExtensions
 {
     public static void Json<T>(this IFilterInputTypeDescriptor<T> descriptor, System.Linq.Expressions.Expression<Func<T, string?>> column)

@@ -76,6 +76,38 @@ must stay inside them.
 
 10. **No index and no migration come with this decision.** See the consequences.
 
+## Amendment 1 (2026-10-21)
+
+The driver asked two things of this decision on 2026-10-21: a client must still be able to read a whole
+document, and the cost of reading it must be stated and charged. The catalogue of paths, which would answer
+"which fields may I filter", is deferred (TD-68). The whole-document field is not.
+
+11. **A jsonb column is not exposed as its stored text.** The whole document is one field, `rawJson`, of the
+    scalar `Any` (TD-15). The text of the column is not a field of its own: a value of 132 MB may not leave
+    the Api as an unguarded string. The first type to take the field is `ModDatabaseObject` (ADR-0041),
+    because it is the only table that holds a document of megabytes; the other types keep the field they
+    have.
+
+12. **`rawJson` costs 100 times a small field.** One field of one row costs 1, so a page of 200 rows that asks
+    for the whole document costs more than `MaxFieldCost` (20,000) and is refused with `HC0047` before the
+    query runs, while a page of 50 rows is served. The cost analysis bounds the shape of a request. The two
+    limits below bound its data, because a weight is not a size.
+
+13. **The size of a document is a column of its row, and the Api decides with it before it reads.** Every row
+    of `mod_database_objects` states `bytes` (ADR-0041), and the resolver refuses a document larger than
+    `RawJson:MaxValueBytes` (2 MB, the value of `Cache:MaxResponseBytes`) with `RAW_JSON_TOO_LARGE`, naming
+    the size and the limit. A measurement decided this: reading one 132 MB document costs 138 ms and 175 MB
+    of memory, because PostgreSQL keeps a value of that size outside the row and compressed, and assembling
+    it reads all of it (ADR-0041, measurement). So the refusal comes before the read, and the statement that
+    reads the document carries the condition in itself
+    (`CASE WHEN bytes <= limit THEN data END`): a row that the resolver refuses is never assembled, even if a
+    stale size disagrees with the document.
+
+14. **One request carries at most 4 MB of whole documents, and the code is `RAW_JSON_REQUEST_LIMIT`.** The
+    budget lives in the global state of the operation, so every field of one request pays into the same total
+    and two clients never share one. A page of two hundred documents of two megabytes would be 400 MB, which
+    neither the cache nor a client wants.
+
 ## Options Considered
 
 | Dimension                   | A. Containment `@>` | B. `#>` by the internal expression | C. `jsonb_extract_path` (chosen) | D. jsonpath `@@` | E. Filter in memory |
@@ -125,6 +157,11 @@ other operation.
   release is cheap today and is not measured on the real archive (TD-64).
 - **Harder:** There is one more shape of query for each path length (ten).
 - **Harder:** `eq` and `pathEq` take values in two forms (TD-65).
+- **Easier (amendment 1):** A client reads the whole document when it needs one, with a field that costs what
+  it costs and says so.
+- **Harder (amendment 1):** A document above 2 MB is not served at all: the client reads the small fields of
+  the row, filters with `pathEq`, or reads the file (ADR-0029). The paths inside a document are not described
+  anywhere, so a client still learns the shape from the data itself (TD-68).
 - **Cost control:** Each filter term counts in the cost limit. A query with 3,000 `pathEq` terms is refused with
   `HC0047`, and the parser refuses a literal nested deeper than 200 levels. Both were run on 2026-10-21.
 - **Revisit when:** a path filter is slow on the real archive. Then add a B-tree index on the expression of the
@@ -192,6 +229,11 @@ Feature: A client filters a jsonb column by the value at a path
 5. [ ] The driver confirms the form of whole-document `eq`: keep JSON text (this ADR) or take a JSON value.
 6. [ ] Measure a path filter on the real archive and decide on an index (TD-64).
 7. [ ] Add ordered comparison (`gt`, `lt`) and a test for the existence of a path (TD-66).
+8. [x] Add `rawJson` to `ModDatabaseObject` with the cost weight, the two limits and the two error codes
+   (`RawJson.cs`, `ObjectApiTests`, three scenarios of `mod-api.feature`).
+9. [x] Promote the size of the source to `mod_database_objects.bytes` (`20261021213335_AddObjectRowSize`).
+10. [ ] Describe the shape of a document, so that a client filters it without reading it (TD-68).
+11. [ ] Bound the text of a configuration file in bytes, which is the same problem one table over (TD-59).
 
 ## Links
 
@@ -201,5 +243,6 @@ Feature: A client filters a jsonb column by the value at a path
 - ADR-0038: the limits that a filter must stay inside
 - TD-52 and TD-55 in `docs/tech-debt.md`; TD-64, TD-65 and TD-66 are new
 - Finding F-08 in `docs/security/audit-2026-10-21.md`
+- ADR-0041: the table that `rawJson` serves, and the measurement of a 132 MB document
 - Code: `src/SptArchive.Api/GraphQL/JsonFilter.cs`, `JsonOperationHandler.cs`, `JsonFilterArguments.cs`,
-  `JsonValueErrorFilter.cs`; `src/SptArchive.Core/Data/JsonPathFunctions.cs`
+  `JsonValueErrorFilter.cs`, `RawJson.cs`; `src/SptArchive.Core/Data/JsonPathFunctions.cs`

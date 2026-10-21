@@ -185,17 +185,16 @@ public sealed class JsonPathFilterTests
         Assert.Equal(operations.Order(), types["JsonOperationFilterInput"].Select(f => f.GetProperty("name").GetString()!).Order());
 
         // Every jsonb column of an exposed entity has a filter field of that type, so a new column cannot
-        // miss it. A table that the Api does not serve has no input type, and this test names it, so a table
-        // that leaves that state must leave the list (ADR-0041 waits for ADR-0032, action item 7).
+        // miss it, and every table that holds one is exposed: the GraphQL view serves the rows of a table that
+        // has no mod_* row of its own as well (ADR-0041, ADR-0032 action item 7). A new table is in this test
+        // on the day it is mapped.
         var columns = scope.Db.Model.GetEntityTypes()
             .SelectMany(e => e.GetProperties().Where(p => p.GetColumnType() == "jsonb").Select(p => (Entity: e.ClrType.Name, Property: p.Name)))
             .ToArray();
         Assert.NotEmpty(columns);
 
         var exposed = columns.Where(c => types.ContainsKey($"{c.Entity}FilterInput")).ToArray();
-        Assert.Equal(
-            ["ModDatabaseObject"],
-            columns.Select(c => c.Entity).Except(exposed.Select(c => c.Entity)).Distinct().Order());
+        Assert.Empty(columns.Select(c => c.Entity).Except(exposed.Select(c => c.Entity)).Distinct());
 
         foreach (var (entity, property) in exposed)
         {

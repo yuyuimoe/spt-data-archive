@@ -31,6 +31,9 @@ builder.Services.AddArchiveCache(builder.Configuration.GetConnectionString("Redi
 
 builder.Services.Configure<QueryCacheOptions>(builder.Configuration.GetSection(QueryCacheOptions.Section));
 
+// The most of one whole document that a request may carry (ADR-0040, decision 8).
+builder.Services.Configure<RawJsonOptions>(builder.Configuration.GetSection(RawJsonOptions.Section));
+
 // ---- Edge guard: a rate limit per client, compression of every answer, three security headers (ADR-0038). ----
 builder.Services.AddArchiveEdge(builder.Configuration);
 

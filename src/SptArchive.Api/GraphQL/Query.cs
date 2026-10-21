@@ -139,6 +139,33 @@ public sealed class Query
     public async Task<ArchiveRun?> GetArchiveRunAsync(Guid id, ArchiveDbContext db, CancellationToken cancellationToken) =>
         await db.ArchiveRuns.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    // ---- Objects that have no table of their own (ADR-0041) ------------------------------------------
+
+    /// <summary>
+    /// The source of every location, bot type, hideout part, price and handbook entry that a dataset adds,
+    /// one row for each file of a location. A modified object has no row here: its changed values are
+    /// <c>modChangePaths</c> under its template.
+    /// </summary>
+    /// <remarks>
+    /// The row states its small facts as fields, and the document itself is <c>rawJson</c>, which costs a
+    /// hundred times a small field and answers <c>RAW_JSON_TOO_LARGE</c> above a limit of megabytes
+    /// (ADR-0040, decision 8). A document of a map is 132 MB, so a client filters it with <c>pathEq</c> or
+    /// reads the facts that a row states, and never pulls a page of documents.
+    /// </remarks>
+    [UsePaging]
+    [UseProjection]
+    [UseFiltering]
+    [UseSorting]
+    public IQueryable<ModDatabaseObject> GetModDatabaseObjects(ArchiveDbContext db) =>
+        db.ModDatabaseObjects.OrderBy(x => x.DatasetId).ThenBy(x => x.Kind).ThenBy(x => x.TemplateId).ThenBy(x => x.Part);
+
+    [GraphQLName("modDatabaseObject")]
+    public async Task<ModDatabaseObject?> GetModDatabaseObjectAsync(
+        Guid datasetId, string kind, string templateId, ArchiveDbContext db, CancellationToken cancellationToken, string? part = null) =>
+        await db.ModDatabaseObjects.FirstOrDefaultAsync(
+            x => x.DatasetId == datasetId && x.Kind == kind && x.TemplateId == templateId && x.Part == (part ?? string.Empty),
+            cancellationToken);
+
     // ---- Items --------------------------------------------------------------------------------------
 
     [UsePaging]

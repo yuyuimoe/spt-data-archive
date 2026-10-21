@@ -59,6 +59,10 @@ services:
       # Exactly one address is believed: the proxy. A whole network would make every container a proxy,
       # and a client that arrives from it would be skipped while the walk looks for the real one.
       RateLimit__TrustedProxies: ${CADDY_ADDRESS:-172.28.0.250}
+      # The whole-document field costs 100 times a small field, and these bound the bytes of one
+      # request beneath it (ADR-0040, amendment 1).
+      RawJson__MaxValueBytes: ${RAW_JSON_MAX_VALUE_BYTES:-2000000}
+      RawJson__MaxRequestBytes: ${RAW_JSON_MAX_REQUEST_BYTES:-4000000}
     # No ports: the proxy publishes the only door. A client reaches the Api over TLS (ADR-0039).
     expose:
       - "8080"

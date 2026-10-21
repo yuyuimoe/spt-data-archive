@@ -15,11 +15,12 @@ namespace SptArchive.Tests;
 /// </summary>
 public static class ApiHarness
 {
-    public static async Task<string> RunAsync(TestScope scope, string query, List<string>? commands = null) =>
-        await RunAsync(scope, new OperationRequestBuilder().SetDocument(query).Build(), commands);
+    public static async Task<string> RunAsync(TestScope scope, string query, List<string>? commands = null, Action<RawJsonOptions>? rawJson = null) =>
+        await RunAsync(scope, new OperationRequestBuilder().SetDocument(query).Build(), commands, rawJson);
 
     /// <summary>Runs a request that carries variables. <paramref name="commands"/> collects the SQL that the query ran.</summary>
-    public static async Task<string> RunAsync(TestScope scope, IOperationRequest request, List<string>? commands = null)
+    /// <param name="rawJson">The limits of the whole-document field, when a test needs them smaller than the Api's.</param>
+    public static async Task<string> RunAsync(TestScope scope, IOperationRequest request, List<string>? commands = null, Action<RawJsonOptions>? rawJson = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IDbContextFactory<ArchiveDbContext>>(new ScopeFactory(scope, commands));
@@ -27,6 +28,11 @@ public static class ApiHarness
         // A failure that says only "Unexpected Execution Error" names no cause. The tests see the exception;
         // a client of the Api does not.
         services.AddArchiveGraphQL().ModifyRequestOptions(o => o.IncludeExceptionDetails = true);
+
+        if (rawJson is not null)
+        {
+            services.Configure(rawJson);
+        }
 
         await using var provider = services.BuildServiceProvider();
         var executor = await provider.GetRequiredService<IRequestExecutorProvider>()
@@ -42,9 +48,9 @@ public static class ApiHarness
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    public static async Task<JsonElement> JsonAsync(TestScope scope, string query, List<string>? commands = null)
+    public static async Task<JsonElement> JsonAsync(TestScope scope, string query, List<string>? commands = null, Action<RawJsonOptions>? rawJson = null)
     {
-        var result = await RunAsync(scope, query, commands);
+        var result = await RunAsync(scope, query, commands, rawJson);
         return JsonDocument.Parse(result).RootElement.Clone();
     }
 

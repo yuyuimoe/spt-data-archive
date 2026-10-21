@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 393 tests (374 xUnit tests and 19 Gherkin scenarios). Eight migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 403 tests (381 xUnit tests and 22 Gherkin scenarios). Nine migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -242,15 +242,18 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 - **Limits.** Page size is capped at 200, a request body at 1 MB, and a query at depth 10, 10 seconds and a
   cost limit of 20,000 field cost and 2,000 objects — nine full pages of rows with every field. A JSON column
   is filtered whole (`eq`, `neq`, as JSON text) or by the value at a path (`pathEq`, `pathNeq`, ADR-0040); it
-  offers no text matching. The Api keeps its own rate limit per client (ADR-0038) and TLS ends at the proxy in
+  offers no text matching. A whole document is a field of its own, `rawJson`, which costs 100 times a small
+  field; a page of 200 documents is refused before it runs, one document above `RawJson:MaxValueBytes` (2 MB)
+  answers `RAW_JSON_TOO_LARGE`, and one request carries at most `RawJson:MaxRequestBytes` (4 MB) of them
+  (ADR-0040 amendment 1). The Api keeps its own rate limit per client (ADR-0038) and TLS ends at the proxy in
   front of it (ADR-0039); a limit that a whole deployment shares still belongs to the edge in front of that
   (Pangolin in production).
 
 ## Known gaps
 
-- **One feature file runs as a test.** Reqnroll runs the 19 scenarios of `docs/specs/mod-api.feature` inside
+- **One feature file runs as a test.** Reqnroll runs the 22 scenarios of `docs/specs/mod-api.feature` inside
   `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
-  (TD-62). The 374 xUnit tests check the schema, the import path, the canonical form and the run import.
+  (TD-62). The 381 xUnit tests check the schema, the import path, the canonical form and the run import.
 - **The CI pipeline runs on GitHub.** A push to `master` runs `scripts/ci.sh` on a `postgres:17` service container
   in 89 seconds, and the run of `02a976c` passed every step (run `39647853715`, TD-09). The workflow is one job and
   one script, so a check added to `scripts/ci.sh` reaches the pipeline with no second edit (TD-63: the actions still

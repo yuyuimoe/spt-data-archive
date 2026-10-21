@@ -484,6 +484,7 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
                 TemplateId = row.Template.TemplateId,
                 Part = part.Part,
                 Data = part.Data,
+                Bytes = System.Text.Encoding.UTF8.GetByteCount(part.Data),
             }))
             .ToList();
 

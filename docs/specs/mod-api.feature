@@ -135,3 +135,33 @@ Feature: Read a mod dataset through the Api
     Then the response has an error that names "startsWith"
     When I query "modDatasets" where "tableHashes" equals the table hashes of "D1"
     Then the answer has the dataset "D1"
+
+  # ------------------------------------------- Objects that have no table of their own
+  # ADR-0041. A location, a bot type, a hideout part, a price and a handbook entry have no
+  # mod_* row. Their small facts are fields, and the whole document is one field of its own:
+  # it costs a hundred times a small field and it has a limit of bytes (ADR-0040, decision 8).
+
+  Scenario: A client reads the source of an added location
+    Given the dataset "D1" adds the location "lighthouse" with the file "base" holding:
+      """
+      {"Id":"lighthouse"}
+      """
+    When I query "modDatabaseObjects" with the dataset id of "D1"
+    Then the answer has one object row for the part "base" of 19 bytes
+
+  Scenario: The whole document is JSON and it is a field of its own
+    Given the dataset "D1" adds the location "lighthouse" with the file "base" holding:
+      """
+      {"Id":"lighthouse"}
+      """
+    When I ask for the whole document of "lighthouse" in the dataset "D1"
+    Then the whole document is the object that the run wrote
+
+  Scenario: A document above the limit of the Api is refused
+    Given the dataset "D1" adds the location "lighthouse" with the file "base" holding:
+      """
+      {"Id":"lighthouse"}
+      """
+    And the Api serves at most 10 bytes of one document
+    When I ask for the whole document of "lighthouse" in the dataset "D1"
+    Then the answer is the error "RAW_JSON_TOO_LARGE"

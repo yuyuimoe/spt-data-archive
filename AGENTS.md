@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Eight migrations exist and are applied, and 393 tests pass against a real Postgres: 374 xUnit tests and the 19 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Nine migrations exist and are applied, and 403 tests pass against a real Postgres: 381 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 393 tests (19 are scenarios); needs the development database (below)
+dotnet test SptArchive.slnx             # 403 tests (22 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -117,9 +117,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, eight migrations are applied, and 393 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 374 xUnit
-  tests and 19 Gherkin scenarios.
+- **Done:** the solution builds, nine migrations are applied, and 403 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 381 xUnit
+  tests and 22 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -141,6 +141,15 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   `JSON_VALUE_MALFORMED` and `JSON_VALUE_REJECTED` (TD-55). A path filter has no index and no timing yet
   (TD-64). A request is bounded by 1 MB, depth 10, 10 seconds and a cost limit that serves nine full pages and
   refuses eleven.
+- **The Api serves the rows that have no `mod_*` table of their own.** `modDatabaseObjects` and
+  `modDatabaseObject` serve one row of `mod_database_objects` — a location, a bot type, a hideout part, a price
+  or a handbook entry that a dataset adds (ADR-0041) — with the small facts as fields, `pathEq` over the
+  document and the whole document as `rawJson`. A row states its size in `bytes`, and the Api decides with it
+  before it reads anything: a document above `RawJson:MaxValueBytes` (2 MB) answers `RAW_JSON_TOO_LARGE`, and
+  one request carries at most `RawJson:MaxRequestBytes` (4 MB) of whole documents, or
+  `RAW_JSON_REQUEST_LIMIT`. The cost limit charges `rawJson` 100 times a small field, so a page of 200 whole
+  documents is refused before it runs (ADR-0040, amendment 1). Measured: PostgreSQL compresses a jsonb value by
+  default, 132 MB to 45 MB, but a read assembles 175 MB in 138 ms, which is why the refusal comes first.
 - **The Api reads a mod dataset.** `modDatasets` and `modDataset` serve the content of one mod version, with
   `modTemplates` (the operation of each touched object), `modChangePaths` (one row per changed value, with the
   old and the new value as JSON), `modFiles` and `modFile` (the manifest and the text of a configuration file),
@@ -179,13 +188,16 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
   and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
   on a schedule yet (TD-03).
-- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 19 scenarios of
+- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 22 scenarios of
   `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
   each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
-- **Next slice:** the Api surface for the mod rows (ADR-0032 action item 7) and the baseline cache.
+- **Next slice:** the baseline cache and the catalogue of the paths inside a jsonb document (TD-68). No map mod
+  is imported since ADR-0041, so the dataset of one is a projection (TD-67), and a path filter over those rows
+  reads every document of the table (TD-70).
 - **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
-  proxy), ADR-0040 (a jsonb filter by path; the form of `eq` stays open, TD-65) and ADR-0041 (a row for a change
-  to a location, a bot type, a hideout part, a price and a handbook entry) are Proposed and await Yui.
+  proxy), ADR-0040 (a jsonb filter by path, the whole-document field and its limits; the form of `eq` stays
+  open, TD-65) and ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
+  handbook entry) are Proposed and await Yui.
   ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0005 and ADR-0010 are superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031

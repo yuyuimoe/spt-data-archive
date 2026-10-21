@@ -564,6 +564,10 @@ namespace SptArchive.Core.Migrations
                         .HasColumnType("text")
                         .HasColumnName("part");
 
+                    b.Property<long>("Bytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytes");
+
                     b.Property<string>("Data")
                         .IsRequired()
                         .HasColumnType("jsonb")
