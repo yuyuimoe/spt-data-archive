@@ -1,7 +1,8 @@
 # Runs scripts/ci.sh on every push and pull request. The list of checks lives in that script, not here.
 #
-# This file has never run: the repository has no remote yet (TD-60). Treat it as untested until
-# the first run on a real remote.
+# Proven on GitHub Actions: run 39647853715 passed on 2026-10-21 in 89 seconds (build 23 s,
+# 316 tests 25 s, check-docs 0 s, likec4 17 s). The service container became healthy, the
+# read-only role was created over TCP, and `10.0.x` resolved to an installed SDK.
 #
 # It uses no secrets and needs no archive data. The passwords below belong to a throwaway
 # PostgreSQL that lives for the length of the job.

@@ -33,7 +33,7 @@ docker/compose.yml         Throwaway Postgres for local work (podman or docker).
 scripts/check-docs.py      Checks Gherkin syntax, links and ADR structure.
 scripts/ci.sh              Runs every check below, in order. The one command that proves a branch is clean.
 scripts/requirements.txt   Python packages of check-docs.py (gherkin-official).
-.github/workflows          The pipeline: it calls scripts/ci.sh. Never run yet (TD-60).
+.github/workflows          The pipeline: it calls scripts/ci.sh on a push or a pull request.
 compose.yaml               PostgreSQL, Redis, Api, Archiver and Caddy (the one public door).
 ```
 
@@ -110,10 +110,11 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 
 ## Current state
 
-- **CI is a script, and the pipeline has never run.** `scripts/ci.sh` runs the build, the tests, `check-docs.py` and
+- **CI is a script, and the pipeline runs it.** `scripts/ci.sh` runs the build, the tests, `check-docs.py` and
   `likec4 validate`, and stops at the first failure (TD-09). `.github/workflows/ci.yml` calls it on a `postgres:17`
-  service container, but the repository has no remote, so that file is untested (TD-60). On an empty database every
-  step passes and all 316 tests pass, so a clean machine and an archive machine agree.
+  service container; the run of `02a976c` on `github.com/yuyuimoe/spt-data-archive` passed every step in 89 seconds
+  (run `39647853715`, TD-60). On an empty database every step passes and all 316 tests pass, so a clean machine and
+  an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
 - **Done:** the solution builds, seven migrations are applied, and 316 tests pass (TD-01, TD-02, TD-04, TD-05,

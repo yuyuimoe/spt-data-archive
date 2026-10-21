@@ -1,5 +1,7 @@
 # SPT Data Archive
 
+[![ci](https://github.com/yuyuimoe/spt-data-archive/actions/workflows/ci.yml/badge.svg)](https://github.com/yuyuimoe/spt-data-archive/actions/workflows/ci.yml)
+
 A Postgres archive of the data model behind the SPT server (`sp-tushonka/server-csharp`) and the mods that extend it,
 with a public, read-only GraphQL API in front of it.
 
@@ -189,8 +191,8 @@ answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
 `scripts/ci.sh` runs the build, the tests, the documentation check and the C4 validation, and stops at the first
 failure. It needs a throwaway PostgreSQL 17 with the roles of `docker/initdb`, and it reads the database from
 `ARCHIVE_TEST_CONNECTION` and `ARCHIVE_TEST_READER_CONNECTION`. It stops if either is unset, so a test run never
-falls back to port 5432 by accident. `.github/workflows/ci.yml` runs the same script on GitHub Actions. That file
-has never run, because the repository has no remote yet (TD-60).
+falls back to port 5432 by accident. `.github/workflows/ci.yml` runs the same script on GitHub Actions: on the
+push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 
 ## Operations
 
@@ -244,8 +246,10 @@ has never run, because the repository has no remote yet (TD-60).
 - **One feature file runs as a test.** Reqnroll runs the 19 scenarios of `docs/specs/mod-api.feature` inside
   `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
   (TD-62). The 297 xUnit tests check the schema, the import path, the canonical form and the run import.
-- **The CI pipeline has never run.** `scripts/ci.sh` is proven on a clean database and on the archive database, and
-  every step passes on both; the workflow file is not (TD-60).
+- **The CI pipeline runs on GitHub.** A push to `master` runs `scripts/ci.sh` on a `postgres:17` service container
+  in 89 seconds, and the run of `02a976c` passed every step (run `39647853715`, TD-09). The workflow is one job and
+  one script, so a check added to `scripts/ci.sh` reaches the pipeline with no second edit (TD-63: the actions still
+  target Node.js 20).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
   `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). The baseline cache
   and the catalog are still action items of ADR-0013, and a change to a map, a bot type or a price is hashed but
