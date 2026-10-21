@@ -170,5 +170,7 @@ public sealed class EdgeTests
 
         var connection = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString());
         Assert.Equal(30, connection.MaxPoolSize);
+        Assert.Equal(5, connection.Timeout);
+        Assert.Equal(1800, connection.ConnectionLifetime);
     }
 }

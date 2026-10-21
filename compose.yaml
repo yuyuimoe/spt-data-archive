@@ -1,9 +1,10 @@
 # Local / production stack for the SPT data archive.
 #
-#   docker compose up -d db redis api       # long-running services
+#   docker compose up -d db redis api caddy # long-running services; the proxy publishes the only port
 #   docker compose run --rm archiver        # one archive run (schedule this with cron / a systemd timer)
 #
-# Secrets come from .env (see .env.example). Postgres and Redis are NOT published to the host.
+# Secrets come from .env (see .env.example). Postgres, Redis and the Api are NOT published to the host:
+# Caddy is the one public door, and it terminates TLS (ADR-0039).
 
 services:
   db:
@@ -45,8 +46,45 @@ services:
       # The API connects as the read-only role.
       ConnectionStrings__Archive: Host=db;Database=archive;Username=archive_reader;Password=${ARCHIVE_READER_PASSWORD}
       ConnectionStrings__Redis: redis:6379
+      # The pool stays under max_connections=50 and leaves room for the Archiver, and its timeouts keep
+      # a saturated pool from looking like a hang (TD-53, ADR-0038 amended on 2026-10-21).
+      Database__MaxPoolSize: ${DATABASE_MAX_POOL_SIZE:-16}
+      Database__MinPoolSize: ${DATABASE_MIN_POOL_SIZE:-0}
+      Database__AcquireTimeoutSeconds: ${DATABASE_ACQUIRE_TIMEOUT_SECONDS:-5}
+      Database__IdleLifetimeSeconds: ${DATABASE_IDLE_LIFETIME_SECONDS:-60}
+      Database__LifetimeSeconds: ${DATABASE_LIFETIME_SECONDS:-1800}
+      # Behind the proxy the peer of every request is Caddy, so the rate limit charges the client that
+      # Caddy names. Only the compose network may claim it (ADR-0039).
+      RateLimit__TrustForwardedFor: "true"
+      # Exactly one address is believed: the proxy. A whole network would make every container a proxy,
+      # and a client that arrives from it would be skipped while the walk looks for the real one.
+      RateLimit__TrustedProxies: ${CADDY_ADDRESS:-172.28.0.250}
+    # No ports: the proxy publishes the only door. A client reaches the Api over TLS (ADR-0039).
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      default:
+        # A fixed address, because the Api believes the header of this one address and no other.
+        # It sits at the top of the range, where the dynamic allocation of compose does not reach.
+        ipv4_address: ${CADDY_ADDRESS:-172.28.0.250}
+    environment:
+      # The name this archive answers to. On a machine with no public name Caddy signs it with its own
+      # CA (ADR-0039); a public deployment puts its real name here and lets Pangolin own the outside.
+      ARCHIVE_HOST: ${ARCHIVE_HOST:-api.sptarchive.local}
     ports:
-      - "${API_PORT:-8080}:8080"
+      - "${API_PORT:-8080}:80"      # answers a plain request with a redirect to https
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The local CA lives here. Without it every restart would change the certificate that clients trust.
+      - caddy_data:/data
 
   archiver:
     build:
@@ -65,5 +103,14 @@ services:
       # Path to the server's SPT_Data folder on the host (after "git lfs pull"), mounted read-only.
       - ${SPT_DATA_PATH:?set SPT_DATA_PATH in .env}:/spt-data:ro
 
+networks:
+  # A pinned subnet, because the Api believes X-Forwarded-For from this network and from nowhere else
+  # (ADR-0039). Set ARCHIVE_SUBNET here and in .env together if it collides with another stack.
+  default:
+    ipam:
+      config:
+        - subnet: ${ARCHIVE_SUBNET:-172.28.0.0/16}
+
 volumes:
   pgdata:
+  caddy_data:

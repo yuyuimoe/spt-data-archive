@@ -143,11 +143,16 @@ export Archive__DatabasePath="$HOME/Documents/repos/tarkov/server-csharp/Librari
 export Archive__SptVersion=4.0.13
 dotnet run --project src/SptArchive.Archiver
 
-docker compose up -d db redis api
+docker compose up -d db redis api caddy
 docker compose run --rm archiver       # re-run on a schedule; add --Archive__Force=true to re-import unchanged data
 ```
 
-The API is then at `http://localhost:8080/graphql`. Example:
+The API is then at `https://localhost:8443/graphql`, behind the proxy that terminates TLS (ADR-0039). The
+Api has no published port of its own, so nothing reaches it without the proxy. The certificate comes from
+the local authority of Caddy: install it once
+(`podman cp $(podman ps -qf name=caddy):/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt`) and
+pass it to a client with `--cacert ./caddy-root.crt --resolve api.sptarchive.local:8443:127.0.0.1`, or
+answer the name `api.sptarchive.local` from `/etc/hosts`. Example:
 
 ```graphql
 {
@@ -180,28 +185,37 @@ The API is then at `http://localhost:8080/graphql`. Example:
   `RATE_LIMITED`; `/healthz` is never charged. Answers are compressed with brotli or gzip when the client asks
   for it, and the compression sits outside the cache, so one uncompressed answer is stored for everyone.
   Every answer carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
-  `X-Frame-Options: DENY`. The Api asks Postgres for at most 30 connections, below the 50 that
-  `compose.yaml` allows, so a burst waits instead of failing.
+  `X-Frame-Options: DENY`. The Api asks Postgres for at most 16 connections, below the 50 that
+  `compose.yaml` allows, so a burst waits instead of failing; a request waits at most 5 seconds for one.
+  Behind the proxy the limit charges the client, not the proxy: the Api believes `X-Forwarded-For` from the
+  one address of Caddy and from no other (ADR-0039).
   To try the cache locally, start one: `podman run -d --rm --name sptarchive-redis -p
   127.0.0.1:6379:6379 docker.io/library/redis:7-alpine redis-server --maxmemory 128mb --maxmemory-policy
   allkeys-lru --save "" --appendonly no`, and set `ConnectionStrings__Redis=127.0.0.1:6379` for both the Api and
   the Archiver.
-- **Load tests.** `tests/load` holds three k6 scripts: `steady.js` (a hot answer at a fixed rate),
-  `stampede.js` (200 clients that miss one answer together) and `ttl.js` (when an answer expires). Install k6 and
-  run them against a running Api, for example `RATE=100 k6 run tests/load/steady.js`. A load test must raise
-  the rate limit first (`TOKENS=100000` or `RATELIMIT_ENABLED=false` in `/tmp/api_load.sh`), or it measures
-  the limiter instead of the Api.
+- **Load tests.** `tests/load` holds four k6 scripts: `steady.js` (a hot answer at a fixed rate),
+  `stampede.js` (200 clients that miss one answer together), `ttl.js` (when an answer expires) and
+  `capacity.js` (how many clients the stack holds). `tests/load/README.md` explains the measured stack, which
+  runs each container at 4 vCPU and 2 GB. A load test must raise the rate limit first
+  (`RATELIMIT_ENABLED=false`), or it measures the limiter instead of the Api.
+- **Capacity.** Measured on 2026-10-21 against the containers of `compose.yaml`:
+  [docs/load/capacity-2026-10-21.html](docs/load/capacity-2026-10-21.html). The Api holds 6 000 clients — one
+  request per second each, 5 999 answers per second of 53 KB — at p95 8.1 ms and p99 15.7 ms, with 2.7 of its
+  4 cores and one core of PostgreSQL. Above that the generator, not the server, runs out of memory. The page
+  also says where the time goes: 80 % of the requests are cache hits at a few milliseconds, one SQL statement
+  holds 93 % of the database time, and the proxy costs a second core for TLS and its access log.
 - **Backups.** `scripts/backup.sh dump` writes a `pg_dump -Fc` with a checksum, copies it to
   `ARCHIVE_BACKUP_COPY_DIR` and proves that it restores (`scripts/backup.sh verify`). Keep the copy off the
   host. See `docs/runbooks/backup.md` (ADR-0011, TD-03 for the missing schedule).
 - **Limits.** Page size is capped at 200, a request body at 1 MB, and a query at depth 10, 10 seconds and a
   cost limit of 20,000 field cost and 2,000 objects — nine full pages of rows with every field. A JSON column
-  offers comparison only. The Api keeps its own rate limit per client (ADR-0038); a limit that a whole
-  deployment shares still belongs to the edge proxy (Cloudflare, Traefik).
+  offers comparison only. The Api keeps its own rate limit per client (ADR-0038) and TLS ends at the proxy in
+  front of it (ADR-0039); a limit that a whole deployment shares still belongs to the edge in front of that
+  (Pangolin in production).
 
 ## Known gaps
 
-- **No Gherkin runner yet.** 280 xUnit tests check the schema, the import path, the canonical form and the
+- **No Gherkin runner yet.** 297 xUnit tests check the schema, the import path, the canonical form and the
   run import, but no Reqnroll binding exists,
   so every scenario in `docs/specs` is still a claim (TD-06).
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one

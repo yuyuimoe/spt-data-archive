@@ -1,0 +1,53 @@
+# The one public door of the archive: TLS, HSTS, and the proxy that names the client (ADR-0039).
+#
+#   docker compose up -d db redis api caddy     # https://localhost:8443/graphql
+#
+# Caddy signs its own certificate with a local CA, because a development machine has no public name for
+# this archive and no ACME account. The first client has to trust that CA once:
+#
+#   podman cp $(podman ps -qf name=caddy):/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+#   curl --cacert ./caddy-root.crt --resolve api.sptarchive.local:8443:127.0.0.1 \
+#        https://api.sptarchive.local:8443/graphql -H 'Content-Type: application/json' \
+#        -d '{"query":"{ __typename }"}'
+#
+# In production the same proxy sits behind Pangolin, which owns the public name and its certificate
+# (ADR-0039). Nothing here assumes that the name is public.
+
+{
+	admin off
+}
+
+# The proxy answers under the name of the installation and, on the compose network, under its service
+# name, so a container client needs no DNS entry of its own.
+{$ARCHIVE_HOST:api.sptarchive.local}, https://caddy, https://localhost {
+
+	# A certificate from the local CA. A public deployment replaces this line with a real name and lets
+	# Caddy or Pangolin obtain the certificate (ADR-0039, action items).
+	tls internal
+
+	# HSTS is set here and only here. The Api speaks plain HTTP behind this proxy and cannot know
+	# whether the client arrived over TLS (ADR-0038, ADR-0039). A year and a half, and every subdomain.
+	# The three other headers repeat what the Api already sets: a response that Caddy produces itself,
+	# such as a refusal or a redirect, carries no header from the Api.
+	header {
+		Strict-Transport-Security "max-age=15552000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		-Server
+	}
+
+	# No "encode" here on purpose. The Api compresses one answer for every client and stores that answer
+	# uncompressed (ADR-0038). Compressing again would burn a second CPU and change nothing.
+	reverse_proxy api:8080 {
+		# The Api charges its rate limit to the client, not to this proxy (ADR-0039). Caddy writes the
+		# client into X-Forwarded-For, and it ignores an incoming one from a client it was not told to
+		# trust, so the header holds the truth and not a claim.
+		header_up X-Forwarded-Host {host}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

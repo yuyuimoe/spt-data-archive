@@ -58,9 +58,10 @@ finishes, so the ceiling bounds that too. The legal maximum today is 1.15 MB.
 `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`. `HSTS` belongs where TLS ends, and the Api
 does not terminate TLS.
 
-**A pool that fits the server.** The Api asks Npgsql for at most `Database:MaxPoolSize` (30) connections,
+**A pool that fits the server.** The Api asks Npgsql for at most `Database:MaxPoolSize` (16) connections,
 well under the 50 that `compose.yaml` allows. A burst now waits for a connection instead of receiving
-`53300`. The Archiver keeps its own pool: it runs alone and migrates the schema.
+`53300`. The Archiver keeps its own pool: it runs alone and migrates the schema. The size and the four
+timeouts come from the amendment of 2026-10-21 below.
 
 The CORS policy stays open to every origin, and an idempotency key still belongs to nobody (F-04, F-05).
 Both are correct while the Api is read-only and anonymous, and both must change with the change that adds
@@ -156,13 +157,40 @@ Feature: The Api refuses a flood and compresses what it answers
 ## Action Items
 
 1. [ ] Put the new settings in `.env.example` and in the compose files.
-2. [ ] Move the shared limit to the edge proxy when it exists (TD-05), and set the forwarded headers so
-   the Api reads the real client address.
-3. [ ] Set `HSTS` and `EnableForHttps` in the change that terminates TLS.
+2. [x] Read the client address from the header of a trusted proxy (ADR-0039).
+3. [x] Set `HSTS` where TLS ends (ADR-0039); `EnableForHttps` stays false, because the Api never answers
+   TLS itself.
+
+## Amendment of 2026-10-21: the size of the pool, from a measurement
+
+The driver asked whether 30 connections is the right number, and pointed at the checklist of
+`connection-pool-tuner`. The checklist says three things that this decision had not written down:
+
+1. A connection only works when PostgreSQL has a core to run its query, so a pool much larger than the
+   core count does not add parallelism: it adds a queue inside the database.
+2. The budget is `max_connections` minus what the Archiver, migrations and an administrator need, with a
+   fifth kept free, and it must survive a second Api instance and a deploy that overlaps two.
+3. Four timeouts keep a pool healthy: how long a request waits for a connection, how long an idle
+   connection lives, how long any connection lives, and the smallest number kept warm.
+
+The Api now sets all five as `Database:*`, and the defaults are 16 connections, an acquire timeout of 5 s
+(a request has 10 s in total), an idle life of 60 s and a life of 30 minutes.
+
+**The measurement.** `docs/load/capacity-2026-10-21.html` runs 4 000 clients at a page of 53 KB with the
+pool at 8, 16 and 30. All three answered 3 915 to 3 920 answers per second with p95 between 5.9 ms and
+6.6 ms, and the difference on p99 went in both directions when a run was repeated. PostgreSQL held 1.2
+connections busy on average and 4 at the most, against 4 cores. The pool was never the constraint.
+
+So the choice is not about latency, which the data does not separate. It is about the budget: 16 leaves 34
+of the 50 connections of `compose.yaml` free, and lets two Api instances fit under the same ceiling. With
+30, a second instance would take 60 and the Archiver would be the one refused.
+
+Measured with `tests/load/scripts/search.sh` and `pg-<n>.txt`; reproducible with `tests/load/README.md`.
 
 ## Links
 
 - ADR-0001: the deployment and its edge proxy
+- ADR-0039: the proxy that terminates TLS and names the client
 - ADR-0008: the response cache the compression sits outside of
 - ADR-0037: the single flight and the idempotency key
 - Finding F-01 to F-03 and F-06 in `docs/security/audit-2026-10-21.md`

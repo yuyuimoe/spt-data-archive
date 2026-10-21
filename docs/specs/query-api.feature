@@ -332,6 +332,26 @@ Feature: Query the archive through a read-only GraphQL API
     And it has the header "Referrer-Policy: no-referrer"
     And it has the header "X-Frame-Options: DENY"
 
+  @unverified
+  Scenario: A client behind the proxy is charged to its own address
+    Given the Api believes the address of one proxy
+    And two clients behind the proxy each send four requests while the Api allows a burst of three
+    Then each client receives three answers and then a refusal
+
+  @unverified
+  Scenario: A forged forwarding header moves no bucket
+    Given the Api believes the address of one proxy
+    When a client behind the proxy sends a header that names another address
+    Then the request is charged to the address of the client
+    And the refusal says "RATE_LIMITED"
+
+  @unverified
+  Scenario: The proxy terminates TLS and states HSTS
+    When a client asks for the query endpoint over HTTPS
+    Then the answer has the header "Strict-Transport-Security" for one year and a half
+    And the answer names no server
+    And a plain request is answered with a redirect to HTTPS
+
   # ---------------------------------------------------------- Not built yet
 
   @backlog

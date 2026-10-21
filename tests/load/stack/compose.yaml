@@ -1,0 +1,125 @@
+# The measured stack: the same four services as ../../../compose.yaml, plus the load generator, each in a
+# container of its own and each limited the same way (4 vCPU, 2 GB), so one slow component cannot eat the
+# machine of another and the numbers mean something (docs/load/README.md).
+#
+#   podman compose -f tests/load/stack/compose.yaml up -d --build
+#   podman cp $(podman ps -qf name=load-caddy):/data/caddy/pki/authorities/local/root.crt /tmp/caddy-root.crt
+#
+# The data comes from a dump of the development archive (scripts/load-stack.sh restores it). The database
+# holds the same seven datasets as the development archive: 4.0.13 and 4.1.6 official, and the mod runs.
+
+name: sptarchive-load
+
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    environment:
+      POSTGRES_DB: archive
+      POSTGRES_USER: archive_owner
+      POSTGRES_PASSWORD: load_owner_password
+      ARCHIVE_READER_PASSWORD: load_reader_password
+    # The production settings of compose.yaml, with pg_stat_statements added because the load test has to
+    # say which statement costs the time and not only that something was slow.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=16MB
+      - -c
+      - max_connections=50
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.max=2000
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - track_io_timing=on
+    # One container, one budget (asked by the driver, 2026-10-21).
+    cpus: 4
+    mem_limit: 2g
+    volumes:
+      - load_pgdata:/var/lib/postgresql/data
+      - ../../../docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive_owner -d archive"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    # The cache of the deployment: 128 MB, least-recently-used, no persistence.
+    command:
+      - redis-server
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --save
+      - ""
+      - --appendonly
+      - no
+    cpus: 4
+    mem_limit: 2g
+
+  api:
+    image: localhost/sptarchive-api:load
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      ConnectionStrings__Archive: Host=db;Database=archive;Username=archive_reader;Password=load_reader_password
+      ConnectionStrings__Redis: redis:6379
+      # The capacity test measures the Api, so the per-client limit stays out of the way. It has its own
+      # test (EdgeTests, ADR-0038).
+      RateLimit__Enabled: "${RATELIMIT_ENABLED:-false}"
+      RateLimit__TokenLimit: "${TOKENS:-100}"
+      RateLimit__TokensPerPeriod: "${TOKENS:-100}"
+      RateLimit__ReplenishSeconds: "${REPLENISH:-10}"
+      # The proxy in front, and the network it comes from (ADR-0039).
+      RateLimit__TrustForwardedFor: "true"
+      # The proxy and nobody else (ADR-0039).
+      RateLimit__TrustedProxies: 10.77.0.250
+      # Swept by scripts/load-stack.sh: the pool that the driver measures.
+      Database__MaxPoolSize: ${POOL:-30}
+      Database__AcquireTimeoutSeconds: "5"
+      Database__IdleLifetimeSeconds: "60"
+      Database__LifetimeSeconds: "1800"
+    cpus: 4
+    mem_limit: 2g
+
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      ARCHIVE_HOST: api.sptarchive.local
+    cpus: 4
+    mem_limit: 2g
+    networks:
+      default:
+        ipv4_address: 10.77.0.250
+    ports:
+      # Loopback only: the measured stack is not for the network.
+      - "127.0.0.1:18443:443"
+    volumes:
+      - ../../../docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - load_caddy_data:/data
+
+networks:
+  default:
+    # The Api believes X-Forwarded-For from this network (ADR-0039).
+    ipam:
+      config:
+        - subnet: 10.77.0.0/24
+
+volumes:
+  load_pgdata:
+  load_caddy_data:

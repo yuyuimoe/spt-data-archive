@@ -26,6 +26,9 @@ public sealed class ClientPartitionedRateLimiter(IOptions<RateLimitOptions> opti
     private const long SweepWhenFullMs = 1_000;
 
     private readonly RateLimitOptions _options = options.Value;
+
+    /// <summary>The proxies whose header the Api believes, read once (ADR-0039).</summary>
+    private readonly TrustedProxy _trusted = TrustedProxy.From(options.Value);
     private readonly Dictionary<string, Entry> _clients = new(StringComparer.Ordinal);
     private readonly Lock _sweepLock = new();
 
@@ -60,18 +63,8 @@ public sealed class ClientPartitionedRateLimiter(IOptions<RateLimitOptions> opti
     private bool IsGuarded(HttpContext context) =>
         _options.Enabled && context.Request.Path.StartsWithSegments(GuardedPath);
 
-    /// <summary>The name of the client the request is charged to.</summary>
-    public static string ClientName(HttpContext context)
-    {
-        var address = context.Connection.RemoteIpAddress;
-        if (address is null)
-        {
-            // A transport without a peer address (a test server, a unix socket). One shared bucket.
-            return "unknown";
-        }
-
-        return (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString();
-    }
+    /// <summary>The name of the client the request is charged to, which is not the proxy (ADR-0039).</summary>
+    public string ClientName(HttpContext context) => ClientAddress.Resolve(context, _options, _trusted);
 
     private Entry Bucket(HttpContext context)
     {

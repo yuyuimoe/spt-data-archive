@@ -59,8 +59,9 @@ public static class EdgeGuard
 
         services.AddResponseCompression(compression =>
         {
-            // TLS does not exist in front of the Api yet. When it does, this switch and HSTS move
-            // together, and a BREACH-style attack on a compressed answer becomes worth checking.
+            // TLS ends at the proxy in front, so the Api speaks plain HTTP and compresses every answer
+            // for every client (ADR-0038, ADR-0039). This switch stays false: the Api never answers TLS
+            // itself, and a compressed answer over TLS would make a BREACH-style attack worth checking.
             compression.EnableForHttps = false;
 
             compression.Providers.Add<BrotliCompressionProvider>();

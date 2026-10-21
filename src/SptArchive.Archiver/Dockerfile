@@ -2,7 +2,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY Directory.Build.props ./
+# Restore first, so this layer is cached until a .csproj changes.
+# Directory.Packages.props carries every package version (central package management, TD-07): without it
+# the restore fails with NU1015, "do not have a version specified".
+COPY Directory.Build.props Directory.Build.targets Directory.Packages.props global.json ./
 COPY src/SptArchive.Core/SptArchive.Core.csproj src/SptArchive.Core/
 COPY src/SptArchive.Archiver/SptArchive.Archiver.csproj src/SptArchive.Archiver/
 RUN dotnet restore src/SptArchive.Archiver/SptArchive.Archiver.csproj

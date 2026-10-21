@@ -1,0 +1,5 @@
+# The raw output of one run is large and local: the access log of the proxy streams a line per request.
+# Everything a report needs is kept: the summaries, the samples, the SQL, and runs.ndjson.
+caddy-*.log
+k6-*.log
+running-*

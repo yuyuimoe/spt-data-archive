@@ -15,12 +15,16 @@ builder.Host.UseSerilog((_, logger) => logger
 
 // ---- Database: read-only. Point ConnectionStrings:Archive at a Postgres role that only has SELECT. ----
 // The pool is capped below the max_connections of the server, so a burst waits for a connection instead
-// of asking Postgres for more than it allows (TD-53, ADR-0038).
+// of asking Postgres for more than it allows, and the four timeouts keep a dead connection from
+// lingering (TD-53, ADR-0038).
+var pool = new DatabasePoolOptions();
+builder.Configuration.GetSection(DatabasePoolOptions.Section).Bind(pool);
+
 builder.Services.AddArchiveDatabase(
     builder.Configuration.GetConnectionString("Archive")
         ?? throw new InvalidOperationException("ConnectionStrings:Archive is not configured."),
     readOnly: true,
-    maxPoolSize: builder.Configuration.GetValue("Database:MaxPoolSize", 30));
+    pool: pool);
 
 // ---- Cache: Redis when configured, otherwise a per-process memory cache. ----
 builder.Services.AddArchiveCache(builder.Configuration.GetConnectionString("Redis"));

@@ -1,5 +1,5 @@
 // Deployment of the containers. Matches compose.yaml.
-// Postgres and Redis are not published to the host. Only the Api publishes a port.
+// Postgres, Redis and the Api are not published to the host. Only the proxy publishes a port.
 
 deployment {
 
@@ -8,6 +8,7 @@ deployment {
     host dockerHost 'Docker host' {
       description 'One machine that runs compose.yaml.'
 
+      instanceOf archive.caddy
       instanceOf archive.db
       instanceOf archive.redis
       instanceOf archive.api

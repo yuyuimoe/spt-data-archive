@@ -40,7 +40,7 @@ model {
 
       edgeGuard = component 'Edge Guard' {
         technology 'ASP.NET Core middleware, System.Threading.RateLimiting'
-        description 'A token bucket per client address, so one client cannot hold the pool or the link. Brotli and gzip compression, outside the cache so one answer is stored for everyone. Three security headers on every answer (ADR-0038).'
+        description 'A token bucket per client address, so one client cannot hold the pool or the link. Behind the proxy it charges the client that the proxy names, from one trusted address (ADR-0039). Brotli and gzip compression, outside the cache so one answer is stored for everyone. Three security headers on every answer (ADR-0038).'
       }
 
       queryCache = component 'Query Cache Middleware' {
@@ -55,7 +55,7 @@ model {
 
       apiDbAccess = component 'ArchiveDbContext (Api)' {
         technology 'EF Core, SptArchive.Core'
-        description 'Pooled no-tracking context. It connects with the read-only database role.'
+        description 'Pooled no-tracking context. It connects with the read-only database role, with at most 16 connections and a 5 s wait for one (ADR-0038).'
       }
     }
 
@@ -86,6 +86,21 @@ model {
       archiverDbAccess = component 'ArchiveDbContext (Archiver)' {
         technology 'EF Core, SptArchive.Core'
         description 'Pooled context. It connects with the owner role, applies migrations and writes data.'
+      }
+    }
+
+    caddy = container 'Caddy' {
+      technology 'Caddy 2'
+      description 'The one public door (ADR-0039). Terminates TLS with a local authority on a machine with no public name, sets HSTS and the three security headers, forwards X-Forwarded-For, and does not compress because the Api already does. It publishes the only port of the stack.'
+
+      tls = component 'TLS and HSTS' {
+        technology 'Caddyfile'
+        description 'A certificate from the local authority, one year and a half of HSTS with subdomains, and no Server header. In production Pangolin owns the public name in front of this.'
+      }
+
+      forward = component 'Forwarded Client' {
+        technology 'reverse_proxy'
+        description 'Forwards the request to the Api and writes the address of the client into X-Forwarded-For. It ignores the header of a client it was not told to trust, so the header states a fact and not a claim.'
       }
     }
 
@@ -127,13 +142,13 @@ model {
 
   // ----------------------------------------------- Relationships: context
 
+  consumer -> archive.caddy 'Sends GraphQL requests over HTTPS'
   consumer -> edge 'Sends GraphQL requests' {
     #planned
   }
-  edge -> archive.api 'Forwards requests' {
+  edge -> archive.caddy 'Forwards requests, and shares a limit across the deployment' {
     #planned
   }
-  consumer -> archive.api 'Sends GraphQL requests over HTTPS'
   maintainer -> archive.archiver 'Starts a run (cron, systemd timer or docker compose run)'
   maintainer -> archive.backupScript 'Runs a dump, a verify or a restore'
   archive.backupScript -> archive.db 'Dumps every table and restores into a scratch database'
@@ -147,6 +162,7 @@ model {
 
   // -------------------------------------------- Relationships: containers
 
+  archive.caddy -> archive.api 'Forwards a request over plain HTTP inside the stack, with the client address in X-Forwarded-For'
   archive.api -> archive.db 'Reads with the read-only role'
   archive.api -> archive.redis 'Reads and stores cached responses'
   archive.archiver -> archive.db 'Replaces official tables in one transaction with the owner role'
@@ -154,6 +170,8 @@ model {
 
   // -------------------------------------------- Relationships: components
 
+  archive.caddy.tls -> archive.caddy.forward 'Hands an answer to the client over TLS'
+  archive.caddy.forward -> archive.api.edgeGuard 'Forwards the request and the client address (ADR-0039)'
   archive.api.edgeGuard -> archive.api.queryCache 'Passes a request inside the limit, and compresses the answer on the way out'
   archive.api.edgeGuard -> consumer 'Refuses a flood with 429 and Retry-After (ADR-0038)'
   archive.api.queryCache -> archive.api.graphql 'Passes cache misses'

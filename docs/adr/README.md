@@ -44,6 +44,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0036](0036-let-several-imports-run-at-the-same-time.md) | Let several imports run at the same time | Accepted |
 | [0037](0037-survive-a-burst-on-one-answer.md) | Survive a burst on one answer, and let a client repeat a request | Accepted |
 | [0038](0038-refuse-a-flood-and-compress-an-answer.md) | Refuse a flood at the Api, and compress what it answers | Proposed |
+| [0039](0039-terminate-tls-at-a-proxy.md) | Terminate TLS at a proxy, and name the client there | Proposed |
 
 ## Status meanings
 
