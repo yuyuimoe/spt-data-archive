@@ -60,18 +60,14 @@ public sealed class Addressing
     public bool IsPinned(string rawId) => _byRawId.TryGetValue(rawId, out var named) && named.Pinned;
 
     /// <summary>
-    /// The tokens for one file. Only the ids that the file can name are in them: a bot type is called
-    /// <c>assault</c>, and that word is a value in many tables. A token map of every id would rewrite it.
+    /// The tokens for one file: the ids that the file can name, in a value and in a key, so a boot that mints
+    /// new ids moves neither a path nor the hash of the file (ADR-0034, decision 5). A key holds an id as well
+    /// as a value does: a bot type keys an item under <c>inventory.items</c>, and a price is keyed by the id
+    /// of the item it prices (ADR-0041, decision 8).
     /// </summary>
     public IdTokens TokensFor(string relativePath)
     {
         var kinds = KindsNamedBy(relativePath);
-
-        if (kinds.Length == 0)
-        {
-            return IdTokens.Blank([]);
-        }
-
         var tokens = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var (rawId, named) in _byRawId)
@@ -82,14 +78,14 @@ public sealed class Addressing
             }
         }
 
-        return IdTokens.Addressed(tokens);
+        return IdTokens.AddressedKeysAndValues(tokens);
     }
 
     /// <summary>Every id the run or the baseline knows, whatever the kind of its object.</summary>
     public IEnumerable<string> KnownIds => _byRawId.Keys;
 
     /// <summary>
-    /// The token of every known id, in the form <c>#address</c>, for the tables that have no row type of
+    /// The token of every known id, in the form <c>#address</c>, for the files that have no row type of
     /// their own: a bot type names an item by its id, so does a location, a price and a hideout recipe
     /// (ADR-0041). The map is new on every call, because a caller adds its own ids to it.
     /// </summary>
@@ -240,15 +236,12 @@ public sealed class Addressing
         return "#content:" + content;
     }
 
-    private static string? Scalar(JsonElement element, string name) =>
-        element.ValueKind == JsonValueKind.Object
-        && element.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.String
-        && !string.IsNullOrWhiteSpace(value.GetString())
-            ? value.GetString()
-            : null;
-
-    /// <summary>The kinds of object that a file can name. An empty list means no id can appear in it.</summary>
+    /// <summary>
+    /// The kinds of object that a file can name. A file that no row table of its own holds names every kind:
+    /// a bot type keys an item in <c>inventory.items</c>, a location names one in its loot, and the archive
+    /// cannot know every place a mod puts an id in such a file (ADR-0041, decision 8). A table of templates
+    /// and a trader name the kinds that their shape holds.
+    /// </summary>
     private static string[] KindsNamedBy(string relativePath)
     {
         if (CanonicalFiles.IsTemplateTable(relativePath))
@@ -264,8 +257,19 @@ public sealed class Addressing
         // A trader points at the items it sells; its own id is in its base file and in its directory name.
         return relativePath.StartsWith(CanonicalFiles.Traders + "/", StringComparison.Ordinal)
             ? [ItemKind, TraderKind]
-            : [];
+            : AnyKind;
     }
+
+    /// <summary>Every kind that the archive names, for a file whose shape says nothing about the ids it holds.</summary>
+    private static readonly string[] AnyKind = [ItemKind, QuestKind, CustomizationKind, TraderKind];
+
+    private static string? Scalar(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(name, out var value)
+        && value.ValueKind == JsonValueKind.String
+        && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()
+            : null;
 
     private static Export Read(string root, List<JsonDocument> documents)
     {

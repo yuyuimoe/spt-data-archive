@@ -25,9 +25,9 @@ public sealed class IdTokens
     }
 
     /// <summary>
-    /// True when an object key that is a known id is written as its token too. A table of templates always
-    /// does. A bot type or a location is keyed by item ids as well, such as the weight of each backpack in
-    /// <c>inventory.items.Backpack</c> (ADR-0041).
+    /// True when an object key that is a known id is written as its token too. Every form that feeds a
+    /// comparison or a hash is one: a bot type keys an item id in <c>inventory.items.Backpack</c>, and a
+    /// price is keyed by the id of the item it prices (ADR-0041).
     /// </summary>
     public bool NamesKeys { get; }
 
@@ -38,9 +38,10 @@ public sealed class IdTokens
     public int Count => _byRawId.Count;
 
     /// <summary>
-    /// A form that says only that a value is a known id. It is the form of a seed or of a tie-break,
-    /// where the name of the target must not enter: an address is derived from content, so content
-    /// that holds an address would refer to itself (ADR-0034, decision 2 and 4).
+    /// A form that says only that a value or a key is a known id. It is the form of a seed or of a tie-break,
+    /// where the name of the target must not enter: an address is derived from content, so content that
+    /// held an address would refer to itself (ADR-0034, decision 2 and 4). A key is written as its token as
+    /// well, because a raw id in a key would move the seed and the tie-break of the whole run (decision 5).
     /// </summary>
     public static IdTokens Blank(IEnumerable<string> knownIds)
     {
@@ -51,17 +52,13 @@ public sealed class IdTokens
             tokens[id] = AnonymousToken;
         }
 
-        return new IdTokens(AnonymousToken, tokens, namesKeys: false);
+        return new IdTokens(AnonymousToken, tokens, namesKeys: true);
     }
 
-    /// <summary>A form that names every object by its address: the own id becomes <see cref="SelfToken"/>.</summary>
-    public static IdTokens Addressed(IReadOnlyDictionary<string, string> addressByRawId) =>
-        new(SelfToken, addressByRawId, namesKeys: false);
-
     /// <summary>
-    /// A form that names every object by its address, in keys as well as in values. It is the form of the
-    /// rows of an object of the server database, whose keys are ids (ADR-0041). It is never the form of a
-    /// hash: the hash of ADR-0029 is the one of <see cref="Addressed"/> and <see cref="Blank"/>.
+    /// A form that names every object by its address, in keys as well as in values. It is the form of a
+    /// comparison and of the hash of a file, whose keys can be ids: a bot type keys an item id, and a price
+    /// is keyed by the id of the item it prices (ADR-0041, decision 8; ADR-0034, decision 5).
     /// </summary>
     public static IdTokens AddressedKeysAndValues(IReadOnlyDictionary<string, string> addressByRawId) =>
         new(SelfToken, addressByRawId, namesKeys: true);
