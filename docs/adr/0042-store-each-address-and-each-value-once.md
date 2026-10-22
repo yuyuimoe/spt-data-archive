@@ -214,8 +214,18 @@ Feature: A changed value is stored once and joined to every change
 6. [x] Measure the pool on the real runs before the merge: the distinct addresses of `WTT-Armory` and
    `AllTheClothes` across their versions, and the share that returns. Measured on 2026-10-21: 3,545 rows,
    3,545 addresses, so no share returns. The pool waits for the stable identity of TD-72 and for ADR-0043.
-7. [ ] Make the address stable before the pool pays: a path that names the object and not its position
-   (TD-72, TD-46). The measurement of the pool holds the shape and not the saving until then.
+7. [x] Make the address stable before the pool pays: a path that names the object and not its position
+   (TD-72, TD-46). Done on 2026-10-21 in `CanonicalForm.Compare` and `ArrayIdentity`: an element is named by
+   its identity field or by its string value; an array with a missing, empty or repeated identity keeps its
+   index and logs one warning for the file, the shape and the reason. Measured on four real runs: rows with a
+   numeric segment fell from 29,341 to 3,382, and rows from 31,243 to 20,048 (the others were shift rows: a
+   value that moved with an insertion). A rebuild of every changed file from its rows proved that no change
+   was lost: `AllTheClothes`, `ECOTI`, `FemalePMCVoice`, `FactoryClassic` and `WTT-Armory` rebuilt their run
+   exactly from the baseline and the rows (all files, except the 7 loose-loot files above 30 MB, which
+   ADR-0043 splits). The measurement of the pool still holds the shape and not the saving: the four runs
+   state 1.0 rows for each address, below the 1.6 of the break-even, because no two of them change the same
+   object (TD-77). The hash of a dataset holds the path, so a new import of `AllTheClothes` or `WTT-Armory`
+   is a new dataset (ADR-0029, amendment 4; TD-75).
 
 ## Links
 

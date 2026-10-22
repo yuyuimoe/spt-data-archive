@@ -221,7 +221,7 @@ public static class DatabaseObjects
                 continue;
             }
 
-            var changes = ReadChanges(before!, after!, tokens);
+            var changes = ReadChanges(before!, after!, tokens, warnings);
             var parts = new List<ObjectPart>();
 
             // A spawn point that the run adds to a map it does not add is a row of its own, the way an
@@ -284,7 +284,7 @@ public static class DatabaseObjects
     }
 
     /// <summary>The changed values of one object, file by file. A path starts with the part of its file.</summary>
-    private static IReadOnlyList<PathContribution> ReadChanges(Obj before, Obj after, IdTokens tokens)
+    private static IReadOnlyList<PathContribution> ReadChanges(Obj before, Obj after, IdTokens tokens, List<string> warnings)
     {
         var changes = new List<PathContribution>();
 
@@ -298,7 +298,7 @@ public static class DatabaseObjects
 
             if (inRun && inBaseline)
             {
-                var differences = CanonicalForm.Compare(now.File, then.Value, now.Value, tokens);
+                var differences = CanonicalForm.Compare(now.File, then.Value, now.Value, tokens, warnings);
 
                 if (differences.Count > 0)
                 {

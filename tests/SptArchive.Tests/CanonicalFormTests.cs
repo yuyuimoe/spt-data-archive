@@ -136,7 +136,8 @@ public sealed class CanonicalFormTests
         var differences = CanonicalForm.Compare("traders/54cb50c76803fa8b248b4571/base.json", left.RootElement, right.RootElement);
 
         // The restock clock is on the list. The id of a suit is not, because no run has moved it yet.
-        Assert.Equal(["$.suits[0]._id"], differences);
+        // A suit is named by its _id (TD-72), so the suit with the new id is added and the old one is removed.
+        Assert.Equal(["$.suits['6ad6d7dabceea800019b9c87']", "$.suits['6ad78419a7635f000115e858']"], differences);
     }
 
     [Fact]

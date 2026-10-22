@@ -294,6 +294,36 @@ Feature: Keep mod data apart from official data
     And a second run that mints another id for "B1" writes the same paths and the same values
 
   @unverified
+  Scenario: The address of a change names the element and not its place in the array
+    Given the item "B1" has the slots "a" and "b", in that order
+    And a second mod run holds the same slots in the order "b" and "a"
+    When both runs add the filter entry "X" to the slot "a"
+    Then the table "mod_change_paths" holds the same path for both runs
+    And that path names the slot "a" and holds no index of the slot
+
+  @unverified
+  Scenario: A list that only moves its elements makes no row, and the file hash still records it
+    Given a mod run whose location file holds the same spawn points in another order
+    When the Archiver archives that run
+    Then the table "mod_change_paths" holds no row for that list
+    And the canonical hash of that file is part of the content hash of the dataset
+
+  @unverified
+  Scenario: An array element with no identity keeps its index and the run warns
+    Given an array whose elements have none of the identity fields
+    When the Archiver archives a run that changes the second element
+    Then the path of the change holds the index of that element
+    And the warnings of the run state the file and the shape of the element
+
+  @unverified
+  Scenario: Two elements with one identity keep their index and the run warns
+    Given an array with two elements that share the same "_name"
+    When the Archiver archives a run that changes the second element
+    Then the path of the change holds the index of that element
+    And the first element keeps its own path
+    And the warnings of the run state that two elements share the identity
+
+  @unverified
   Scenario: The rows of these objects do not move the content hash
     Given a mod run that changes a location, a bot type, a hideout part, a price and a handbook entry
     When I compute the content hash of that run

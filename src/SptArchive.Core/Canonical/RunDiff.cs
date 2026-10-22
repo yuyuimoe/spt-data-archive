@@ -45,10 +45,10 @@ public static class RunDiff
         var idMap = new List<Addressing.AddressEntry>(addressing.Entries);
         var warnings = new List<string>(addressing.Warnings);
 
-        CollectTemplateTable(run, baseline, ItemsTable, ModTemplateKind.Item, addressing, templates, hashes);
-        CollectTemplateTable(run, baseline, QuestsTable, ModTemplateKind.Quest, addressing, templates, hashes);
-        CollectTemplateTable(run, baseline, CustomizationsTable, ModTemplateKind.Customization, addressing, templates, hashes);
-        CollectTraders(run, baseline, addressing, templates, hashes);
+        CollectTemplateTable(run, baseline, ItemsTable, ModTemplateKind.Item, addressing, templates, hashes, warnings);
+        CollectTemplateTable(run, baseline, QuestsTable, ModTemplateKind.Quest, addressing, templates, hashes, warnings);
+        CollectTemplateTable(run, baseline, CustomizationsTable, ModTemplateKind.Customization, addressing, templates, hashes, warnings);
+        CollectTraders(run, baseline, addressing, templates, hashes, warnings);
 
         // An offer is a template of its own, named by what it is (ADR-0032, decision 4), so the
         // assort of a trader becomes rows instead of one hash of the file.
@@ -195,11 +195,19 @@ public static class RunDiff
         using var runDocument = Parse(runFile!);
         using var baselineDocument = Parse(baselineFile!);
 
-        return CanonicalForm.Compare(
-            path,
-            baselineDocument.RootElement,
-            runDocument.RootElement,
-            addressing.TokensFor(path)).Count > 0;
+        var tokens = addressing.TokensFor(path);
+
+        if (CanonicalForm.Compare(path, baselineDocument.RootElement, runDocument.RootElement, tokens).Count > 0)
+        {
+            return true;
+        }
+
+        // A comparison names an array element by identity, so it cannot see a list that only moved. The
+        // dataset hash counts the order of an array (ADR-0029, amendment 4), and so does this decision.
+        return !string.Equals(
+            CanonicalForm.Hash(path, baselineDocument.RootElement, tokens),
+            CanonicalForm.Hash(path, runDocument.RootElement, tokens),
+            StringComparison.Ordinal);
     }
 
     internal static bool SameBytes(string left, string right)
@@ -223,7 +231,8 @@ public static class RunDiff
         string kind,
         Addressing addressing,
         List<TemplateContribution> templates,
-        IDictionary<string, string> hashes)
+        IDictionary<string, string> hashes,
+        List<string> warnings)
     {
         var hasRun = run.TryGetValue(tablePath, out var runFile);
         var hasBaseline = baseline.TryGetValue(tablePath, out var baselineFile);
@@ -296,7 +305,7 @@ public static class RunDiff
                 continue;
             }
 
-            var differences = CanonicalForm.Compare(tablePath, baselineEntry.Value, runEntry.Value, tokens);
+            var differences = CanonicalForm.Compare(tablePath, baselineEntry.Value, runEntry.Value, tokens, warnings);
 
             if (differences.Count == 0)
             {
@@ -347,7 +356,8 @@ public static class RunDiff
         SortedDictionary<string, string> baseline,
         Addressing addressing,
         List<TemplateContribution> templates,
-        IDictionary<string, string> hashes)
+        IDictionary<string, string> hashes,
+        List<string> warnings)
     {
         var directories = DirectoryNames(run, TradersTable)
             .Union(DirectoryNames(baseline, TradersTable), StringComparer.Ordinal)
@@ -398,7 +408,7 @@ public static class RunDiff
                 if (op == ModTemplateOperation.Modified && baseline.TryGetValue(basePath, out var baselineBase))
                 {
                     using var baselineDocument = Parse(baselineBase);
-                    var differences = CanonicalForm.Compare(basePath, baselineDocument.RootElement, document.RootElement, tokens);
+                    var differences = CanonicalForm.Compare(basePath, baselineDocument.RootElement, document.RootElement, tokens, warnings);
                     changes = ReadChanges(basePath, baselineDocument.RootElement, document.RootElement, differences, tokens);
                 }
             }
@@ -676,12 +686,12 @@ public static class RunDiff
 
         foreach (var jsonPath in differences)
         {
-            var pointer = ToPointer(jsonPath);
-            TryResolve(baseline, pointer, out var oldValue);
-            var hasNew = TryResolve(run, pointer, out var newValue);
+            var steps = Steps(jsonPath);
+            TryResolve(baseline, steps, out var oldValue);
+            var hasNew = TryResolve(run, steps, out var newValue);
 
             changes.Add(new PathContribution(
-                pointer,
+                ToPointer(jsonPath),
                 hasNew ? ModChangePathOperation.Set : ModChangePathOperation.Remove,
                 oldValue,
                 newValue));
@@ -709,12 +719,12 @@ public static class RunDiff
 
         foreach (var jsonPath in differences)
         {
-            var pointer = ToPointer(jsonPath);
-            TryResolve(baselineCanonical.RootElement, pointer, out var oldValue);
-            var hasNew = TryResolve(runCanonical.RootElement, pointer, out var newValue);
+            var steps = Steps(jsonPath);
+            TryResolve(baselineCanonical.RootElement, steps, out var oldValue);
+            var hasNew = TryResolve(runCanonical.RootElement, steps, out var newValue);
 
             changes.Add(new PathContribution(
-                pointer,
+                ToPointer(jsonPath),
                 hasNew ? ModChangePathOperation.Set : ModChangePathOperation.Remove,
                 oldValue,
                 newValue));
@@ -723,82 +733,131 @@ public static class RunDiff
         return changes;
     }
 
+    /// <summary>One step of a path from <see cref="CanonicalForm.Compare"/>: a property, an index or an identity.</summary>
+    private readonly record struct Step(StepKind Kind, string Text);
+
+    private enum StepKind
+    {
+        Property,
+        Index,
+        Key,
+    }
+
     /// <summary>
-    /// "$._props.Weight" becomes "/_props/Weight" and "$.StackSlots[0]._max_count" becomes
-    /// "/StackSlots/0/_max_count" (ADR-0017 stores a JSON pointer).
+    /// "$._props.Weight" becomes "/_props/Weight", "$.StackSlots[0]._max_count" becomes
+    /// "/StackSlots/0/_max_count" and "$.Slots['mod_scope'].x" becomes "/Slots/mod_scope/x" (ADR-0017 stores
+    /// a JSON pointer; TD-72 names an element by identity). The pointer does not tell an index from an
+    /// identity made of digits, so the value of a change is always read from the typed steps.
     /// </summary>
-    internal static string ToPointer(string jsonPath)
+    public static string ToPointer(string jsonPath) =>
+        string.Concat(Steps(jsonPath).Select(step =>
+            "/" + step.Text.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal)));
+
+    private static List<Step> Steps(string jsonPath)
     {
         var body = jsonPath.StartsWith('$') ? jsonPath[1..] : jsonPath;
-        var segments = new List<string>();
+        var steps = new List<Step>();
         var current = new System.Text.StringBuilder();
 
-        foreach (var character in body)
+        void Flush()
         {
-            switch (character)
+            if (current.Length > 0)
+            {
+                steps.Add(new Step(StepKind.Property, current.ToString()));
+                current.Clear();
+            }
+        }
+
+        for (var position = 0; position < body.Length; position++)
+        {
+            switch (body[position])
             {
                 case '.':
-                    if (current.Length > 0)
+                    Flush();
+                    break;
+
+                case '[' when position + 1 < body.Length && body[position + 1] == '\'':
+                    // A step named by identity is quoted: ['key'], with \\ and \' escaped (CanonicalForm.PushKey).
+                    Flush();
+                    position += 2;
+                    var key = new System.Text.StringBuilder();
+
+                    while (position < body.Length && body[position] != '\'')
                     {
-                        segments.Add(current.ToString());
-                        current.Clear();
+                        if (body[position] == '\\' && position + 1 < body.Length)
+                        {
+                            position++;
+                        }
+
+                        key.Append(body[position]);
+                        position++;
                     }
 
+                    steps.Add(new Step(StepKind.Key, key.ToString()));
+                    position++; // the closing bracket
                     break;
 
                 case '[':
-                    if (current.Length > 0)
-                    {
-                        segments.Add(current.ToString());
-                        current.Clear();
-                    }
-
-                    break;
-
-                case ']':
+                    Flush();
+                    var end = body.IndexOf(']', position);
+                    steps.Add(new Step(StepKind.Index, body[(position + 1)..end]));
+                    position = end;
                     break;
 
                 default:
-                    current.Append(character);
+                    current.Append(body[position]);
                     break;
             }
         }
 
-        if (current.Length > 0)
-        {
-            segments.Add(current.ToString());
-        }
-
-        return string.Concat(segments.Select(segment =>
-            "/" + segment.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal)));
+        Flush();
+        return steps;
     }
 
-    /// <summary>Reads the value at a pointer, and says whether the side holds it at all.</summary>
-    private static bool TryResolve(JsonElement root, string pointer, out string? value)
+    /// <summary>Reads the value at a path, and says whether the side holds it at all.</summary>
+    private static bool TryResolve(JsonElement root, IReadOnlyList<Step> steps, out string? value)
     {
         value = null;
         var current = root;
 
-        foreach (var segment in pointer.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var step in steps)
         {
-            var name = segment.Replace("~1", "/", StringComparison.Ordinal).Replace("~0", "~", StringComparison.Ordinal);
-
-            if (current.ValueKind == JsonValueKind.Array
-                && int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
-                && index >= 0
-                && index < current.GetArrayLength())
+            switch (step.Kind)
             {
-                current = current[index];
-                continue;
-            }
+                case StepKind.Key when current.ValueKind == JsonValueKind.Array:
+                    var found = ArrayIdentity.Keys(current, null, out _)?.IndexOf(step.Text) ?? -1;
 
-            if (current.ValueKind == JsonValueKind.Object && current.TryGetProperty(name, out var property))
-            {
-                current = property;
-                continue;
-            }
+                    if (found < 0)
+                    {
+                        return false;
+                    }
 
-            return false;
+                    current = current[found];
+                    break;
+
+                case StepKind.Index when current.ValueKind == JsonValueKind.Array:
+                    if (!int.TryParse(step.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
+                        || index < 0
+                        || index >= current.GetArrayLength())
+                    {
+                        return false;
+                    }
+
+                    current = current[index];
+                    break;
+
+                case StepKind.Property when current.ValueKind == JsonValueKind.Object:
+                    if (!current.TryGetProperty(step.Text, out var property))
+                    {
+                        return false;
+                    }
+
+                    current = property;
+                    break;
+
+                default:
+                    return false;
+            }
         }
 
         value = current.GetRawText();
