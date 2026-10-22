@@ -47,6 +47,7 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0039](0039-terminate-tls-at-a-proxy.md) | Terminate TLS at a proxy, and name the client there | Proposed |
 | [0040](0040-filter-a-jsonb-column-by-path.md) | Filter a jsonb column by the value at a path | Proposed |
 | [0041](0041-give-a-change-to-data-that-has-no-mod-table-a-row.md) | Give a change to data that has no mod table a row | Proposed |
+| [0042](0042-store-each-address-and-each-value-once.md) | Store each address and each value once, and join them to a change | Proposed |
 
 ## Status meanings
 

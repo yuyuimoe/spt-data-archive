@@ -205,8 +205,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   development archive. The measurements are in [docs/research/storage-engine.md](docs/research/storage-engine.md).
 - **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
   proxy), ADR-0040 (a jsonb filter by path, the whole-document field and its limits; the form of `eq` stays
-  open, TD-65) and ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
-  handbook entry) are Proposed and await Yui.
+  open, TD-65), ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
+  handbook entry) and ADR-0042 (an address pool and a value pool behind the change rows, TD-72/TD-73)
+  are Proposed and await Yui.
   ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0005 and ADR-0010 are superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031
