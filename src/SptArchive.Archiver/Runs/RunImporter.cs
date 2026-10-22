@@ -182,7 +182,14 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             "the archive cannot show. Import the official data of the installation first, then the run.");
     }
 
-    /// <summary>True when this run is already archived: same dataset, same release.</summary>
+    /// <summary>
+    /// True when this run is already archived: the content, this mod version and this release.
+    /// </summary>
+    /// <remarks>
+    /// The observation names the mod version and not only the dataset (TD-82). A second version with the
+    /// same content shares the dataset (ADR-0013) and still needs its own <c>mods</c> row and its own
+    /// observation (ADR-0018), so a dataset alone does not make a run current.
+    /// </remarks>
     public async Task<bool> IsCurrentAsync(ArchiveDbContext db, RunImportPlan plan, CancellationToken cancellationToken)
     {
         var datasetId = await db.ModDatasets
@@ -190,12 +197,19 @@ public sealed class RunImporter(IOptions<ArchiveOptions> options, ILogger<RunImp
             .Select(dataset => (Guid?)dataset.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        return datasetId is not null
-            && await db.ModDataObservations.AnyAsync(
-                observation => observation.DatasetId == datasetId
-                    && observation.SptVersion == plan.Release
-                    && observation.Kind == ModObservationKind.Archive,
-                cancellationToken);
+        if (datasetId is null)
+        {
+            return false;
+        }
+
+        return await (from observation in db.ModDataObservations
+            join mod in db.Mods on observation.ModId equals mod.Id
+            where observation.DatasetId == datasetId
+                && observation.SptVersion == plan.Release
+                && observation.Kind == ModObservationKind.Archive
+                && mod.ModGuid == plan.Target.ModGuid
+                && mod.Version == plan.Target.Version
+            select observation.Id).AnyAsync(cancellationToken);
     }
 
     /// <summary>Writes the dataset, its observation and the rows. The caller owns the transaction.</summary>

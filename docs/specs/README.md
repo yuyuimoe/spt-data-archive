@@ -43,14 +43,14 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 ## Slice to work on next
 
 Done in the last slices: four files run as tests with Reqnroll.
-They are `archive-official-data.feature` (28 of 38 tests), `mod-registry.feature` (28 of 55), `backup-and-restore.feature`
+They are `archive-official-data.feature` (28 of 38 tests), `mod-registry.feature` (29 of 55), `backup-and-restore.feature`
 (9) and `query-api.feature` (73 of 76). They run against throwaway databases and the real script and Api (TD-62). Done before them: one row for
 one object of the seven files that a run changes (ADR-0044), and the filter of a jsonb column by the value at a
 path (ADR-0040, TD-52, TD-55). Six feature files are linked from `tests/SptArchive.Tests`: `mod-api.feature`
 (24 scenarios), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76, of which 3
 keep `@unverified`) and `archive-official-data.feature` (38, of which 10 are skipped: one scenario whose title
 contradicts its steps, and the 9 examples of the `@backlog` outline) and `mod-registry.feature` (55, of which
-27 are skipped: 17 `@backlog` scenarios with 21 tests, and 6 scenarios that need a decision of the driver). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
+26 are skipped: 17 `@backlog` scenarios with 21 tests, and 5 scenarios that need a decision of the driver). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
 Next: the baseline cache (ADR-0013). `bot-and-faction-data` (12 scenarios) stays unbound and tagged `@unverified`:
 the tables it names do not exist (TD-62).
 Scenarios outside the slice stay `@unverified` or `@backlog`.

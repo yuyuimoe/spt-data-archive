@@ -27,6 +27,7 @@ public sealed class RunImportTests : IDisposable
     private const string OfficialItemId = "ffffffffffffffffffffffff";
 
     private const string TargetGuid = "com.example.thermal";
+    private const string TargetVersion = "3.4.0";
     private const string DependencyGuid = "com.example.commonlib";
     private const string TargetDirectory = "Thermal";
 
@@ -77,7 +78,7 @@ public sealed class RunImportTests : IDisposable
 
         // The mod row states the version the run named, not the dataset (ADR-0013).
         var mod = await scope.Db.Mods.SingleAsync(row => row.ModGuid == TargetGuid, cancellationToken);
-        Assert.Equal((TargetGuid, "3.4.0", ">=4.1.3 <4.2.0"), (mod.ModGuid, mod.Version, mod.SptVersionRange));
+        Assert.Equal((TargetGuid, TargetVersion, ">=4.1.3 <4.2.0"), (mod.ModGuid, mod.Version, mod.SptVersionRange));
 
         var templates = await scope.Db.ModTemplates
             .Where(row => datasetIds.Contains(row.DatasetId))
@@ -216,6 +217,58 @@ public sealed class RunImportTests : IDisposable
         Assert.Equal(1, await scope.Db.ModDataObservations.CountAsync(row => datasetIds.Contains(row.DatasetId!.Value), cancellationToken));
         Assert.Equal(1, await scope.Db.ModItems.CountAsync(row => datasetIds.Contains(row.DatasetId), cancellationToken));
         Assert.Equal(2, await scope.Db.ModFiles.CountAsync(file => datasetIds.Contains(file.DatasetId), cancellationToken));
+    }
+
+    [Fact]
+    public async Task A_second_version_with_the_same_content_is_observed_on_the_same_dataset()
+    {
+        // Two versions with the same content share one dataset (ADR-0013). The version is not part of the
+        // content: it reaches the dataset through its own observation, so the second version still needs
+        // its `mods` row and its observation (ADR-0018, TD-82).
+        var cancellationToken = TestContext.Current.CancellationToken;
+        WriteBaseline();
+        WriteRun();
+
+        await using var scope = await ArchiveDatabase.BeginAsync(cancellationToken);
+        await EnsureLanguageAsync(scope, "en", cancellationToken);
+
+        var importer = Importer();
+        await ImportAsync(importer, scope);
+
+        var datasetIds = await TestDatasetsAsync(scope, cancellationToken);
+        var first = await scope.Db.ModDataObservations.SingleAsync(
+            row => datasetIds.Contains(row.DatasetId!.Value), cancellationToken);
+
+        // The next version of the mod ships the same content on the same release.
+        WriteRun(version: "3.5.0");
+
+        var plan = importer.Prepare();
+        Assert.Equal("3.5.0", plan.Target.Version);
+        Assert.False(
+            await importer.IsCurrentAsync(scope.Db, plan, cancellationToken),
+            "The version 3.5.0 has no observation, so its run is not archived yet.");
+
+        var report = await ImportAsync(importer, scope);
+        Assert.False(report.IsNewDataset);
+        Assert.Equal(first.DatasetId, report.DatasetId);
+
+        // One dataset for the mod, and one observation for each version, both pointing at it.
+        Assert.Empty(await scope.Db.ModDatasets.Where(
+            dataset => dataset.ModGuid == TargetGuid && dataset.Id != first.DatasetId).ToListAsync(cancellationToken));
+
+        var observations = await scope.Db.ModDataObservations
+            .Include(row => row.Mod)
+            .Where(row => row.Mod.ModGuid == TargetGuid)
+            .ToListAsync(cancellationToken);
+
+        Assert.Equal(
+            ["3.4.0", "3.5.0"],
+            observations.Select(row => row.Mod.Version).Order(StringComparer.Ordinal));
+        Assert.All(observations, row => Assert.Equal(first.DatasetId, row.DatasetId));
+        Assert.All(observations, row => Assert.Equal(Release, row.SptVersion));
+
+        // A second import of the second version is current: the dataset and its observation exist.
+        Assert.True(await importer.IsCurrentAsync(scope.Db, plan, cancellationToken));
     }
 
     [Fact]
@@ -406,7 +459,8 @@ public sealed class RunImportTests : IDisposable
         string? quests = null,
         string? traderAssort = null,
         string? locales = null,
-        string? origin = null)
+        string? origin = null,
+        string version = TargetVersion)
     {
         Write(Run, BaselineTree);
         Write(Run, new Dictionary<string, string>
@@ -417,11 +471,16 @@ public sealed class RunImportTests : IDisposable
             ["locales/global/en.json"] = locales ?? RunLocales,
         });
 
-        WriteRunAccount(Run, release, targetManifest: true, origin: origin);
+        WriteRunAccount(Run, release, targetManifest: true, origin: origin, version: version);
     }
 
     /// <summary>The run account: which mods loaded, on which release, and the manifest of each (ADR-0029).</summary>
-    private static void WriteRunAccount(string root, string? release, bool targetManifest, string? origin = null)
+    private static void WriteRunAccount(
+        string root,
+        string? release,
+        bool targetManifest,
+        string? origin = null,
+        string version = TargetVersion)
     {
         var mods = new List<string>
         {
@@ -444,7 +503,7 @@ public sealed class RunImportTests : IDisposable
                 modGuid = TargetGuid,
                 name = "Thermal",
                 author = "LennoxP90",
-                version = "3.4.0",
+                version,
                 sptVersion = ">=4.1.3 <4.2.0",
                 modDependencies = new Dictionary<string, string> { [DependencyGuid] = "^3.0.0" },
             }));

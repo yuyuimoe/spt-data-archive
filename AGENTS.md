@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 644 tests pass against a real Postgres. 434 are xUnit tests. 210 are Gherkin tests that Reqnroll runs: `mod-api.feature` (24), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76), `archive-official-data.feature` (38, from 27 headings) and `mod-registry.feature` (55, from 51 headings) (TD-02, TD-06). Three scenarios of `query-api.feature` keep `@unverified`. `archive-official-data.feature` skips 10 tests: one scenario and the 9 examples of its `@backlog` outline. `mod-registry.feature` skips 27 tests: 17 `@backlog` scenarios (21 tests) and 6 scenarios that need a decision of the driver. The one unbound feature file keeps 12 scenarios (TD-62).
+The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 645 tests pass against a real Postgres. 435 are xUnit tests. 210 are Gherkin tests that Reqnroll runs: `mod-api.feature` (24), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76), `archive-official-data.feature` (38, from 27 headings) and `mod-registry.feature` (55, from 51 headings) (TD-02, TD-06). Three scenarios of `query-api.feature` keep `@unverified`. `archive-official-data.feature` skips 10 tests: one scenario and the 9 examples of its `@backlog` outline. `mod-registry.feature` skips 26 tests: 17 `@backlog` scenarios (21 tests) and 5 scenarios that need a decision of the driver. The one unbound feature file keeps 12 scenarios (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 644 tests (210 are scenarios, 40 of them skipped); needs the development database (below)
+dotnet test SptArchive.slnx             # 645 tests (210 are scenarios, 39 of them skipped); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -117,10 +117,10 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **Six feature files run as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 24 scenarios of `docs/specs/mod-api.feature`,
   the 8 of `docs/specs/file-rows.feature`, the 9 of `docs/specs/backup-and-restore.feature`, 73 of the 76 of
-  `docs/specs/query-api.feature`, 28 of the 38 of `docs/specs/archive-official-data.feature` and 28 of the 55 of
+  `docs/specs/query-api.feature`, 28 of the 38 of `docs/specs/archive-official-data.feature` and 29 of the 55 of
   `docs/specs/mod-registry.feature` inside `dotnet test` (ADR-0012, TD-06). Three scenarios of `query-api.feature` keep the tag `@unverified`, and so do one scenario of
   `archive-official-data.feature` (a title that contradicts its steps) and its `@backlog` outline of 9 examples. `mod-registry.feature` keeps it on
-  23 of its 51 scenarios: the 17 `@backlog` ones and six that the driver must decide (TD-62). The one unbound feature
+  22 of its 51 scenarios: the 17 `@backlog` ones and five that the driver must decide (TD-62). The one unbound feature
   file, `bot-and-faction-data` (12), keeps it on every scenario: its tables do not exist (TD-62). `check-docs.py` refuses a
   scenario that lies about itself: an `@unverified` scenario in a file that the test project links without the
   skip hook, and a scenario without the tag in a file that it does not link.
@@ -129,9 +129,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   `RunRecordTests`) write there. Their rows are invisible to every other test, which runs in a transaction on the
   shared `archive` database: before 2026-10-22 a committed release such as `993.x` moved "the latest release" of a
   parallel query, and a page of `modFiles` held a file of another test (TD-81).
-- **Done:** the solution builds, eleven migrations are applied, and 644 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59),
-  434 xUnit tests and 210 Gherkin tests, 40 of which are skipped as `@unverified`.
+- **Done:** the solution builds, eleven migrations are applied, and 645 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59, TD-82),
+  435 xUnit tests and 210 Gherkin tests, 39 of which are skipped as `@unverified`.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -140,7 +140,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   result (ADR-0033). Every row is keyed by the address the archive derived for the object, and the id map keeps
   the id the run gave it (ADR-0034). Official data comes only from an installation that loaded no mod, and a run
   waits for the official data of its release (ADR-0035). Several imports may run at the same time: a run holds a
-  lease, and a transaction-scoped advisory lock covers what it writes (ADR-0036).
+  lease, and a transaction-scoped advisory lock covers what it writes (ADR-0036). A second version of a mod with
+  the same content shares the dataset of the first and still writes its own `mods` row and its own observation,
+  because a run is current only when its own mod version is observed on its release (TD-82).
 - **The Api answers one release at a time.** Every official field takes an optional `sptVersion`, and an
   answer comes from the latest archived release when the argument is left out (ADR-0014, ADR-0019). A bad
   value is an error with its own code and never an empty list: `SPT_VERSION_UNKNOWN`,

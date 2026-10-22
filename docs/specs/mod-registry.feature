@@ -91,7 +91,6 @@ Feature: Keep mod data apart from official data
     Then the table "mod_datasets" has one row for that version
     And that row states the content hash, the table hashes and the row counts
 
-  @unverified
   Scenario: Unchanged content reuses the dataset
     Given the mod version "1.0.0" has the dataset "D1"
     When the version "1.1.0" of that mod exports the same content
