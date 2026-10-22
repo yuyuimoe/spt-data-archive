@@ -102,6 +102,27 @@ public static class ArchiveDatabase
         }
     }
 
+    /// <summary>Drops a database that <see cref="OwnDatabaseAsync"/> made, for a test that wants a clean one for
+    /// each run. Open its connections with <c>Pooling=false</c>, so that no pooled session outlives it.</summary>
+    public static async Task DropOwnDatabaseAsync(string name)
+    {
+        await Gate.WaitAsync();
+        try
+        {
+            OwnDatabases.Remove(name);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+
+        var admin = new NpgsqlConnectionStringBuilder(OwnerConnectionString) { Database = "postgres", Pooling = false }.ConnectionString;
+        await using var connection = new NpgsqlConnection(admin);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand($"drop database if exists \"archive_test_{name}\" with (force)", connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
     public static ArchiveDbContext CreateContext(string connectionString)
     {
         var options = new DbContextOptionsBuilder<ArchiveDbContext>()

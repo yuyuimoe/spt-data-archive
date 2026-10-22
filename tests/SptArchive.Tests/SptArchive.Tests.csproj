@@ -46,6 +46,7 @@
     <ReqnrollFeatureFiles Include="../../docs/specs/file-rows.feature" Link="Specs/file-rows.feature" />
     <ReqnrollFeatureFiles Include="../../docs/specs/backup-and-restore.feature" Link="Specs/backup-and-restore.feature" />
     <ReqnrollFeatureFiles Include="../../docs/specs/query-api.feature" Link="Specs/query-api.feature" />
+    <ReqnrollFeatureFiles Include="../../docs/specs/archive-official-data.feature" Link="Specs/archive-official-data.feature" />
   </ItemGroup>
 
   <ItemGroup>

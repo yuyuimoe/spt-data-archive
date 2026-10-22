@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 551 tests pass against a real Postgres: 434 xUnit tests and the 117 Gherkin scenarios of `mod-api.feature` (24), `file-rows.feature` (8), `backup-and-restore.feature` (9) and `query-api.feature` (76), which Reqnroll runs (TD-02, TD-06). Three scenarios of `query-api.feature` keep `@unverified`, and the three unbound feature files keep 90 (TD-62).
+The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 589 tests pass against a real Postgres. 434 are xUnit tests. 155 are Gherkin scenarios that Reqnroll runs: `mod-api.feature` (24), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76) and `archive-official-data.feature` (38, from 27 headings) (TD-02, TD-06). Three scenarios of `query-api.feature` keep `@unverified`. `archive-official-data.feature` skips 10 tests: one scenario and the 9 examples of its `@backlog` outline. The two unbound feature files keep 63 scenarios (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 551 tests (117 are scenarios, 3 of them skipped); needs the development database (below)
+dotnet test SptArchive.slnx             # 589 tests (155 are scenarios, 13 of them skipped); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -115,11 +115,13 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   service container; the run of `02a976c` on `github.com/yuyuimoe/spt-data-archive` passed every step in 89 seconds
   (run `39647853715`, TD-60). On an empty database every step passes and every test passes, so a clean machine and
   an archive machine agree.
-- **Four feature files run as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 24 scenarios of `docs/specs/mod-api.feature`,
-  the 8 of `docs/specs/file-rows.feature`, the 9 of `docs/specs/backup-and-restore.feature` and 73 of the 76 of
-  `docs/specs/query-api.feature` inside `dotnet test` (ADR-0012, TD-06). Three scenarios of `query-api.feature` keep
-  the tag `@unverified`, and the three unbound feature files — `archive-official-data` (27), `mod-registry` (51)
-  and `bot-and-faction-data` (12) — keep it on every one of their 90 scenarios (TD-62). `check-docs.py` refuses a
+- **Five feature files run as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 24 scenarios of `docs/specs/mod-api.feature`,
+  the 8 of `docs/specs/file-rows.feature`, the 9 of `docs/specs/backup-and-restore.feature`, 73 of the 76 of
+  `docs/specs/query-api.feature` and 28 of the 38 of `docs/specs/archive-official-data.feature` inside `dotnet test`
+  (ADR-0012, TD-06). Three scenarios of `query-api.feature` keep the tag `@unverified`, and so do one scenario of
+  `archive-official-data.feature` (a title that contradicts its steps) and its `@backlog` outline of 9 examples. The two
+  unbound feature files — `mod-registry` (51) and `bot-and-faction-data` (12) — keep it on every one of their 63
+  scenarios (TD-62). `check-docs.py` refuses a
   scenario that lies about itself: an `@unverified` scenario in a file that the test project links without the
   skip hook, and a scenario without the tag in a file that it does not link.
 - **A test class that commits owns a database.** `ArchiveDatabase.OwnDatabaseAsync` creates and migrates
@@ -127,9 +129,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   `RunRecordTests`) write there. Their rows are invisible to every other test, which runs in a transaction on the
   shared `archive` database: before 2026-10-22 a committed release such as `993.x` moved "the latest release" of a
   parallel query, and a page of `modFiles` held a file of another test (TD-81).
-- **Done:** the solution builds, eleven migrations are applied, and 551 tests pass (TD-01, TD-02, TD-04, TD-05,
+- **Done:** the solution builds, eleven migrations are applied, and 589 tests pass (TD-01, TD-02, TD-04, TD-05,
   TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59),
-  434 xUnit tests and 117 Gherkin scenarios, 3 of which are skipped as `@unverified`.
+  434 xUnit tests and 155 Gherkin scenarios, 13 of which are skipped as `@unverified`.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into

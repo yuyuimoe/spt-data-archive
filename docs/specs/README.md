@@ -1,6 +1,6 @@
 # Specifications
 
-The `.feature` files in this folder describe what the system does. They are written in [Gherkin](https://cucumber.io/docs/gherkin/reference). They are the tests: Reqnroll runs the files that the test project links (ADR-0012). Today that is `mod-api.feature` only.
+The `.feature` files in this folder describe what the system does. They are written in [Gherkin](https://cucumber.io/docs/gherkin/reference). They are the tests: Reqnroll runs the files that the test project links (ADR-0012). Five files are linked today (see the slice below).
 
 ## Files
 
@@ -42,13 +42,13 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 
 ## Slice to work on next
 
-Done: the nine scenarios of `backup-and-restore.feature` and 73 of the 76 of `query-api.feature` run as tests
+Done: 28 of the 38 scenarios of `archive-official-data.feature` (27 headings), the nine scenarios of `backup-and-restore.feature` and 73 of the 76 of `query-api.feature` run as tests
 with Reqnroll, against throwaway databases and the real script and Api (TD-62). Done before them: one row for
 one object of the seven files that a run changes (ADR-0044), and the filter of a jsonb column by the value at a
-path (ADR-0040, TD-52, TD-55). Four feature files are linked from `tests/SptArchive.Tests`: `mod-api.feature`
-(24 scenarios), `file-rows.feature` (8), `backup-and-restore.feature` (9) and `query-api.feature` (76, of which 3
-keep `@unverified`). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
-Next: the baseline cache (ADR-0013) and the binding of the three feature files that stay unbound —
-`archive-official-data` (27), `mod-registry` (51) and `bot-and-faction-data` (12) — which keep 90 scenarios tagged
-`@unverified` (TD-62).
+path (ADR-0040, TD-52, TD-55). Five feature files are linked from `tests/SptArchive.Tests`: `mod-api.feature`
+(24 scenarios), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76, of which 3
+keep `@unverified`) and `archive-official-data.feature` (38, of which 10 are skipped: one scenario whose title
+contradicts its steps, and the 9 examples of the `@backlog` outline). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
+Next: the baseline cache (ADR-0013) and the binding of the two feature files that stay unbound —
+`mod-registry` (51) and `bot-and-faction-data` (12) — which keep 63 scenarios tagged `@unverified` (TD-62).
 Scenarios outside the slice stay `@unverified` or `@backlog`.

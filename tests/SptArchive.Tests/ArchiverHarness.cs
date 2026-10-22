@@ -2,6 +2,11 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using SptArchive.Archiver;
+using SptArchive.Archiver.Importers;
 using SptArchive.Archiver.Runs;
 using SptArchive.Core.Data;
 
@@ -115,5 +120,127 @@ internal static class RunTree
         var full = Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         System.IO.File.WriteAllText(full, content);
+    }
+}
+
+/// <summary>A cache that keeps what the Archiver writes, so a test reads the key back. It can also be down.</summary>
+internal sealed class RecordingCache : IDistributedCache
+{
+    private readonly Dictionary<string, byte[]> _values = new(StringComparer.Ordinal);
+
+    /// <summary>When set, every write fails the way an unreachable Redis does.</summary>
+    public bool Down { get; set; }
+
+    public string? Text(string key) => _values.TryGetValue(key, out var value) ? System.Text.Encoding.UTF8.GetString(value) : null;
+
+    public byte[]? Get(string key) => _values.GetValueOrDefault(key);
+
+    public Task<byte[]?> GetAsync(string key, CancellationToken token = default) => Task.FromResult(Get(key));
+
+    public void Refresh(string key)
+    {
+    }
+
+    public Task RefreshAsync(string key, CancellationToken token = default) => Task.CompletedTask;
+
+    public void Remove(string key) => _values.Remove(key);
+
+    public Task RemoveAsync(string key, CancellationToken token = default)
+    {
+        Remove(key);
+        return Task.CompletedTask;
+    }
+
+    public void Set(string key, byte[] value, DistributedCacheEntryOptions options)
+    {
+        if (Down)
+        {
+            throw new InvalidOperationException("The cache is not reachable.");
+        }
+
+        _values[key] = value;
+    }
+
+    public Task SetAsync(string key, byte[] value, DistributedCacheEntryOptions options, CancellationToken token = default)
+    {
+        Set(key, value, options);
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>What the Archiver logged: the level, the text and the exception of every entry.</summary>
+internal sealed class LogSink
+{
+    public List<(Microsoft.Extensions.Logging.LogLevel Level, string Message, Exception? Exception)> Entries { get; } = [];
+
+    public ILogger<T> For<T>() => new SinkLogger<T>(this);
+
+    private sealed class SinkLogger<T>(LogSink sink) : ILogger<T>
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lock (sink.Entries)
+            {
+                sink.Entries.Add((logLevel, formatter(state, exception), exception));
+            }
+        }
+    }
+}
+
+/// <summary>Runs a real importer and counts the calls, so a test can say that a run imported nothing.</summary>
+internal sealed class CountingImporter(IImporter inner) : IImporter
+{
+    public int Calls { get; private set; }
+
+    public string Name => inner.Name;
+
+    public Task ImportAsync(ImportContext context, CancellationToken cancellationToken)
+    {
+        Calls++;
+        return inner.ImportAsync(context, cancellationToken);
+    }
+}
+
+/// <summary>Builds the real <see cref="ArchiveJob"/> and runs it to its end, the way the process does.</summary>
+internal static class ArchiverHarness
+{
+    /// <summary>The five importers of <c>Program.cs</c>, in its order.</summary>
+    public static IImporter[] Importers() =>
+    [
+        new LocaleImporter(NullLogger<LocaleImporter>.Instance),
+        new ItemImporter(NullLogger<ItemImporter>.Instance),
+        new CustomizationImporter(NullLogger<CustomizationImporter>.Instance),
+        new QuestImporter(NullLogger<QuestImporter>.Instance),
+        new TraderImporter(NullLogger<TraderImporter>.Instance),
+    ];
+
+    public static async Task RunAsync(
+        string connectionString,
+        ArchiveOptions options,
+        IEnumerable<IImporter> importers,
+        IDistributedCache cache,
+        ILogger<ArchiveJob> logger,
+        CancellationToken cancellationToken)
+    {
+        var job = new ArchiveJob(
+            new OwnerFactory(connectionString),
+            importers,
+            new RunImporter(Options.Create(options), NullLogger<RunImporter>.Instance),
+            cache,
+            Options.Create(options),
+            new NullLifetime(),
+            logger);
+
+        await job.StartAsync(cancellationToken);
+        await job.ExecuteTask!;
     }
 }
