@@ -1,110 +1,156 @@
 # ADR-0044: Split every file that a run changes into one row for each object it holds
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
 **Deciders:** Yui
+
+Ratified by Yui on 2026-10-21. The Context below is the correction that the measurement of that day made
+to the first draft of this decision.
 
 ## Context
 
 ADR-0041 gave a row to the five tables that the server keeps as one document: a location, a bot type, a
-hideout part, a price and a handbook entry. ADR-0043 added the spawn point of a loose-loot file. Three
-tables were already rows before them: the items of `templates/items.json`, the quests of
-`templates/quests.json`, the customizations of `templates/customization.json`, the base of each trader and
-each offer of an assortment, and every key of `locales/<scope>/<language>.json`.
+hideout part, a price and a handbook entry. ADR-0043 added the spawn point of a loose-loot file. Six kinds
+of file already held rows before them:
 
-So the archive reports the rest as a file that changed with no row of its own. Measured on 2026-10-21 in
-the 19 exports of the development machine, against the baseline export of 4.1.6:
+- `templates/items.json`, `templates/quests.json` and `templates/customization.json`: one row for each id.
+- `locales/<scope>/<language>.json`: one row for each key.
+- A trader: one row for each of `base.json`, `dialogue.json`, `suits.json`, `services.json`,
+  `assort.json` and `questassort.json`.
+- A map: one row for each file of its directory, named by the file (`base`, `looseLoot`, `statics`,
+  `staticLoot`, `staticContainers`, `staticAmmo`, `allExtracts`).
 
-- 107 changed or new JSON files are above 2,000,000 bytes, and together they take 1,348,928,941 bytes.
-  Of those, 70 are translation files, which the archive already holds as one row for each key.
-- The `WTT-Armory` run changes `templates/dialogue.json` (4,694,993 bytes), `templates/profiles.json`
-  (1,078,871 bytes), `globals.json` (704,308 bytes), `settings.json` (345,329 bytes) and the files of the
-  hideout that hold no list.
-- Six directories of the development machine hold a whole-table export: `templates.json` of 23,790,813
-  bytes, `locales.json` of 51,429,107 bytes and `traders.json` of 2,614,662 bytes at the root. They hold
-  the table that the server keeps, and not a run: the exporter writes them with the `export` verb, and the
-  Archiver imports no run from them (ADR-0027, ADR-0029).
+Seven files of a run still hold no row. Measured on 2026-10-21 in the baseline export of 4.1.6:
 
-A client that asks "what did this mod do to the dialogue of a trader" gets a canonical hash of a 4.7 MB
-file, and nothing it can read. The same client that asks for a translation gets the key.
+| File | Bytes | Root | The object is named by |
+|---|---|---|---|
+| `globals.json` | 704,308 | an object of 5 keys | the preset id, the `Role`, the `Name`, or the key |
+| `settings.json` | 345,329 | an object of one key, `config` | the key |
+| `templates/dialogue.json` | 4,693,993 | `elements`, a list of 53 | `Id`; a line by its `Id` |
+| `templates/profiles.json` | 1,078,871 | 9 editions | the edition name |
+| `templates/achievements.json` | 121,613 | a list of 79 | `id` |
+| `templates/character.json` | 12,610 | a list of 546 strings | the string |
+| `templates/customisationStorage.json` | 3,330 | a list of 93 | `id` |
+
+Four of those seven changed in the 19 exports of the development machine, against that baseline:
+
+| File | Run | Bytes of the changed copy |
+|---|---|---|
+| `globals.json` | `WTT-Armory` | 811,221 |
+| `templates/achievements.json` | `WTT-Armory` | 131,331 |
+| `templates/character.json` | `AllTheClothes`, `FemalePMCVoice` | 14,743 and 12,637 |
+| `templates/customisationStorage.json` | `AllTheClothes`, `FemalePMCVoice` | 6,368 and 3,398 |
+
+That is six files and 979,698 bytes. `templates/dialogue.json`, `templates/profiles.json` and
+`settings.json` are byte-identical to the baseline in all 19 exports.
+
+A client that asks "which item preset did this mod change" gets the canonical hash of `globals.json` and
+nothing it can read, and that file holds 488 item presets. The same client that asks for a translation, an
+item or an offer gets a row.
+
+### The correction of 2026-10-21
+
+The first draft of this decision stated that 107 changed files above 2,000,000 bytes take 1,348,928,941
+bytes, and that `WTT-Armory` changes `templates/dialogue.json` (4,694,993 bytes) and `settings.json`
+(345,329 bytes). The measurement found both statements wrong:
+
+- The 1,348,928,941 bytes counted 70 translation files and 12 location files, which already hold a row for
+  each key or for each file part, and the six whole-table exports of `templates.json`, `locales.json` and
+  `traders.json`, which are not runs (decision 8).
+- `templates/dialogue.json` and `settings.json` do not differ from the baseline in any of the 19 exports.
+
+So the case for this decision is what a client can read, and not how many bytes move. The seven files hold
+the largest documents of the server that a client cannot open.
 
 ## Decision
 
 **We will give each object of every JSON file that a run changes a row, and the rows of one file the shape
 that file has.**
 
-1. **A file of lists is a directory of objects.** A file whose root is an array, or an object that holds
-   arrays, is split by the objects of its lists, and each object is named by the id it carries. The rule
-   that ADR-0041 wrote for a handbook and a hideout already does this; this decision applies it to every
-   file that the archive reports in `FilesWithoutRows`.
+1. **A list is a directory of objects.** A file whose root is a list is split by its objects, and each
+   object is named by the key that it carries. The key differs by file: `Id` in a dialogue element, `id` in
+   an achievement and in a storage entry, `_id` in an item. A list of strings, such as
+   `templates/character.json`, is split by the string. A list whose objects carry no such key is split by
+   its place, the way ADR-0043 names a spawn point that carries no `template.Id`.
 
-2. **A file with no list is one object, named by its path.** `globals.json`, `settings.json` and a file of
-   the top of a map stay one row, because the server reads them whole. A value inside it is a path, the way
-   a value of a bot file is today.
+2. **An object that holds objects is a directory too.** `globals.json` holds four parts that a mod edits:
+   `ItemPresets`, 488 presets keyed by preset id; `bot_presets`, a list of 28 objects named by `Role`;
+   `BotWeaponScatterings`, a list of 3 objects named by `Name`; and `LocationInfection`, an object of 10
+   numbers. Each of them becomes a row for each object. `templates/profiles.json` holds 9 editions, and
+   each edition is a row named by the edition.
 
-3. **A dialogue file is split by its node.** `templates/dialogue.json` is an object whose keys are the ids
-   of traders, and each of those is an object whose keys are the ids of dialogue nodes. The trader is the
-   object and the node is its part, so a changed line is a path under the trader and the node.
+3. **An object with no list stays one object, and a value inside it is a path.** `globals.json.config`
+   holds 107 keys, `settings.json.config` holds the settings of the server, and the `StartPoints` of a
+   dialogue element holds the entry points of that dialogue. Each stays one object, and a changed key
+   inside it is a path, as a value of a bot file is today.
 
-4. **No file above the limit of the Api becomes one row.** A row holds one object. When an object itself is
+4. **A dialogue is a list of elements, and a line is the part.** `templates/dialogue.json` holds
+   `elements`: 53 objects that carry `Id`, `Trader`, `Lines`, `StartPoints`, `SubTraders` and
+   `localization`. The element is the object and the line is its part, so a changed line is a path under
+   the element and the line. The trader is a value of the element and not its name, because one trader can
+   hold more than one element.
+
+5. **No file above the limit of the Api becomes one row.** A row holds one object. When an object itself is
    above `RawJson:MaxValueBytes`, its row states its size, its hash and its source link, and `rawJson`
    refuses it, as ADR-0041, amendment 1 states for a file.
 
-5. **The content hash does not move.** The canonical hash of every file stays in the basis of the dataset
+6. **The content hash does not move.** The canonical hash of every file stays in the basis of the dataset
    hash (ADR-0029, amendment 4), so a dataset that the archive holds keeps its hash and this decision
    writes no new dataset (ADR-0013).
 
-6. **A dataset of the archive is not rewritten.** An import before this decision keeps the rows it had, and
+7. **A dataset of the archive is not rewritten.** An import before this decision keeps the rows it had, and
    this decision gives no way to rebuild them. That is TD-75, and it is the same limit that ADR-0043 met.
 
-7. **A whole-table export is no run and needs no split.** The archive imports a run, and a run holds the
-   files of the server in the layout of `SPT_Data` (ADR-0027). The three files of a whole-table export are
-   a diagnostic of the exporter, and TD-74 gives the link to the source of a file.
+8. **A whole-table export is no run and needs no split.** The archive imports a run, and a run holds the
+   files of the server in the layout of `SPT_Data` (ADR-0027). The three files of a whole-table export are a
+   diagnostic of the exporter, and ADR-0045 gives the link to the source of a file.
 
-8. **No official table is touched** (ADR-0003). Every row is keyed by the dataset id.
+9. **No official table is touched** (ADR-0003). Every row is keyed by the dataset id.
 
 ## Options Considered
 
 | Dimension | A. The whole file in one row | B. The hash only (today) | C. One row for each object (chosen) |
 |---|---|---|---|
-| Answers "what did the mod change in the dialogue" | Only below 2 MB, and then one 4.7 MB document | No | Yes, one path for each changed line |
-| Bytes for `templates/dialogue.json` | 4.7 MB, refused | 0 | The changed nodes |
-| Answers "which translation changed" | One document for each language | No | Already one row for each key |
+| Answers "which item preset did the mod change" | No, and the row holds 488 presets | No | Yes, one path under the preset |
+| Bytes for `globals.json` | 811,221, below the limit | 0 | The changed presets, and no copy of the rest |
+| Bytes for `templates/dialogue.json` | 4,693,993, above the limit, refused | 0 | The changed lines |
 | Work | None new | None | A reader for each file shape |
 | A new file shape of a future release | Nothing | Nothing | One more reader, and the import stops until it exists |
 
-Option A buys no read for the files that matter, because each of them is above the limit. Option B is
-honest about the change and silent about its content. Option C costs one reader for each file shape.
+Option A is enough for the four files of a real run that changed and are below the limit, and it costs one
+row and no reader. Option C also covers the two files above or near it, and it answers with the object that
+moved. The archive chooses C, because a change is a path over an object that has a name, and because
+`templates/dialogue.json` and `templates/profiles.json` are at or above the limit of the Api.
 
 ## Trade-off Analysis
 
-The trade-off is a reader for each file shape against the answer a client gets, and the readers do not
-share one shape. A dialogue is an object of objects of objects; a profile is an object of keys; a hideout
-list is an array of ids. ADR-0041 already accepted one reader for five tables, and this decision makes that
-reader a family.
+The trade-off is a reader for each file shape against the answer that a client gets, and the readers do not
+share one shape. A dialogue is a list of objects of lists; a profile is an object of editions; a globals
+file holds a list, a map by preset id, and an object of numbers. ADR-0041 already accepted one reader for
+five tables, and this decision makes that reader a family.
 
-The other side is the guard. The archive refuses a run whose files it cannot account for (ADR-0029), so a
+The second side is the number of rows. `globals.json` becomes 488 rows for the presets and 28 for the bot
+presets, where a whole-file row would be one. The archive writes a row only for an object that differs, so a
+dataset pays for what its mod changed.
+
+The third side is the guard. The archive refuses a run whose files it cannot account for (ADR-0029), so a
 release that writes another file shape stops the import until the archive knows it. That is what a reader
 that must explain every byte buys, and it is the same protection that ADR-0043 accepted.
 
-Option C is not a saving of bytes when a mod rewrites a file, the way ADR-0043 was not a saving for
-`FactoryClassic`. It is a saving of bytes when a mod changes one line of a dialogue of 4.7 MB, and it is the
-difference between a readable change and a hash.
-
-The last trade-off is the one the driver asked about: whether every value should become a column of a
+The last trade-off is the one that the driver asked about: whether every value should become a column of a
 table, with the relations of a normalized model. It should not, and the reason is measured:
 
 - A change row already holds one value: its address, its path, its old value and its new value. There is no
   smaller detail of a change than one leaf, and the archive writes one row for each leaf today
   (ADR-0032, decision 2). A normalized table would not find a finer change.
-- The properties of an item are not the properties of a release. A mod writes a key the release never
+- The properties of an item are not the properties of a release. A mod writes a key that the release never
   wrote, such as `_props.Slots.0._props.filters.0.Filter`, and a table of columns refuses it or grows a
-  column for it. ADR-0002 keeps the source object whole, and this archive answers about a key it does not
-  know by a path over `jsonb`.
+  column for it. ADR-0002 keeps the source object whole, and this archive answers about a key that it does
+  not know by a path over `jsonb`.
 - The measured cost of the shape: 3,545 change rows take 53 MB inline against 22 MB with the addresses and
-  the values pooled (ADR-0042). The pool pays from 1.6 rows for each address, and the archive holds one.
-  A norm of five forms would pool more and would pay less; it needs the stable addresses that TD-72 asks
-  for first.
+  the values pooled (ADR-0042). The pool pays from 1.6 rows for each address, and the archive holds one. A
+  norm of five forms would pool more and would pay less; it needs the stable addresses that TD-72 asks for
+  first.
 
 So a table of columns is a decision for the values that a client filters and sorts, and this ADR does not
 make it. TD-68 (a catalogue of the paths of a `jsonb` document) is the piece that makes a path searchable
@@ -112,8 +158,9 @@ without that table.
 
 ## Consequences
 
-- **Easier:** a client reads the dialogue, the profile and the settings change of a dataset by object.
-- **Easier:** a row states the id that the mod wrote, so a client follows one dialogue node.
+- **Easier:** a client reads the dialogue line, the profile, the preset and the achievement change of a
+  dataset by object.
+- **Easier:** a row states the id that the mod wrote, so a client follows one dialogue node or one preset.
 - **Harder:** the Archiver owns a reader for each file shape, and a release can add one.
 - **Harder:** the row count of a dataset grows with the objects that a mod changes, not with the files.
 - **Revisit when:** a file shape changes in a release, or an object of a row is above the limit of `rawJson`.
@@ -124,20 +171,29 @@ without that table.
 Feature: Every file that a run changes holds a row for each of its objects
 
   @unverified
-  Scenario: A changed dialogue line is one path under its trader and its node
-    Given a baseline that holds the dialogue node "firstMeeting" of the trader "579dc571d53a0658a154fbec"
-    And a run that changes one line of that node
+  Scenario: A changed dialogue line is one path under its element and its line
+    Given a baseline that holds the dialogue element "683dafc7a7c0a468ac8a9b05" with one line
+    And a run that changes one field of that line
     When the Archiver archives the run
-    Then the table "mod_change_paths" holds one row for that trader and that node
-    And the row holds the old line and the new line
+    Then the table "mod_templates" holds one row of the kind "dialogue" for that element
+    And the table "mod_change_paths" holds one row whose path starts with "/Lines/"
+    And the row holds the old value and the new value
+
+  @unverified
+  Scenario: A changed item preset is one row
+    Given a baseline whose "globals.json" holds the preset "5841474424597759ba49be91" with a price of 1
+    And a run whose preset "5841474424597759ba49be91" holds a price of 2
+    When the Archiver archives the run
+    Then the table "mod_templates" holds one row of the kind "preset" named by the preset id
+    And the table "mod_change_paths" holds the path "/price"
 
   @unverified
   Scenario: A file that the server reads whole is one object with paths
-    Given a baseline whose "globals.json" holds "{"time": 1}"
-    And a run whose "globals.json" holds "{"time": 2}"
+    Given a baseline whose "settings.json" holds a "config" object with the key "time" set to 1
+    And a run whose "settings.json" holds the same key set to 2
     When the Archiver archives the run
-    Then the table "mod_templates" holds one row of the kind "global"
-    And the table "mod_change_paths" holds the path "/time"
+    Then the table "mod_templates" holds one row of the kind "setting"
+    And the table "mod_change_paths" holds the path "/config/time"
 
   @unverified
   Scenario: A file that no reader knows stops the import
@@ -156,10 +212,10 @@ Feature: Every file that a run changes holds a row for each of its objects
 
 ## Action Items
 
-1. [ ] Measure `FilesWithoutRows` over the 19 exports: the file, the bytes and the objects of each.
-2. [ ] Write the reader of the dialogue, the profile, the achievements, the prestige, the default equipment
-   presets, the custom achievements, the character, the location services and the files that stay whole,
-   and one test for each shape.
+1. [x] Measure the files that hold no row over the 19 exports: the file, the bytes and the objects of each.
+   Done on 2026-10-21: seven files, four of them changed in six copies, 979,698 bytes.
+2. [ ] Write the reader of the dialogue, the profile, the globals file, the achievements, the character, the
+   customisation storage and the settings, and one test for each shape.
 3. [ ] Add the kind of each new row to `ModTemplateKind`, and the filter of the Api to it.
 4. [ ] Add the scenarios to `docs/specs`, and remove `@unverified` when the tests pass.
 5. [ ] Rebuild the rows of a dataset that the archive holds (TD-75).
@@ -174,4 +230,4 @@ Feature: Every file that a run changes holds a row for each of its objects
 - ADR-0042: the pool of addresses and values.
 - ADR-0043: the spawn point of a loose-loot file.
 - ADR-0045: the link to the source of a file.
-- `docs/tech-debt.md`: TD-68, TD-72, TD-74, TD-75.
+- `docs/tech-debt.md`: TD-68, TD-72, TD-74, TD-75, TD-76.

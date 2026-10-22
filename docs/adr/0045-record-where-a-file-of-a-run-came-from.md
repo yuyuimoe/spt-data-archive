@@ -1,8 +1,11 @@
 # ADR-0045: Record where a file of a run came from, and serve the link
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
 **Deciders:** Yui
+
+Ratified by Yui on 2026-10-21. The exporter release that fills the field is action item 1, and no run of
+the archive states a source until it exists.
 
 ## Context
 

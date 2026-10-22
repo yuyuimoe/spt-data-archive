@@ -49,8 +49,8 @@ An ADR records one decision, the reason for it and what it causes. Each ADR ends
 | [0041](0041-give-a-change-to-data-that-has-no-mod-table-a-row.md) | Give a change to data that has no mod table a row | Proposed |
 | [0042](0042-store-each-address-and-each-value-once.md) | Store each address and each value once, and join them to a change | Accepted |
 | [0043](0043-split-a-loose-loot-file-into-one-row-for-each-spawn-point.md) | Split a loose-loot file into one row for each spawn point | Accepted |
-| [0044](0044-split-every-file-that-a-run-changes-into-one-row-for-each-object.md) | Split every file that a run changes into one row for each object | Proposed |
-| [0045](0045-record-where-a-file-of-a-run-came-from.md) | Record where a file of a run came from, and serve the link | Proposed |
+| [0044](0044-split-every-file-that-a-run-changes-into-one-row-for-each-object.md) | Split every file that a run changes into one row for each object | Accepted |
+| [0045](0045-record-where-a-file-of-a-run-came-from.md) | Record where a file of a run came from, and serve the link | Accepted |
 
 ## Status meanings
 

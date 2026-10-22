@@ -193,11 +193,16 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 22 scenarios of
   `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
   each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
-- **Next slice:** a stable address (TD-72) and the split of the files that still have no row (ADR-0044,
-  Proposed). Measured on 2026-10-21 in the 19 exports of the development machine: 3,499 of the 3,545 change
-  paths are positional, so no address repeats, and the pool of ADR-0042 waits. ADR-0043 is Accepted and its
-  code is in: a loose-loot file is a directory of spawn points, and the ten files that `WTT-Armory` moves
-  take 548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558
+- **Next slice:** the readers of the seven files that still hold no row (ADR-0044, accepted 2026-10-21,
+  TD-76). Measured on 2026-10-21 in the baseline of 4.1.6: `globals.json` 704,308 B with 488 item presets,
+  `templates/dialogue.json` 4,693,993 B with 53 elements, `templates/profiles.json` 1,078,871 B with 9
+  editions, `settings.json` 345,329 B, `templates/achievements.json` 121,613 B with 79 objects, and two
+  small lists. Four of the seven changed in the 19 exports of the development machine, in six copies of
+  979,698 B, and `templates/dialogue.json` and `settings.json` changed in none of them. A stable address
+  (TD-72) waits behind it: 3,499 of the 3,545 change paths are positional, so no address repeats and the
+  pool of ADR-0042 pays nothing yet. ADR-0043 is Accepted, implemented and measured in ADR-0044: a
+  loose-loot file is a directory of spawn points, and the ten files that `WTT-Armory` moves take
+  548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558
   times below the limit of `rawJson`). `FactoryClassic` replaces two maps and writes 404 rows of 4,623,791
   bytes and 1,050 removal paths of 19,394,570 bytes. The baseline cache and the catalogue of the paths
   inside a jsonb document (TD-68) follow. No map mod is imported since ADR-0041, so the dataset of one is a
@@ -214,17 +219,18 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   development archive. The measurements are in [docs/research/storage-engine.md](docs/research/storage-engine.md).
 - **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
   proxy), ADR-0040 (a jsonb filter by path, the whole-document field and its limits; the form of `eq` stays
-  open, TD-65), ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
-  handbook entry, and amendment 1, which refuses a copy of a file above the limit of the Api, TD-74),
-  ADR-0044 (one row for each object of every file that a run changes) and ADR-0045 (the link to the source
-  of a file, which needs exporter 1.6.0) are Proposed and await Yui.
+  open, TD-65) and ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
+  handbook entry, and amendment 1, which refuses a copy of a file above the limit of the Api, TD-74) are
+  Proposed and await Yui.
   ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0042 (an address pool and a value pool behind the change rows) is Accepted, and its
   measurement says the pool pays from 1.6 change rows for each address: the archive holds one, so the
   storage waits for a stable address (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
-  Accepted and implemented, ratified by Yui on 2026-10-21. ADR-0005 and ADR-0010 are superseded; ADR-0001 to
-  0004, 0006 to 0009, 0011 to 0029 and 0031 to 0037 are Accepted.
+  Accepted and implemented, ratified by Yui on 2026-10-21. ADR-0044 (one row for each object of every file
+  that a run changes) and ADR-0045 (the link to the source of a file, which waits for exporter 1.6.0) are
+  Accepted, ratified by Yui on 2026-10-21, and neither is implemented (TD-76). ADR-0005 and ADR-0010 are
+  superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0037 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
   and the importer exist and ran on nineteen real mod runs (`docs/runbooks/mod-export.md`), including a curated
   run of one mod (ADR-0029).
