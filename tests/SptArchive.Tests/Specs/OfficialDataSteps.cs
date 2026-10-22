@@ -41,7 +41,9 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
 
     // ---- Background ----------------------------------------------------------------------------
 
-    [Given("""^a read-only copy of the server "SPT_Data/database" folder$""")]
+    // The copy sits in a temporary folder that the scenario writes. Every run of the Archiver (world.RunAsync and the
+    // import of a mod dataset) holds the folders it reads read-only, and the scenario fails when the run changes one.
+    [Given("""^a copy of the server "SPT_Data/database" folder that the Archiver can only read$""")]
     public void GivenACopyOfTheServerFolder() => world.WriteDefaultSource();
 
     [Given("a migrated archive database")]
@@ -218,15 +220,19 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
             ApplyMigrations = false,
         };
 
-        await ArchiverHarness.RunAsync(world.ConnectionString, options, [], world.Cache, world.Log.For<ArchiveJob>(), TestContext.Current.CancellationToken);
+        using (ReadOnlySource.Hold(_modRun!, world.Source))
+        {
+            await ArchiverHarness.RunAsync(world.ConnectionString, options, [], world.Cache, world.Log.For<ArchiveJob>(), TestContext.Current.CancellationToken);
+        }
 
         Assert.False(world.Failed, "The import of the mod run failed: " + world.Failure);
     }
 
-    [Then("the table {string} has the new row")]
-    public async Task ThenTheTableHasTheNewRow(string table)
+    [Then("""^the table "(.*)" has the new row, found through the table "(.*)" \(ADR-0034\) and not by the mod id$""")]
+    public async Task ThenTheTableHasTheNewRow(string table, string mapTable)
     {
         Assert.Equal("mod_customizations", table);
+        Assert.Equal("mod_id_maps", mapTable);
 
         // The archive keys a mod row by the address it derived for the object, and the id map keeps the id that
         // the run gave it (ADR-0034). The new row is found through that map.
@@ -237,6 +243,8 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
 
         Assert.Equal("Thermal Hoodie", row.Name);
         Assert.Equal(1, await db.ModCustomizations.CountAsync(token));
+        Assert.NotEqual(AddedClothingId, map.Address);
+        Assert.False(await db.ModCustomizations.AnyAsync(clothing => clothing.Id == AddedClothingId, token), "A row is keyed by the mod id.");
 
         _expected = JsonValue.Create(map.Address);
     }
@@ -330,11 +338,14 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
         }
     }
 
-    [Given("the file {string} lists the language {string}")]
-    public void GivenTheFileListsTheLanguage(string file, string code)
+    [Given("the file {string} lists the language {string} besides {string}")]
+    public void GivenTheFileListsTheLanguage(string file, string code, string listed)
     {
-        // "en" stays in the list: its entries prove that the run went on past the language without a file.
-        world.Write(file, new JsonObject { ["en"] = "English", [code] = "Language " + code }.ToJsonString());
+        // The listed language has a file (the default source writes en.json), so its entries prove that the run
+        // went on past the language without a file.
+        Assert.True(File.Exists(Path.Combine(world.Source, "locales", "global", listed + ".json")), $"The source holds no file for '{listed}'.");
+
+        world.Write(file, new JsonObject { [listed] = "Language " + listed, [code] = "Language " + code }.ToJsonString());
     }
 
     [Given("the folder {string} has no file {string}")]
@@ -354,7 +365,7 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
         var token = TestContext.Current.CancellationToken;
 
         Assert.False(await db.LocaleEntries.AnyAsync(entry => entry.LanguageCode == code, token));
-        Assert.True(await db.LocaleEntries.AnyAsync(entry => entry.LanguageCode == "en", token), "The run imported no language at all.");
+        Assert.True(await db.LocaleEntries.AnyAsync(entry => entry.LanguageCode == "en", token), "The run imported no listed language.");
     }
 
     [Given("a locale file has the same key twice with different values")]
@@ -499,12 +510,12 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
 
     // ---- Offers --------------------------------------------------------------------------------
 
-    [Given("the trader assort has a root item {string} with the barter scheme {string} and the loyalty level {int}")]
-    public void GivenTheAssortHasARootItem(string root, string scheme, int level)
+    [Given("the trader assort has a root item {string} with a barter scheme of {int} of the item {string} and the loyalty level {int}")]
+    public void GivenTheAssortHasARootItem(string root, int count, string payment, int level)
     {
-        // A barter scheme is a list of alternatives, each a list of payments. "S1" is the item that pays.
+        // The shape of the server: a list of alternatives, each a list of payments of a count and an item template.
         AddRoot(root);
-        _barter[root] = new JsonArray(new JsonArray(new JsonObject { ["count"] = 1, ["_tpl"] = scheme }));
+        _barter[root] = new JsonArray(new JsonArray(new JsonObject { ["count"] = count, ["_tpl"] = payment }));
         _loyalty[root] = level;
         WriteAssort();
     }
@@ -554,14 +565,16 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
         }
     }
 
-    [Then("that row has the barter scheme {string} and the loyalty level {int}")]
-    public void ThenThatRowHasTheBarterScheme(string scheme, int level)
+    [Then("that row has a barter scheme of {int} of the item {string} and the loyalty level {int}")]
+    public void ThenThatRowHasTheBarterScheme(int count, string payment, int level)
     {
         var row = Assert.IsType<TraderAssortItem>(world.Row);
-        var payment = JsonNode.Parse(row.BarterScheme!)![0]![0]!;
+        var scheme = JsonNode.Parse(row.BarterScheme!)!.AsArray();
 
-        Assert.Equal(1, JsonNode.Parse(row.BarterScheme!)!.AsArray().Count);
-        Assert.Equal(scheme, payment["_tpl"]!.GetValue<string>());
+        Assert.Single(scheme);
+        Assert.Single(scheme[0]!.AsArray());
+        Assert.Equal(count, scheme[0]![0]!["count"]!.GetValue<int>());
+        Assert.Equal(payment, scheme[0]![0]!["_tpl"]!.GetValue<string>());
         Assert.Equal(level, row.LoyaltyLevel);
     }
 
@@ -682,9 +695,21 @@ internal sealed class OfficialDataSteps(OfficialWorld world)
         Assert.Contains(world.Log.Entries, entry => entry.Message.Contains("nothing to do", StringComparison.Ordinal));
     }
 
-    [Then("it exits with code 0")]
-    public void ThenItExitsWithCodeZero() =>
-        Assert.False(world.Failed, "The job logged a critical failure, which is where it sets the exit code 1: " + world.Failure);
+    // The exit code is not read: Environment.ExitCode is process-global, and scenarios run in parallel. The job sets it to
+    // 1 where it logs the critical entry, so the log and the run record say what the code would.
+    [Then("""^the run reports success: the log holds no critical entry and the table "(.*)" holds no failed run$""")]
+    public async Task ThenTheRunReportsSuccess(string table)
+    {
+        Assert.Equal("archive_runs", table);
+        Assert.False(world.Failed, "The job logged a critical failure: " + world.Failure);
+        Assert.DoesNotContain(world.Log.Entries, entry => entry.Level >= LogLevel.Error);
+
+        await using var db = world.Open();
+        var statuses = await db.ArchiveRuns.Select(run => run.Status).ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.NotEmpty(statuses);
+        Assert.All(statuses, status => Assert.Equal(ArchiveRun.Succeeded, status));
+    }
 
     [Then("it imports all data again")]
     public async Task ThenItImportsAllDataAgain()

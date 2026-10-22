@@ -218,13 +218,16 @@ internal sealed class OfficialWorld
             Force = Force,
         };
 
-        await ArchiverHarness.RunAsync(
-            ConnectionString,
-            options,
-            Importers,
-            Cache,
-            Log.For<ArchiveJob>(),
-            TestContext.Current.CancellationToken);
+        using (ReadOnlySource.Hold(Source))
+        {
+            await ArchiverHarness.RunAsync(
+                ConnectionString,
+                options,
+                Importers,
+                Cache,
+                Log.For<ArchiveJob>(),
+                TestContext.Current.CancellationToken);
+        }
 
         if (Failed)
         {
@@ -276,4 +279,89 @@ internal sealed class OfficialWorld
         OfficialTables.Concat(["spt_versions", "archive_runs", "languages"]).Contains(table, StringComparer.Ordinal)
             ? table
             : throw new ArgumentException($"The scenario names the table '{table}', which the steps do not know.");
+}
+
+/// <summary>
+/// Makes folders read-only for as long as it lives: the folders hold no writable file or directory, so a write by
+/// the Archiver fails the run. On release it proves that nothing changed, by a digest of every file, so the proof
+/// holds for a user who ignores permissions (root) too.
+/// </summary>
+internal sealed class ReadOnlySource : IDisposable
+{
+    private readonly string[] _roots;
+    private readonly string[] _digests;
+
+    private ReadOnlySource(string[] roots)
+    {
+        _roots = roots;
+        _digests = roots.Select(Digest).ToArray();
+
+        foreach (var root in roots)
+        {
+            SetWritable(root, writable: false);
+        }
+    }
+
+    public static ReadOnlySource Hold(params string[] roots) => new(roots);
+
+    public void Dispose()
+    {
+        foreach (var root in _roots)
+        {
+            SetWritable(root, writable: true);
+        }
+
+        for (var index = 0; index < _roots.Length; index++)
+        {
+            Assert.True(_digests[index] == Digest(_roots[index]), $"The Archiver changed the read-only folder '{_roots[index]}'.");
+        }
+    }
+
+    private static void SetWritable(string root, bool writable)
+    {
+        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                File.SetAttributes(file, writable ? FileAttributes.Normal : FileAttributes.ReadOnly);
+            }
+            else
+            {
+                File.SetUnixFileMode(file, writable ? UnixFileMode.UserRead | UnixFileMode.UserWrite : UnixFileMode.UserRead);
+            }
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return; // A directory attribute on Windows does not stop a write into it.
+        }
+
+        var directories = Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Append(root);
+
+        foreach (var directory in directories)
+        {
+            File.SetUnixFileMode(
+                directory,
+                writable
+                    ? UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    : UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static string Digest(string root)
+    {
+        using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+
+        foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+        {
+            hash.AppendData(System.Text.Encoding.UTF8.GetBytes(Path.GetRelativePath(root, path) + "\n"));
+
+            if (File.Exists(path))
+            {
+                hash.AppendData(File.ReadAllBytes(path));
+            }
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
 }

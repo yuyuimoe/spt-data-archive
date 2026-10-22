@@ -4,7 +4,7 @@ Feature: Archive the official server data
   So that users can query official data without running the server
 
   Background:
-    Given a read-only copy of the server "SPT_Data/database" folder
+    Given a copy of the server "SPT_Data/database" folder that the Archiver can only read
     And a migrated archive database
 
   # ------------------------------------------------------------------ Items
@@ -46,7 +46,7 @@ Feature: Archive the official server data
   Scenario: A clothes-only mod changes the archive
     Given a mod dataset whose export adds one entry to "customization"
     When the Archiver imports the dataset
-    Then the table "mod_customizations" has the new row
+    Then the table "mod_customizations" has the new row, found through the table "mod_id_maps" (ADR-0034) and not by the mod id
     And the table "mod_templates" has a template row of the kind "customization"
 
   # ---------------------------------------------------------------- Locales
@@ -72,7 +72,7 @@ Feature: Archive the official server data
     And the table "locale_entries" has entries for both languages
 
   Scenario: A language without a file is skipped
-    Given the file "locales/languages.json" lists the language "xx"
+    Given the file "locales/languages.json" lists the language "xx" besides "en"
     And the folder "locales/global" has no file "xx.json"
     When the Archiver runs
     Then the run succeeds
@@ -108,10 +108,10 @@ Feature: Archive the official server data
     And the table "traders" has no row for that folder
 
   Scenario: Assort offers carry their barter scheme and loyalty level
-    Given the trader assort has a root item "R1" with the barter scheme "S1" and the loyalty level 2
+    Given the trader assort has a root item "R1" with a barter scheme of 3 of the item "5449016a4bdc2d6f028b456f" and the loyalty level 2
     When the Archiver runs
     Then the table "trader_assort_items" has a row for "R1"
-    And that row has the barter scheme "S1" and the loyalty level 2
+    And that row has a barter scheme of 3 of the item "5449016a4bdc2d6f028b456f" and the loyalty level 2
 
   Scenario: Child items of an offer point at their parent
     Given the trader assort has a child item "C1" with the parent "R1" and the slot "mod_scope"
@@ -130,7 +130,7 @@ Feature: Archive the official server data
     Given a succeeded run exists with the hash of the current source files
     When the Archiver runs
     Then it imports nothing
-    And it exits with code 0
+    And the run reports success: the log holds no critical entry and the table "archive_runs" holds no failed run
 
   Scenario: A forced run imports unchanged data
     Given a succeeded run exists with the hash of the current source files
