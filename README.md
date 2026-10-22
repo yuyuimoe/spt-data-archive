@@ -289,6 +289,6 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
   field or, for a string, by its value; an array that has no identity keeps its index and logs a warning
   (TD-72). The filter groups of an item still hold an index, so no address repeats between the four datasets
   that write rows, and the pool of
-  [ADR-0042](docs/adr/0042-store-each-address-and-each-value-once.md) waits (TD-77).
+  [ADR-0042](docs/adr/0042-store-each-address-and-each-value-once.md) waits (TD-79).
 - **JSON columns are `Any` values** in GraphQL (`props`, `data`, `base`, ...), not a typed JSON scalar (TD-15). A client
   filters one by path, and reads the value at a path as JSON (ADR-0040); it cannot select a sub-field.

@@ -205,7 +205,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   index and logs one warning for the file, the shape and the reason. Measured over the four real runs that
   write rows, paths with a numeric segment fell from 29,341 to 3,382, and a copy of `AllTheClothes` with
   every array reversed keeps 321 of 321 addresses where the old code kept 323 of 454. The pool of ADR-0042
-  still pays nothing: those runs hold 1.0 rows for each address and the break-even is 1.6 (TD-77). The index
+  still pays nothing: those runs hold 1.0 rows for each address and the break-even is 1.6 (TD-79). The index
   that remains is the filter groups of an item (2,792 rows in `WTT-Armory`, elements `{Filter,Shift}`), which
   hold no identity field.
 - **The seven files that held no row have rows.** `globals.json`, `settings.json`, `templates/dialogue.json`,
@@ -220,7 +220,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   mod is imported since ADR-0041, so the dataset of one is a projection (TD-67), and a path filter over those
   rows reads every document of the table (TD-70). A dataset that the archive already holds keeps the rows it
   had, because a dataset is never rewritten (TD-75). The pool of ADR-0042 waits for two datasets that change
-  one address (TD-77).
+  one address (TD-79). The filter groups of an item still hold an index (TD-77).
 - **Storage is jsonb with lz4, and three engines were compared.** The migration `SetToastCompressionLz4` sets
   lz4 on the 27 jsonb columns and `compose.yaml` sets it for the columns a later migration adds
   (ADR-0041, ratified 2026-10-21). Measured against CouchDB 3.4.3 and Cassandra 5.0.9 on the same 132 MB map
@@ -239,7 +239,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0042 (an address pool and a value pool behind the change rows) is Accepted, and its
   measurement says the pool pays from 1.6 change rows for each address: the archive holds 1.0,
-  so the storage waits for two datasets that change one object (TD-77); the address is stable (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
+  so the storage waits for two datasets that change one object (TD-79); the address is stable (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
   Accepted and implemented, ratified by Yui on 2026-10-21. ADR-0044 (one row for each object of every file
   that a run changes) is Accepted and implemented for the seven files (TD-76). ADR-0045 (the link to the source
   of a file) waits for exporter 1.6.0. It is Accepted and not implemented. ADR-0005 and ADR-0010 are

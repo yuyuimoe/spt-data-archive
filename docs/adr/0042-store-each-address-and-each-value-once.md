@@ -224,7 +224,7 @@ Feature: A changed value is stored once and joined to every change
    exactly from the baseline and the rows (all files, except the 7 loose-loot files above 30 MB, which
    ADR-0043 splits). The measurement of the pool still holds the shape and not the saving: the four runs
    state 1.0 rows for each address, below the 1.6 of the break-even, because no two of them change the same
-   object (TD-77). The hash of a dataset holds the path, so a new import of `AllTheClothes` or `WTT-Armory`
+   object (TD-79). The hash of a dataset holds the path, so a new import of `AllTheClothes` or `WTT-Armory`
    is a new dataset (ADR-0029, amendment 4; TD-75).
 
 ## Links
