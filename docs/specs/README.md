@@ -1,6 +1,6 @@
 # Specifications
 
-The `.feature` files in this folder describe what the system does. They are written in [Gherkin](https://cucumber.io/docs/gherkin/reference). They are the tests: Reqnroll runs the files that the test project links (ADR-0012). Five files are linked today (see the slice below).
+The `.feature` files in this folder describe what the system does. They are written in [Gherkin](https://cucumber.io/docs/gherkin/reference). They are the tests: Reqnroll runs the files that the test project links (ADR-0012). Seven files are linked today (see the slice below).
 
 ## Files
 
@@ -11,6 +11,7 @@ The `.feature` files in this folder describe what the system does. They are writ
 | [mod-api.feature](mod-api.feature) | The Api surface of a mod dataset: its templates, change paths, files, addresses and runs |
 | [file-rows.feature](file-rows.feature) | One row for each object of the seven files that a run changes (ADR-0044) |
 | [mod-registry.feature](mod-registry.feature) | Mod data stays apart from official data |
+| [bot-and-faction-data.feature](bot-and-faction-data.feature) | The bots, the maps and the mechanics a release and a mod change (ADR-0024, ADR-0041, ADR-0044), and the faction of a bot type (ADR-0025) |
 | [backup-and-restore.feature](backup-and-restore.feature) | Dumps and restores |
 
 ## Tags
@@ -42,15 +43,16 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 
 ## Slice to work on next
 
-Done in the last slices: four files run as tests with Reqnroll.
-They are `archive-official-data.feature` (28 of 38 tests), `mod-registry.feature` (28 of 55), `backup-and-restore.feature`
-(9) and `query-api.feature` (73 of 76). They run against throwaway databases and the real script and Api (TD-62). Done before them: one row for
+Done in the last slices: five more feature files run as tests with Reqnroll.
+They are `archive-official-data.feature` (28 of 38 tests), `mod-registry.feature` (28 of 55),
+`backup-and-restore.feature` (9), `query-api.feature` (73 of 76) and `bot-and-faction-data.feature` (3 of 12).
+They run against a throwaway database, the real Archiver, the real Api and the curated seed (TD-62). Done before them: one row for
 one object of the seven files that a run changes (ADR-0044), and the filter of a jsonb column by the value at a
-path (ADR-0040, TD-52, TD-55). Six feature files are linked from `tests/SptArchive.Tests`: `mod-api.feature`
+path (ADR-0040, TD-52, TD-55). Seven feature files are linked from `tests/SptArchive.Tests`: `mod-api.feature`
 (24 scenarios), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76, of which 3
-keep `@unverified`) and `archive-official-data.feature` (38, of which 10 are skipped: one scenario whose title
-contradicts its steps, and the 9 examples of the `@backlog` outline) and `mod-registry.feature` (55, of which
-27 are skipped: 17 `@backlog` scenarios with 21 tests, and 6 scenarios that need a decision of the driver). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
-Next: the baseline cache (ADR-0013). `bot-and-faction-data` (12 scenarios) stays unbound and tagged `@unverified`:
-the tables it names do not exist (TD-62).
+keep `@unverified`), `archive-official-data.feature` (38, of which 10 are skipped: one scenario whose title
+contradicts its steps, and the 9 examples of the `@backlog` outline), `mod-registry.feature` (55, of which
+27 are skipped: 17 `@backlog` scenarios with 21 tests, and 6 scenarios that need a decision of the driver) and
+`bot-and-faction-data.feature` (12, of which 9 are skipped, all `@backlog`). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
+Next: the baseline cache (ADR-0013).
 Scenarios outside the slice stay `@unverified` or `@backlog`.

@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 644 tests pass against a real Postgres. 434 are xUnit tests. 210 are Gherkin tests that Reqnroll runs: `mod-api.feature` (24), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76), `archive-official-data.feature` (38, from 27 headings) and `mod-registry.feature` (55, from 51 headings) (TD-02, TD-06). Three scenarios of `query-api.feature` keep `@unverified`. `archive-official-data.feature` skips 10 tests: one scenario and the 9 examples of its `@backlog` outline. `mod-registry.feature` skips 27 tests: 17 `@backlog` scenarios (21 tests) and 6 scenarios that need a decision of the driver. The one unbound feature file keeps 12 scenarios (TD-62).
+The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 656 tests pass against a real Postgres. 434 are xUnit tests. 222 are Gherkin tests that Reqnroll runs: `mod-api.feature` (24), `file-rows.feature` (8), `backup-and-restore.feature` (9), `query-api.feature` (76), `archive-official-data.feature` (38, from 27 headings), `mod-registry.feature` (55, from 51 headings) and `bot-and-faction-data.feature` (12) (TD-02, TD-06). Three scenarios of `query-api.feature` keep `@unverified`. `archive-official-data.feature` skips 10 tests: one scenario and the 9 examples of its `@backlog` outline. `mod-registry.feature` skips 27 tests: 17 `@backlog` scenarios (21 tests) and 6 scenarios that need a decision of the driver. `bot-and-faction-data.feature` skips 9 tests, and every one of them is `@backlog`. No feature file is unbound (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 644 tests (210 are scenarios, 40 of them skipped); needs the development database (below)
+dotnet test SptArchive.slnx             # 656 tests (222 are scenarios, 49 of them skipped); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -115,13 +115,15 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   service container; the run of `02a976c` on `github.com/yuyuimoe/spt-data-archive` passed every step in 89 seconds
   (run `39647853715`, TD-60). On an empty database every step passes and every test passes, so a clean machine and
   an archive machine agree.
-- **Six feature files run as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 24 scenarios of `docs/specs/mod-api.feature`,
+- **Seven feature files run as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 24 scenarios of `docs/specs/mod-api.feature`,
   the 8 of `docs/specs/file-rows.feature`, the 9 of `docs/specs/backup-and-restore.feature`, 73 of the 76 of
-  `docs/specs/query-api.feature`, 28 of the 38 of `docs/specs/archive-official-data.feature` and 28 of the 55 of
-  `docs/specs/mod-registry.feature` inside `dotnet test` (ADR-0012, TD-06). Three scenarios of `query-api.feature` keep the tag `@unverified`, and so do one scenario of
+  `docs/specs/query-api.feature`, 28 of the 38 of `docs/specs/archive-official-data.feature`, 28 of the 55 of
+  `docs/specs/mod-registry.feature` and 3 of the 12 of `docs/specs/bot-and-faction-data.feature` inside `dotnet test`
+  (ADR-0012, TD-06). Three scenarios of `query-api.feature` keep the tag `@unverified`, and so do one scenario of
   `archive-official-data.feature` (a title that contradicts its steps) and its `@backlog` outline of 9 examples. `mod-registry.feature` keeps it on
-  23 of its 51 scenarios: the 17 `@backlog` ones and six that the driver must decide (TD-62). The one unbound feature
-  file, `bot-and-faction-data` (12), keeps it on every scenario: its tables do not exist (TD-62). `check-docs.py` refuses a
+  23 of its 51 scenarios: the 17 `@backlog` ones and six that the driver must decide (TD-62). `bot-and-faction-data.feature` keeps it on
+  9 of its 12, which are the `@backlog` scenarios of the official tables, the wave, the facets and the value mod (TD-62).
+  No feature file is unbound. `check-docs.py` refuses a
   scenario that lies about itself: an `@unverified` scenario in a file that the test project links without the
   skip hook, and a scenario without the tag in a file that it does not link.
 - **A test class that commits owns a database.** `ArchiveDatabase.OwnDatabaseAsync` creates and migrates
@@ -129,9 +131,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   `RunRecordTests`) write there. Their rows are invisible to every other test, which runs in a transaction on the
   shared `archive` database: before 2026-10-22 a committed release such as `993.x` moved "the latest release" of a
   parallel query, and a page of `modFiles` held a file of another test (TD-81).
-- **Done:** the solution builds, eleven migrations are applied, and 644 tests pass (TD-01, TD-02, TD-04, TD-05,
+- **Done:** the solution builds, eleven migrations are applied, and 656 tests pass (TD-01, TD-02, TD-04, TD-05,
   TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59),
-  434 xUnit tests and 210 Gherkin tests, 40 of which are skipped as `@unverified`.
+  434 xUnit tests and 222 Gherkin tests, 49 of which are skipped as `@unverified`.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -207,10 +209,10 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
   and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
   on a schedule yet (TD-03).
-- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 32 scenarios of
-  `docs/specs/mod-api.feature` and `docs/specs/file-rows.feature` inside `dotnet test`, from
-  `tests/SptArchive.Tests/Specs`. The test project links each bound feature file by name; a file that it does not
-  link keeps its `@unverified` tags, and `scripts/check-docs.py` refuses a tag that contradicts the project (TD-62).
+- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs 222 scenarios of the seven linked
+  feature files inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links each bound
+  feature file by name; a scenario of a linked file that keeps its `@unverified` tag is skipped by a hook, and
+  `scripts/check-docs.py` refuses a tag that contradicts the project (TD-62).
 - **A loose-loot file is split into its spawn points.** ADR-0043 is Accepted, implemented and measured: a
   `locations/<map>/looseLoot.json` is a directory of spawn points, and the ten files that `WTT-Armory` moves
   take 548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558

@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 644 tests: 434 xUnit tests and 210 Gherkin tests, 40 of which are skipped as `@unverified`. Eleven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 656 tests: 434 xUnit tests and 222 Gherkin tests, 49 of which are skipped as `@unverified`. Eleven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -251,11 +251,11 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 
 ## Known gaps
 
-- **Six feature files run as a test.** Reqnroll runs the 24 scenarios of `docs/specs/mod-api.feature`, the 8 of
+- **Seven feature files run as a test.** Reqnroll runs the 24 scenarios of `docs/specs/mod-api.feature`, the 8 of
   `docs/specs/file-rows.feature`, the 9 of `docs/specs/backup-and-restore.feature`, 73 of the 76 of
-  `docs/specs/query-api.feature`, 28 of the 38 tests of `docs/specs/archive-official-data.feature` and 28 of the 55
-  of `docs/specs/mod-registry.feature` inside `dotnet test` (ADR-0012, ADR-0044). The other scenarios of these files
-  and all 12 of `bot-and-faction-data.feature` stay claims, tagged `@unverified`, and `scripts/check-docs.py` refuses a
+  `docs/specs/query-api.feature`, 28 of the 38 tests of `docs/specs/archive-official-data.feature`, 28 of the 55
+  of `docs/specs/mod-registry.feature` and 3 of the 12 of `docs/specs/bot-and-faction-data.feature` inside `dotnet test`
+  (ADR-0012, ADR-0044). The other scenarios of these files stay claims, tagged `@unverified`, and `scripts/check-docs.py` refuses a
   tag that contradicts the test project (TD-62). The 434 xUnit tests check the schema, the import path, the canonical
   form, the run import and the query cache.
 - **A test that commits owns its database.** `ConcurrentRunTests`, `OfficialImportTests` and `RunRecordTests` commit

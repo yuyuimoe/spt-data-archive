@@ -11,6 +11,8 @@ Errors (exit code 1):
     that has no steps yet, but only while the test project holds a hook that skips such a scenario
     (tests/SptArchive.Tests/Specs/UnverifiedScenarios.cs): the runner reports it as skipped, so it is
     never reported as passing.
+  * A scenario of a @backlog behavior has no @unverified tag. A behavior that is not built cannot have
+    a passing test, so the tag that skips it has to stay.
 
 Warnings (exit code 0):
   * A prose sentence has more than 25 words (Simplified Technical English).
@@ -100,7 +102,8 @@ def check_feature_tags() -> None:
 
     A file may be bound in part: a scenario that keeps the tag in a linked file is skipped by the hook
     of the test project, so it is reported as skipped and never as passing. The hook has to exist for
-    that claim to hold, so its absence is an error as well.
+    that claim to hold, so its absence is an error as well. A @backlog scenario states a behavior that
+    is not built, so it keeps @unverified too: the runner skips it, and it is never reported as passing.
     """
     bound = bound_features()
     hook = skip_hook()
@@ -122,6 +125,9 @@ def check_feature_tags() -> None:
             if feature in bound and unverified and hook is None:
                 errors.append(
                     f"{rel(feature)}: the scenario \"{name}\" keeps @unverified, but no hook of the test project skips it; a scenario that runs must pass, so remove the tag or add the hook")
+            if "@backlog" in tags and not unverified:
+                errors.append(
+                    f"{rel(feature)}: the scenario \"{name}\" states a behavior that is not built, so it keeps @backlog and it must keep @unverified too")
 
 
 def check_links() -> None:
