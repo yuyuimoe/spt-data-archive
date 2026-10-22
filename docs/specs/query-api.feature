@@ -315,7 +315,7 @@ Feature: Query the archive through a read-only GraphQL API
     And the answer does not have the item "B1"
 
   Scenario: A path reaches into an object and an array
-    Given the item "A1" has the property "Nested" with the list [1, 2] in its "props" column
+    Given the item "A1" has the property "Nested" with the object {"list": [1, 2]} in its "props" column
     When I query "items" where "props" has the value 2 at the path "Nested", "list", "1"
     Then the answer has the item "A1"
     When I query "items" where "props" has the value 2 at the path "Nested", "list", "0"
