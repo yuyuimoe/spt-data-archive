@@ -44,6 +44,7 @@
     <!-- One line for each feature file whose scenarios are bound. A file that is not listed here does not run. -->
     <ReqnrollFeatureFiles Include="../../docs/specs/mod-api.feature" Link="Specs/mod-api.feature" />
     <ReqnrollFeatureFiles Include="../../docs/specs/file-rows.feature" Link="Specs/file-rows.feature" />
+    <ReqnrollFeatureFiles Include="../../docs/specs/backup-and-restore.feature" Link="Specs/backup-and-restore.feature" />
   </ItemGroup>
 
   <ItemGroup>

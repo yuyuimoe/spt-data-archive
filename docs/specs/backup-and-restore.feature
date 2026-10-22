@@ -3,7 +3,6 @@ Feature: Back up and restore the archive
   I want a dump after each successful run
   So that the archive survives the loss of the database host
 
-  @unverified
   Scenario: A successful run produces a dump
     Given a successful archive run
     When the backup step runs
@@ -16,13 +15,11 @@ Feature: Back up and restore the archive
     When the backup step runs
     Then no new dump file is created
 
-  @unverified
   Scenario: A dump restores into an empty database
     Given a dump file from a successful run
     When I restore it into a new empty database
     Then every table has the same row count as in the source database
 
-  @unverified
   Scenario: A restored database keeps the read-only role
     Given a dump file and the role setup from "docker/initdb"
     When I restore the dump into a new database
@@ -36,20 +33,17 @@ Feature: Back up and restore the archive
     Then the oldest daily dump is removed
     And the weekly dumps are kept
 
-  @unverified
   Scenario: A dump that cannot be read is refused
     Given a file that is not a custom-format dump
     When I verify or restore it
     Then the script fails with a message
     And no database is created
 
-  @unverified
   Scenario: A restore never overwrites a database
     Given a database that already exists
     When I restore a dump into that name
     Then the script fails and the database is unchanged
 
-  @unverified
   Scenario: Verify proves the restore against the source
     Given a dump of the database
     When I verify the dump
@@ -57,7 +51,6 @@ Feature: Back up and restore the archive
     And the row count of every table equals the source
     And the scratch database is dropped
 
-  @unverified
   Scenario: A copy that differs from the dump is an error
     Given a copy directory is set
     When the copy does not match the checksum of the dump
