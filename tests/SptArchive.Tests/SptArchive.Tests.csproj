@@ -48,6 +48,7 @@
     <ReqnrollFeatureFiles Include="../../docs/specs/query-api.feature" Link="Specs/query-api.feature" />
     <ReqnrollFeatureFiles Include="../../docs/specs/archive-official-data.feature" Link="Specs/archive-official-data.feature" />
     <ReqnrollFeatureFiles Include="../../docs/specs/mod-registry.feature" Link="Specs/mod-registry.feature" />
+    <ReqnrollFeatureFiles Include="../../docs/specs/bot-and-faction-data.feature" Link="Specs/bot-and-faction-data.feature" />
   </ItemGroup>
 
   <ItemGroup>
