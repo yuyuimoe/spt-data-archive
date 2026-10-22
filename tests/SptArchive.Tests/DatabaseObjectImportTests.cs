@@ -82,10 +82,15 @@ public sealed class DatabaseObjectImportTests : IDisposable
             cancellationToken);
         Assert.Equal((string.Empty, "4000"), (added.Part, added.Data));
 
-        // A modified object has no source row: its paths are the archive of the change.
-        Assert.DoesNotContain(
-            await scope.Db.ModDatabaseObjects.Where(row => row.DatasetId == dataset.Id).ToListAsync(cancellationToken),
-            row => row.TemplateId == "woods");
+        // A modified object has no source row of its own: its paths are the archive of the change. The one
+        // row it keeps is the spawn point that the run adds, which is a row and not a path (ADR-0043).
+        var spawn = Assert.Single(
+            await scope.Db.ModDatabaseObjects
+                .Where(row => row.DatasetId == dataset.Id && row.TemplateId == "woods")
+                .ToListAsync(cancellationToken));
+        Assert.Equal("looseLoot/spawnpoints/woods_2", spawn.Part);
+        Assert.Equal(ModTemplateKind.Location, spawn.Kind);
+        Assert.True(spawn.Bytes > 0);
 
         // The way back from the id of the run to the address (ADR-0034).
         Assert.True(await scope.Db.ModIdMaps.AnyAsync(

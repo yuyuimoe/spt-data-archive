@@ -115,8 +115,9 @@ public sealed class DatabaseObjectTests : IDisposable
         // The boss chance rotates on every boot (ADR-0028): it moved in the run and is not a change.
         Assert.DoesNotContain(woods.Template.Changes, change => change.Path.Contains("BossChance", StringComparison.Ordinal));
 
-        // A modified object keeps no source of its own: its paths are the archive of the change.
-        Assert.Empty(woods.Parts);
+        // A modified object keeps no source of its own: its paths are the archive of the change. The one
+        // exception is the spawn point that the run adds, which is a row (ADR-0043, decision 4).
+        Assert.Equal(["looseLoot/spawnpoints/woods_2"], woods.Parts.Select(part => part.Part));
     }
 
     [Fact]
@@ -133,16 +134,97 @@ public sealed class DatabaseObjectTests : IDisposable
     }
 
     [Fact]
-    public void An_entry_that_the_run_appends_to_a_list_of_a_location_is_one_path_by_its_index()
+    public void A_spawn_point_that_the_run_adds_to_a_map_is_a_row_of_its_own()
     {
         var woods = Object(Diff(), "location", "woods");
 
-        var spawn = Assert.Single(woods.Template.Changes, change => change.Path == "/looseLoot/spawnpoints/1");
-        Assert.Equal((ModChangePathOperation.Set, null), (spawn.Op, spawn.OldValue));
+        // A loose-loot file is a directory of spawn points, so an added one is a row and not a path
+        // under the map (ADR-0043, decisions 1 and 4).
+        var added = Assert.Single(woods.Parts);
+        Assert.Equal("looseLoot/spawnpoints/woods_2", added.Part);
+        Assert.DoesNotContain(woods.Template.Changes, change => change.Path.Contains("woods_2", StringComparison.Ordinal));
 
-        // The item that the spawn point names is named by its address and not by the id the run gave it.
-        Assert.Contains($"\"_tpl\":\"#{ItemD}\"", spawn.NewValue);
-        Assert.DoesNotContain(ObjectTree.AddedItemId, spawn.NewValue);
+        // The row holds the spawn point as the map author wrote it, with every id written as its address.
+        Assert.Contains($"\"_tpl\":\"#{ItemD}\"", added.Data);
+        Assert.DoesNotContain(ObjectTree.AddedItemId, added.Data);
+    }
+
+    [Fact]
+    public void A_changed_spawn_point_is_paths_under_the_name_the_map_gave_it()
+    {
+        var baseline = ObjectTree.Baseline();
+        baseline["locations/woods/looseLoot.json"] = Loot(("woods key [1111]", "0.1"));
+
+        var run = ObjectTree.RunOverBaseline();
+        run["locations/woods/looseLoot.json"] = Loot(("woods key [1111]", "0.4"));
+
+        var woods = Object(diff: Diff(baseline, run), kind: "location", templateId: "woods");
+
+        var probability = Assert.Single(woods.Template.Changes, change => change.Path.Contains("woods key", StringComparison.Ordinal));
+        Assert.Equal(
+            ("/looseLoot/spawnpoints/woods key [1111]/probability", ModChangePathOperation.Set, "0.1", "0.4"),
+            (probability.Path, probability.Op, probability.OldValue, probability.NewValue));
+
+        // A changed spawn point has paths and no row of its own.
+        Assert.Empty(woods.Parts);
+    }
+
+    [Fact]
+    public void A_spawn_point_that_the_run_removes_is_one_path_with_the_whole_object_as_its_old_value()
+    {
+        var baseline = ObjectTree.Baseline();
+        baseline["locations/woods/looseLoot.json"] = Loot(("woods_1", "0.1"), ("woods 9", "0.2"));
+
+        var run = ObjectTree.RunOverBaseline();
+        run["locations/woods/looseLoot.json"] = Loot(("woods_1", "0.1"));
+
+        var woods = Object(diff: Diff(baseline, run), kind: "location", templateId: "woods");
+
+        var removed = Assert.Single(woods.Template.Changes, change => change.Path.StartsWith("/looseLoot/spawnpoints/", StringComparison.Ordinal));
+        Assert.Equal(("/looseLoot/spawnpoints/woods 9", ModChangePathOperation.Remove), (removed.Path, removed.Op));
+        Assert.Null(removed.NewValue);
+
+        // The old value is the whole spawn point, because the map is where the archive still holds it.
+        Assert.Contains("\"woods 9\"", removed.OldValue);
+        Assert.Contains("\"probability\":0.2", removed.OldValue);
+    }
+
+    [Fact]
+    public void A_list_that_only_moves_a_spawn_point_makes_no_row()
+    {
+        // The archive compares the spawn points by name, so the order of the list is not a change
+        // (ADR-0043, decision 6).
+        var baseline = ObjectTree.Baseline();
+        baseline["locations/woods/looseLoot.json"] = Loot(("A", "0.1"), ("B", "0.2"));
+
+        var run = ObjectTree.RunOverBaseline();
+        run["locations/woods/looseLoot.json"] = Loot(("B", "0.2"), ("A", "0.1"));
+
+        var diff = Diff(baseline, run);
+        var woods = Object(diff, "location", "woods");
+
+        Assert.DoesNotContain(woods.Template.Changes, change => change.Path.Contains("looseLoot", StringComparison.Ordinal));
+        Assert.Empty(woods.Parts);
+
+        // The file still enters the content hash, and it counts the order (ADR-0029, amendment 4).
+        Assert.Contains("locations/woods/looseLoot.json", diff.UnstoredChanges.Keys);
+    }
+
+    [Fact]
+    public void Two_spawn_points_with_one_name_are_told_apart_by_their_order()
+    {
+        var baseline = ObjectTree.Baseline();
+        baseline["locations/woods/looseLoot.json"] = Loot(("dup", "0.1"), ("dup", "0.2"));
+
+        var run = ObjectTree.RunOverBaseline();
+        run["locations/woods/looseLoot.json"] = Loot(("dup", "0.1"), ("dup", "0.5"));
+
+        var diff = Diff(baseline, run);
+        var woods = Object(diff, "location", "woods");
+
+        var change = Assert.Single(woods.Template.Changes, row => row.Path.Contains("dup", StringComparison.Ordinal));
+        Assert.Equal(("/looseLoot/spawnpoints/dup#2/probability", "0.2", "0.5"), (change.Path, change.OldValue, change.NewValue));
+        Assert.Contains(diff.Warnings, warning => warning.Contains("appears more than once", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -396,6 +478,14 @@ public sealed class DatabaseObjectTests : IDisposable
             Parts = row.Parts.Select(part => part.Part),
             Changes = row.Template.Changes.Select(change => new { change.Path, change.Op, change.OldValue, change.NewValue }),
         }));
+
+    /// <summary>A loose-loot file of one map, with one spawn point for each name and chance.</summary>
+    private static string Loot(params (string Name, string Probability)[] spawns) =>
+        "{\"spawnpointCount\":{\"mean\":10,\"std\":2},\"spawnpoints\":["
+        + string.Join(",", spawns.Select(spawn =>
+            "{\"locationId\":\"" + spawn.Name + "\",\"probability\":" + spawn.Probability
+            + ",\"template\":{\"Id\":\"" + spawn.Name + "\",\"Items\":[]}}"))
+        + "]}";
 
     private RunContribution Diff() => Diff(ObjectTree.Baseline(), ObjectTree.RunOverBaseline());
 

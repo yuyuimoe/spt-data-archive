@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Ten migrations exist and are applied, and 406 tests pass against a real Postgres: 384 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Ten migrations exist and are applied, and 410 tests pass against a real Postgres: 388 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -117,7 +117,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, ten migrations are applied, and 406 tests pass (TD-01, TD-02, TD-04, TD-05,
+- **Done:** the solution builds, ten migrations are applied, and 410 tests pass (TD-01, TD-02, TD-04, TD-05,
   TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 384 xUnit
   tests and 22 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
@@ -149,7 +149,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   one request carries at most `RawJson:MaxRequestBytes` (4 MB) of whole documents, or
   `RAW_JSON_REQUEST_LIMIT`. The cost limit charges `rawJson` 100 times a small field, so a page of 200 whole
   documents is refused before it runs (ADR-0040, amendment 1). Measured: PostgreSQL compresses a jsonb value by
-  default, 132 MB to 45 MB, but a read assembles 175 MB in 138 ms, which is why the refusal comes first.
+  default, 132 MB to 45 MB, but a read assembles 175 MB in 138 ms, which is why the refusal comes first. A row of a map is one file of the map, and for a loose-loot file it is one spawn
+  point, named by the `template.Id` that the map author wrote: its `part` reads `looseLoot/spawnpoints/<name>`
+  (ADR-0043).
 - **The Api reads a mod dataset.** `modDatasets` and `modDataset` serve the content of one mod version, with
   `modTemplates` (the operation of each touched object), `modChangePaths` (one row per changed value, with the
   old and the new value as JSON), `modFiles` and `modFile` (the manifest and the text of a configuration file),
@@ -191,13 +193,16 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 22 scenarios of
   `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
   each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
-- **Next slice:** a stable address (TD-72) and one row for each spawn point of a loose-loot file (ADR-0043,
-  Proposed). Measured on 2026-10-21 in the 19 exports of the development machine: twelve loose-loot files
-  differ from the baseline and take 553,046,567 bytes, and 3,499 of the 3,545 change paths are positional,
-  so no address repeats. `WTT-Armory` adds 21 spawn points in ten maps that take 548,447,155 bytes, and the
-  21 take 44,347 bytes. The baseline cache and the catalogue of the paths inside a jsonb document (TD-68)
-  follow. No map mod is imported since ADR-0041, so the dataset of one is a projection (TD-67), and a path
-  filter over those rows reads every document of the table (TD-70).
+- **Next slice:** a stable address (TD-72) and the split of the files that still have no row (ADR-0044,
+  Proposed). Measured on 2026-10-21 in the 19 exports of the development machine: 3,499 of the 3,545 change
+  paths are positional, so no address repeats, and the pool of ADR-0042 waits. ADR-0043 is Accepted and its
+  code is in: a loose-loot file is a directory of spawn points, and the ten files that `WTT-Armory` moves
+  take 548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558
+  times below the limit of `rawJson`). `FactoryClassic` replaces two maps and writes 404 rows of 4,623,791
+  bytes and 1,050 removal paths of 19,394,570 bytes. The baseline cache and the catalogue of the paths
+  inside a jsonb document (TD-68) follow. No map mod is imported since ADR-0041, so the dataset of one is a
+  projection (TD-67), and a path filter over those rows reads every document of the table (TD-70). A dataset
+  that the archive already holds keeps the rows it had, because a dataset is never rewritten (TD-75).
 - **Storage is jsonb with lz4, and three engines were compared.** The migration `SetToastCompressionLz4` sets
   lz4 on the 27 jsonb columns and `compose.yaml` sets it for the columns a later migration adds
   (ADR-0041, ratified 2026-10-21). Measured against CouchDB 3.4.3 and Cassandra 5.0.9 on the same 132 MB map
@@ -210,14 +215,16 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
   proxy), ADR-0040 (a jsonb filter by path, the whole-document field and its limits; the form of `eq` stays
   open, TD-65), ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
-  handbook entry, and amendment 1, which refuses a copy of a file above the limit of the Api, TD-74) and
-  ADR-0043 (one row for each spawn point of a loose-loot file) are Proposed and await Yui.
+  handbook entry, and amendment 1, which refuses a copy of a file above the limit of the Api, TD-74),
+  ADR-0044 (one row for each object of every file that a run changes) and ADR-0045 (the link to the source
+  of a file, which needs exporter 1.6.0) are Proposed and await Yui.
   ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0042 (an address pool and a value pool behind the change rows) is Accepted, and its
   measurement says the pool pays from 1.6 change rows for each address: the archive holds one, so the
-  storage waits for a stable address (TD-72). ADR-0005 and ADR-0010 are superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031
-  to 0037 are Accepted.
+  storage waits for a stable address (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
+  Accepted and implemented, ratified by Yui on 2026-10-21. ADR-0005 and ADR-0010 are superseded; ADR-0001 to
+  0004, 0006 to 0009, 0011 to 0029 and 0031 to 0037 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
   and the importer exist and ran on nineteen real mod runs (`docs/runbooks/mod-export.md`), including a curated
   run of one mod (ADR-0029).

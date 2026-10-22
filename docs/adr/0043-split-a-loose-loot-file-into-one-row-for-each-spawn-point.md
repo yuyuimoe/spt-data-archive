@@ -1,7 +1,8 @@
 # ADR-0043: Split a loose-loot file into one row for each spawn point
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
+**Ratified:** 2026-10-21 by Yui
 **Deciders:** Yui
 
 ## Context
@@ -104,6 +105,33 @@ The other risk is the shape. A reader that knows a loose-loot file is a reader t
 writes another shape. The archive already refuses a run that it cannot account for (ADR-0029), so a shape
 that it does not know stops the import and does not corrupt it.
 
+### The split measured on the real exports, 2026-10-21
+
+`RunDiff.Compute` on the three maps that move loot, against the baseline export of 4.1.6:
+
+| Run | Time | Spawn-point rows | Bytes of those rows | Largest row | Change paths under `/looseLoot` |
+|---|---|---|---|---|---|
+| `WTT-Armory`, 10 maps | 69.6 s | 36 | 56,301 | 3,583 | 0 |
+| `FactoryClassic`, 2 maps | 2.9 s | 404 | 4,623,791 | 204,020 | 1,050, 19,394,570 bytes |
+| `ArenaMapPort` | 8.6 s | 0 | 0 | 0 | 0 |
+
+The ten loose-loot files that `WTT-Armory` moves take 548,447,155 bytes. The archive now holds
+56,301 bytes for what the mod did to them, and every row is served whole: the largest is 3,583 bytes,
+which is 558 times below the limit of 2,000,000 bytes. `FactoryClassic` replaces two maps, so its rows are
+the size of the loot it writes: 4.6 MB of added spawn points and 19.4 MB of removed ones, each a document
+that a client can read.
+
+`ArenaMapPort` is no run: its directory holds the three files of a whole-table export, so a run diff reads
+nothing from it. The time is the reading of the files, not the split.
+
+### A dataset that the archive already holds keeps the rows it had
+
+A dataset is written once and never rewritten (ADR-0018), and a dataset is named by its content hash,
+which this decision does not move (decision 7). So a run of `WTT-Armory` imported again reuses the dataset
+of 2026-10-21 and writes no row, and the 132 MB file part rows of that dataset stay as they are. A run that
+the archive imported before this decision keeps the rows of the shape it was imported with. The archive
+needs a way to rebuild the rows of a dataset whose content hash did not move (TD-75).
+
 ## Consequences
 
 - **Easier:** a client asks which spawn points a dataset adds to a map, and reads each one whole.
@@ -160,16 +188,21 @@ Feature: A loose-loot file is one row for each spawn point
 
 ## Action Items
 
-1. [ ] Write the reader of a loose-loot file, and the name to a part and a path segment. It reads the file
-   as a stream, because the largest one takes 132 MB.
-2. [ ] Give a spawn point its address, and keep `template.Id` and `Root` in `mod_id_maps` (ADR-0034).
-3. [ ] Write the added spawn points in `mod_database_objects`, the changed ones in `mod_change_paths`, and
+1. [x] Write the reader of a loose-loot file, and the name to a part and a path segment. It reads the file
+   with `JsonDocument`, because the largest one takes 132 MB.
+2. [x] Name a spawn point by its `template.Id`, and tell a repeated name apart by its order. A spawn point
+   with no name is named by its content, and it names no id (ADR-0034, decision 4). `mod_id_maps` keeps the
+   map, and the per-spawn-point id of a map that a mod adds is covered by `template.Id` in the row.
+3. [x] Write the added spawn points in `mod_database_objects`, the changed ones in `mod_change_paths`, and
    the removed ones as one row with the operation `remove`.
-4. [ ] Measure the import of the ten `WTT-Armory` maps and of `FactoryClassic`: the rows, the bytes, and the
-   time against the 1,265 ms of a whole file.
-5. [ ] Add the scenario tags to `docs/specs`, and remove `@unverified` when the tests pass.
+4. [x] Measure the diff of the ten `WTT-Armory` maps and of `FactoryClassic`, in the table above. The import
+   into a database of a dataset that the archive does not hold yet stays open (action item 7).
+5. [x] Add the tests, in `tests/SptArchive.Tests/DatabaseObjectTests.cs`. The five scenarios below stay
+   `@unverified` in `docs/specs` until the archive holds a dataset imported with the split (TD-75).
 6. [ ] Decide whether another file shape of a location needs its own rule: `chance.json` and the other
    files of a map are below the limit today.
+7. [ ] Rebuild the rows of a dataset whose content hash did not move, so that an import before this decision
+   gets the split (TD-75).
 
 ## Links
 

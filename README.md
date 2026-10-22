@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 406 tests (384 xUnit tests and 22 Gherkin scenarios). Ten migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 410 tests (388 xUnit tests and 22 Gherkin scenarios). Ten migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).

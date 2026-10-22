@@ -222,16 +222,65 @@ public static class DatabaseObjects
             }
 
             var changes = ReadChanges(before!, after!, tokens);
+            var parts = new List<ObjectPart>();
 
-            if (changes.Count == 0)
+            // A spawn point that the run adds to a map it does not add is a row of its own, the way an
+            // added item is, and not a path under the map (ADR-0043, decision 4).
+            if (string.Equals(kind, ModTemplateKind.Location, StringComparison.Ordinal))
+            {
+                changes = PullSpawnPoints(changes, parts);
+            }
+
+            if (changes.Count == 0 && parts.Count == 0)
             {
                 continue;
             }
 
             objects.Add(new ObjectContribution(
                 new TemplateContribution(kind, address, after!.RawKey, ModTemplateOperation.Modified, null, null, null, changes),
-                []));
+                parts));
         }
+    }
+
+    /// <summary>
+    /// Moves each added spawn point out of the changed values and into a row of its own. A changed spawn
+    /// point keeps its paths under the name, and a removed one stays one path with the whole object as the
+    /// old value (ADR-0043, decision 5).
+    /// </summary>
+    private static List<PathContribution> PullSpawnPoints(IReadOnlyList<PathContribution> changes, List<ObjectPart> parts)
+    {
+        var kept = new List<PathContribution>(changes.Count);
+
+        foreach (var change in changes)
+        {
+            if (change is { Op: ModChangePathOperation.Set, OldValue: null, NewValue: not null }
+                && IsSpawnPointPart(change.Path))
+            {
+                parts.Add(new ObjectPart(change.Path[1..], change.NewValue));
+                continue;
+            }
+
+            kept.Add(change);
+        }
+
+        return kept;
+    }
+
+    /// <summary>True for the pointer that names one whole spawn point, and not a value inside it.</summary>
+    private static bool IsSpawnPointPart(string pointer)
+    {
+        foreach (var list in new[] { CanonicalFiles.SpawnPoints, CanonicalFiles.SpawnPointsForced })
+        {
+            var prefix = "/" + CanonicalFiles.LooseLoot + "/" + list + "/";
+
+            if (pointer.StartsWith(prefix, StringComparison.Ordinal)
+                && !pointer.AsSpan(prefix.Length).Contains('/'))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>The changed values of one object, file by file. A path starts with the part of its file.</summary>
@@ -241,7 +290,9 @@ public static class DatabaseObjects
 
         foreach (var part in after.Parts.Keys.Union(before.Parts.Keys, StringComparer.Ordinal).OrderBy(p => p, StringComparer.Ordinal))
         {
-            var prefix = part.Length == 0 ? string.Empty : "/" + Escape(part);
+            // The part is the path of a file inside the object, with every segment escaped already, so
+            // a spawn point with a slash in its name stays one segment (ADR-0043, decision 2).
+            var prefix = part.Length == 0 ? string.Empty : "/" + part;
             var inRun = after.Parts.TryGetValue(part, out var now);
             var inBaseline = before.Parts.TryGetValue(part, out var then);
 
@@ -419,6 +470,14 @@ public static class DatabaseObjects
                             objects[map] = location = new Obj(slot.Kind, CanonicalFiles.Locations, map, hasId: true, path);
                         }
 
+                        // A loose-loot file is a directory of spawn points, and each one is a part of its
+                        // own (ADR-0043, decision 1 and 3).
+                        if (string.Equals(member.Part, CanonicalFiles.LooseLoot, StringComparison.Ordinal))
+                        {
+                            AddSpawnPoints(location, path, root);
+                            break;
+                        }
+
                         location.Parts[member.Part] = new FilePart(path, root);
                         break;
 
@@ -443,6 +502,110 @@ public static class DatabaseObjects
 
             return objects;
         }
+
+        /// <summary>
+        /// Splits the loot of a map: one part for each spawn point, named by its <c>template.Id</c>, and one
+        /// part for what is left of the file. The order of the two lists is not part of any name, so a run
+        /// that only moves a spawn point in the list writes no row (ADR-0043, decision 6).
+        /// </summary>
+        private void AddSpawnPoints(Obj location, string path, JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                location.Parts[CanonicalFiles.LooseLoot] = new FilePart(path, root);
+                return;
+            }
+
+            var rest = new List<JsonProperty>();
+
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.Value.ValueKind != JsonValueKind.Array
+                    || property.Name is not (CanonicalFiles.SpawnPoints or CanonicalFiles.SpawnPointsForced))
+                {
+                    rest.Add(property);
+                    continue;
+                }
+
+                var taken = new Dictionary<string, int>(StringComparer.Ordinal);
+
+                foreach (var spawn in property.Value.EnumerateArray())
+                {
+                    var name = SpawnPointName(spawn);
+                    var key = name;
+
+                    if (taken.TryGetValue(name, out var count))
+                    {
+                        taken[name] = ++count;
+                        key = name + "#" + count.ToString(CultureInfo.InvariantCulture);
+
+                        warnings.Add(
+                            $"{path}: the spawn point '{name}' of '{property.Name}' appears more than once, so " +
+                            $"its order names the copy {count} (ADR-0043, decision 2).");
+                    }
+                    else
+                    {
+                        taken[name] = 1;
+                    }
+
+                    location.Parts[PartOfSpawn(property.Name, key)] = new FilePart(path, spawn);
+                }
+            }
+
+            if (rest.Count == 0)
+            {
+                return;
+            }
+
+            using var buffer = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
+                writer.WriteStartObject();
+                foreach (var property in rest)
+                {
+                    property.WriteTo(writer);
+                }
+
+                writer.WriteEndObject();
+            }
+
+            var remainder = JsonDocument.Parse(buffer.ToArray());
+            documents.Add(remainder);
+            location.Parts[CanonicalFiles.LooseLoot] = new FilePart(path, remainder.RootElement);
+        }
+
+        /// <summary>The name of one spawn point: the id its template carries, which the map author wrote.</summary>
+        private static string SpawnPointName(JsonElement spawn)
+        {
+            if (spawn.ValueKind == JsonValueKind.Object)
+            {
+                if (spawn.TryGetProperty("template", out var template)
+                    && template.ValueKind == JsonValueKind.Object
+                    && template.TryGetProperty("Id", out var id)
+                    && id.ValueKind == JsonValueKind.String
+                    && !string.IsNullOrWhiteSpace(id.GetString()))
+                {
+                    return id.GetString()!;
+                }
+
+                foreach (var field in new[] { "Id", "locationId" })
+                {
+                    if (spawn.TryGetProperty(field, out var value)
+                        && value.ValueKind == JsonValueKind.String
+                        && !string.IsNullOrWhiteSpace(value.GetString()))
+                    {
+                        return value.GetString()!;
+                    }
+                }
+            }
+
+            // A spawn point with no name of its own is named by its content, and it names no id (ADR-0034).
+            return ContentPrefix + ContentHash(new FilePart(string.Empty, spawn), [], ownId: null)[..16];
+        }
+
+        /// <summary>The part of a map that holds one spawn point, with the name in one escaped segment.</summary>
+        private static string PartOfSpawn(string list, string name) =>
+            CanonicalFiles.LooseLoot + "/" + list + "/" + Escape(name);
 
         /// <summary>The price table maps the id of an item to a number: one object for each item.</summary>
         private void ReadPrices(Dictionary<string, Obj> objects, string path, JsonElement root)

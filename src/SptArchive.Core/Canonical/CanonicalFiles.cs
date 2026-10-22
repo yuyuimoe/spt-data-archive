@@ -27,6 +27,18 @@ public static class CanonicalFiles
     /// <summary>The directory of the bot types: one file per type, named by its id.</summary>
     public const string BotTypes = "bots/types";
 
+    /// <summary>
+    /// The file of a map that holds its loot: <c>locations/&lt;map&gt;/looseLoot.json</c>. It is a directory of
+    /// spawn points, and each one is a row (ADR-0043).
+    /// </summary>
+    public const string LooseLoot = "looseLoot";
+
+    /// <summary>The list of the spawn points of a map: loot that may appear.</summary>
+    public const string SpawnPoints = "spawnpoints";
+
+    /// <summary>The list of the spawn points that always appear.</summary>
+    public const string SpawnPointsForced = "spawnpointsForced";
+
     /// <summary>True for a table that holds one object per id, and the object carries that id again.</summary>
     public static bool IsTemplateTable(string relativePath) =>
         relativePath is Items or Quests or Customizations;
