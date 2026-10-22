@@ -7,10 +7,11 @@ using SptArchive.Core.Data;
 
 namespace SptArchive.Tests;
 
-/// <summary>Opens the development database as its owner, the way the Archiver does.</summary>
-internal sealed class OwnerFactory : IDbContextFactory<ArchiveDbContext>
+/// <summary>Opens a database as its owner, the way the Archiver does. A test that commits names its own
+/// database, so that the rows of one class never reach the shared archive.</summary>
+internal sealed class OwnerFactory(string connectionString) : IDbContextFactory<ArchiveDbContext>
 {
-    public ArchiveDbContext CreateDbContext() => ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+    public ArchiveDbContext CreateDbContext() => ArchiveDatabase.CreateContext(connectionString);
 }
 
 /// <summary>A cache that stores nothing: the archive run announces its dataset and moves on.</summary>

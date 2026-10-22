@@ -15,6 +15,7 @@ namespace SptArchive.Tests;
 public static class ArchiveDatabase
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static readonly Dictionary<string, string> OwnDatabases = new(StringComparer.Ordinal);
     private static bool _migrated;
 
     public static string OwnerConnectionString =>
@@ -44,6 +45,56 @@ public static class ArchiveDatabase
             await using var db = CreateContext(OwnerConnectionString);
             await db.Database.MigrateAsync(cancellationToken);
             _migrated = true;
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The connection string of a database that one test class owns, created and migrated on first use. A
+    /// class whose imports commit cannot use the shared database: another test that runs at the same moment
+    /// sees its rows, and a query that resolves the latest release answers with them. A class that commits
+    /// keeps its rows in a database of its own, where no other test reads.
+    /// </summary>
+    public static async Task<string> OwnDatabaseAsync(string name, CancellationToken cancellationToken = default)
+    {
+        await EnsureMigratedAsync(cancellationToken);
+
+        await Gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (OwnDatabases.TryGetValue(name, out var known))
+            {
+                return known;
+            }
+
+            var database = "archive_test_" + name;
+            var admin = new NpgsqlConnectionStringBuilder(OwnerConnectionString) { Database = "postgres" }.ConnectionString;
+            var connectionString = new NpgsqlConnectionStringBuilder(OwnerConnectionString) { Database = database }.ConnectionString;
+
+            await using (var connection = new NpgsqlConnection(admin))
+            {
+                await connection.OpenAsync(cancellationToken);
+                await using var command = new NpgsqlCommand($"create database \"{database}\"", connection);
+                try
+                {
+                    await command.ExecuteNonQueryAsync(cancellationToken);
+                }
+                catch (PostgresException failure) when (failure.SqlState == PostgresErrorCodes.DuplicateDatabase)
+                {
+                    // An earlier run of the suite left it behind. Its migrations are already applied.
+                }
+            }
+
+            await using (var db = CreateContext(connectionString))
+            {
+                await db.Database.MigrateAsync(cancellationToken);
+            }
+
+            OwnDatabases[name] = connectionString;
+            return connectionString;
         }
         finally
         {

@@ -57,7 +57,11 @@ must stay inside them.
    `JsonPathFunctions.Extract`, one for each path length. `ArchiveDbContext` maps each to the PostgreSQL
    function with a public `SqlFunctionExpression`. Every segment and the value are query parameters, so a path
    never becomes part of the statement text. A path from a client cannot make a new statement shape except
-   by its length, so EF Core caches at most ten shapes.
+   by its length, so EF Core caches at most ten shapes. A negation in front of that comparison is not safe under
+   SQL three-valued logic on its own: `NULL <> value` is `NULL`, so the row would drop out. EF Core writes item 4
+   as `jsonb_extract_path(...) <> value OR jsonb_extract_path(...) IS NULL` on 2026-10-22, which keeps the row that
+   lacks the path. A JSON null at the path is a value (`'null'::jsonb`) and not SQL NULL, so the two cases stay
+   apart without a `jsonb_typeof` guard.
 
 6. **`eq` and `neq` keep their meaning and their type.** They compare the whole document and take JSON text. The
    Api now checks the text before the query. Text that is not JSON is `JSON_VALUE_MALFORMED`, and the message

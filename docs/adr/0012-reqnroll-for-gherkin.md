@@ -53,7 +53,7 @@ Feature: Specs are executable
 1. [x] Check Reqnroll with .NET 10 (amendment of 2026-10-21).
 2. [x] Link the feature files from `docs/specs`. The tests live in `tests/SptArchive.Tests`, not in a new
    project (amendment of 2026-10-21).
-3. [x] Bind `mod-api.feature` (19 scenarios).
+3. [x] Bind `mod-api.feature` (24 scenarios). Bound later: `file-rows.feature` (8, 2026-10-22), `backup-and-restore.feature` (9, 2026-10-22) and `query-api.feature` (73 of 76, 2026-10-22).
 4. [ ] Bind the other feature files, one slice at a time. Their scenarios keep `@unverified` or `@backlog`
    until then (TD-62).
 5. [x] Decide whether `ModSurfaceTests` stays. It asserted the same facts as `mod-api.feature` in plain

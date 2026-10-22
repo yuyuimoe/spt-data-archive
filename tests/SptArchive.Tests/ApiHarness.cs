@@ -15,6 +15,7 @@ namespace SptArchive.Tests;
 /// </summary>
 public static class ApiHarness
 {
+    private static readonly SemaphoreSlim Gate = new(1, 1);
     public static async Task<string> RunAsync(TestScope scope, string query, List<string>? commands = null, Action<RawJsonOptions>? rawJson = null, Action<FileTextOptions>? fileText = null) =>
         await RunAsync(scope, new OperationRequestBuilder().SetDocument(query).Build(), commands, rawJson, fileText);
 
@@ -44,14 +45,27 @@ public static class ApiHarness
         var executor = await provider.GetRequiredService<IRequestExecutorProvider>()
             .GetExecutorAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await executor.ExecuteAsync(request, TestContext.Current.CancellationToken);
+        // The harness shares one connection and one transaction with the scenario, so that the scenario can
+        // roll back. Two resolvers of one request would then share one connection too, and Npgsql refuses a
+        // second command on a busy one ("A command is already in progress"). The Api gives each resolver its
+        // own connection, so this limit belongs to the harness alone: the resolvers of one request run here
+        // one at a time.
+        await Gate.WaitAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            var result = await executor.ExecuteAsync(request, TestContext.Current.CancellationToken);
 
-        using var stream = new MemoryStream();
-        var writer = System.IO.Pipelines.PipeWriter.Create(stream);
-        await new HotChocolate.Transport.Formatters.JsonResultFormatter(indented: false)
-            .FormatAsync(result, writer, default, TestContext.Current.CancellationToken);
-        await writer.CompleteAsync();
-        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            using var stream = new MemoryStream();
+            var writer = System.IO.Pipelines.PipeWriter.Create(stream);
+            await new HotChocolate.Transport.Formatters.JsonResultFormatter(indented: false)
+                .FormatAsync(result, writer, default, TestContext.Current.CancellationToken);
+            await writer.CompleteAsync();
+            return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+        }
+        finally
+        {
+            Gate.Release();
+        }
     }
 
     public static async Task<JsonElement> JsonAsync(TestScope scope, string query, List<string>? commands = null, Action<RawJsonOptions>? rawJson = null, Action<FileTextOptions>? fileText = null)

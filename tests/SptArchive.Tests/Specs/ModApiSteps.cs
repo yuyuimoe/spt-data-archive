@@ -18,7 +18,7 @@ namespace SptArchive.Tests.Specs;
 /// writes inside one transaction that it rolls back, so the archive is never left with test data.
 /// </summary>
 [Binding]
-public sealed class ModApiSteps
+public sealed class ModApiSteps(QueryWorld world)
 {
     // The server release that the mod ran on (scenario "An observation states the release that a mod version ran on").
     private const string Release = "4.1.6";
@@ -44,6 +44,8 @@ public sealed class ModApiSteps
         ["archiveRuns"] = "id kind purpose status sptVersion result startedAt targetModGuid targetVersion",
         ["archiveRun"] = "id kind purpose status sptVersion result startedAt targetModGuid targetVersion baselineRelease",
         ["modDatabaseObjects"] = "datasetId kind templateId part bytes",
+        ["items"] = "id name sptVersion",
+        ["modItems"] = "id name datasetId",
     };
 
     private readonly Dictionary<string, Guid> _datasets = [];
@@ -52,7 +54,6 @@ public sealed class ModApiSteps
     private readonly Dictionary<string, ModFile> _files = [];
     private readonly Dictionary<string, JsonElement> _responses = [];
 
-    private TestScope? _scope;
     private int? _maxDocumentBytes;
     private int? _maxTextBytes;
     private int? _maxRequestTextBytes;
@@ -60,14 +61,10 @@ public sealed class ModApiSteps
     private ArchiveRun? _officialRun;
     private string _lastField = "";
 
+    // The scope and the last answer belong to the scenario and not to this class, because the steps of
+    // query-api.feature (QueryApiSteps) share them: both features say "the response has no errors".
     [AfterScenario]
-    public async Task RollBack()
-    {
-        if (_scope is not null)
-        {
-            await _scope.DisposeAsync();
-        }
-    }
+    public async Task RollBack() => await world.DisposeAsync();
 
     // ------------------------------------------------------------------------------------ The archive
 
@@ -330,7 +327,9 @@ public sealed class ModApiSteps
         QueryAsync(field, $$"""mod: { modGuid: { eq: {{Literal(modGuid)}} } }""");
 
     [When("I query {string}")]
-    public Task WhenIQuery(string field) => QueryAsync(field, null);
+    public Task WhenIQuery(string field) =>
+        // The one field that is not paged: it answers the whole list of releases.
+        field == "sptVersions" ? RunAsync(field, "{ sptVersions { version } }") : QueryAsync(field, null);
 
     [When("I ask for the whole document of {string} in the dataset {string}")]
     public Task WhenIAskForTheWholeDocument(string location, string dataset) =>
@@ -636,10 +635,14 @@ public sealed class ModApiSteps
     [Then("the response has an error that names {string}")]
     public void ThenTheResponseHasAnErrorThatNames(string name)
     {
-        // A text operation on jsonb becomes LIKE, which Postgres refuses, so the schema must not announce it.
         var message = Response().GetProperty("errors")[0].GetProperty("message").GetString()!;
         Assert.Contains(name, message);
-        Assert.Contains("does not exist", message);
+
+        // A text operation on jsonb becomes LIKE, which Postgres refuses, so the schema must not announce it.
+        if (name == "startsWith")
+        {
+            Assert.Contains("does not exist", message);
+        }
     }
 
     [Then("the answer has the dataset {string}")]
@@ -650,8 +653,7 @@ public sealed class ModApiSteps
 
     // ------------------------------------------------------------------------------------ Helpers
 
-    private async Task<TestScope> ScopeAsync() =>
-        _scope ??= await ArchiveDatabase.BeginAsync(TestContext.Current.CancellationToken);
+    private Task<TestScope> ScopeAsync() => world.ScopeAsync();
 
     /// <summary>
     /// Runs one paged Api field and keeps the answer. The filter is the text inside <c>where: { ... }</c>;
@@ -675,7 +677,8 @@ public sealed class ModApiSteps
         // One root field per request: two root fields of one document run at the same time, and the test
         // transaction holds one connection. A real request opens a connection of its own.
         _lastField = field;
-        _responses[field] = await ApiHarness.JsonAsync(
+        world.Field = field;
+        _responses[field] = world.Response = await ApiHarness.JsonAsync(
             await ScopeAsync(),
             query,
             rawJson: _maxDocumentBytes is { } bytes ? limits => limits.MaxValueBytes = bytes : null,
@@ -686,11 +689,11 @@ public sealed class ModApiSteps
             });
     }
 
-    private JsonElement Response() => _responses[_lastField];
+    private JsonElement Response() => world.Response;
 
-    private JsonElement Nodes() => ApiHarness.Nodes(Response(), _lastField);
+    private JsonElement Nodes() => ApiHarness.Nodes(Response(), world.Field);
 
-    private JsonElement Row() => Response().GetProperty("data").GetProperty(_lastField);
+    private JsonElement Row() => Response().GetProperty("data").GetProperty(world.Field);
 
     private string DatasetFilter(string dataset) => $$"""datasetId: { eq: "{{_datasets[dataset]}}" }""";
 

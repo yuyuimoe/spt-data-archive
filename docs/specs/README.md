@@ -42,10 +42,13 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 
 ## Slice to work on next
 
-Done: one row for each object of the seven files that a run changes, and every scenario of `file-rows.feature`
-runs as a test with Reqnroll (ADR-0044, TD-62). Done before it: filter a jsonb column by the value at a path
-(ADR-0040, TD-52, TD-55). The section "Filter by a path" of `query-api.feature` is the behavior of that slice,
-and a test proves each scenario, and the 24 scenarios of `mod-api.feature` run as tests (TD-06, ADR-0012).
-`scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
-Next: the baseline cache (ADR-0013) and the binding of the other five feature files (TD-62).
+Done: the nine scenarios of `backup-and-restore.feature` and 73 of the 76 of `query-api.feature` run as tests
+with Reqnroll, against throwaway databases and the real script and Api (TD-62). Done before them: one row for
+one object of the seven files that a run changes (ADR-0044), and the filter of a jsonb column by the value at a
+path (ADR-0040, TD-52, TD-55). Four feature files are linked from `tests/SptArchive.Tests`: `mod-api.feature`
+(24 scenarios), `file-rows.feature` (8), `backup-and-restore.feature` (9) and `query-api.feature` (76, of which 3
+keep `@unverified`). `scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
+Next: the baseline cache (ADR-0013) and the binding of the three feature files that stay unbound —
+`archive-official-data` (27), `mod-registry` (51) and `bot-and-faction-data` (12) — which keep 90 scenarios tagged
+`@unverified` (TD-62).
 Scenarios outside the slice stay `@unverified` or `@backlog`.

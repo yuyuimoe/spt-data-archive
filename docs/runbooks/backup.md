@@ -12,9 +12,9 @@ Set them in the shell or in `.env`. `.env.example` lists them. Never put the pas
 | `ARCHIVE_DB_NAME` | archive | The database to dump. |
 | `ARCHIVE_BACKUP_DIR` | ./backups | Local directory for dumps. |
 | `ARCHIVE_BACKUP_COPY_DIR` | empty | Second directory, for example a mounted share on another host. Empty means no copy. |
-| `ARCHIVE_BACKUP_KEEP_DAILY` | 7 | Keep the newest N dumps. |
+| `ARCHIVE_BACKUP_KEEP_DAILY` | 7 | Keep the newest dump of each of the N most recent days that hold a dump. |
 | `ARCHIVE_BACKUP_COMPRESSION` | 6 | The compression of the dump. `N` means gzip level N. `gzip:N`, `zstd:N` and `xz:N` name the method. A level below 6 is refused. |
-| `ARCHIVE_BACKUP_KEEP_WEEKLY` | 4 | Also keep the newest dump of each of the last M weeks. |
+| `ARCHIVE_BACKUP_KEEP_WEEKLY` | 4 | Also keep the newest dump of each of the M ISO weeks that end before the week of the oldest day the daily pool kept. |
 
 ## Take a dump
 
@@ -69,8 +69,13 @@ algorithm". `zstd:6` works. A host that wants xz needs a `pg_dump` built with it
   Archiver that dies must not take the backup with it, and several imports may run at once (ADR-0036).
 - **The off-host target is a directory.** `ARCHIVE_BACKUP_COPY_DIR` points at a mount, and `rclone` or
   `scp` can fill that mount. The script names no cloud service, because the deployment stack is not built.
-- **Retention is 7 daily dumps and the newest dump of each of the last 4 weeks**, as the scenario in
-  `backup-and-restore.feature` states.
+- **Retention is two pools, and each one counts its own unit.** The daily pool holds the newest dump of
+  each of the 7 most recent days that hold a dump. The weekly pool holds the newest dump of each of the 4
+  most recent ISO weeks that end before the week of the oldest day the daily pool kept, so the two pools
+  never claim the same week. The day is the date in the file name and the week is its ISO year and week
+  (`%G-%V`), so a leap year, a month of 30 or 31 days, the week that holds the turn of the year and a clock
+  change change nothing. The scenario "Old dumps are pruned" runs as a test (ADR-0011, amendment of
+  2026-10-22).
 - **The dump is compressed, with gzip level 6 or higher.** A plain dump grows with every release, and
   the archive keeps every release (ADR-0014). The default level costs a second and saves four fifths of
   the bytes. `backup.sh` refuses a lower level, so no one disables compression by accident.

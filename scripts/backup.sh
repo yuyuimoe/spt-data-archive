@@ -80,22 +80,47 @@ dump)
     cp "$file" "$file.sha256" "$ARCHIVE_BACKUP_COPY_DIR/"
     (cd "$ARCHIVE_BACKUP_COPY_DIR" && sha256sum -c "$(basename "$file").sha256" >/dev/null) || die "copy differs from the dump"
   fi
-  # Retention: newest N daily dumps, plus the newest dump of each of the last M ISO weeks. Prune every directory.
+  # Retention keeps two pools apart, and it reads both units from the date in the file name, never from a
+  # count of days as 86 400 seconds (ADR-0011, amendment of 2026-10-22):
+  #
+  #   daily   the newest dump of each of the KEEP_DAILY most recent days that hold a dump;
+  #   weekly  the newest dump of each of the KEEP_WEEKLY most recent ISO weeks before the week of the
+  #           oldest day that the daily pool kept.
+  #
+  # The day is the date itself, and the week is its ISO year and week (%G-%V): a leap year, a month of 30
+  # or 31 days, a week that holds the turn of the year and a clock change all leave both units alone.
   for dir in "$ARCHIVE_BACKUP_DIR" ${ARCHIVE_BACKUP_COPY_DIR:+"$ARCHIVE_BACKUP_COPY_DIR"}; do
-    declare -A keep=(); declare -A seen=()
+    declare -A keep=() day_seen=() week_seen=()
     mapfile -t all < <(cd "$dir" && ls -1 archive-*.dump 2>/dev/null | sort -r)
-    i=0; nweek=0
+    nday=0; oldest_day=""; older=()
     for f in "${all[@]}"; do   # newest first
-      i=$((i+1)); d=${f#archive-}; d=${d:0:8}
-      w=$(date -u -d "${d:0:4}-${d:4:2}-${d:6:2}" +%G-%V)
-      (( i <= ARCHIVE_BACKUP_KEEP_DAILY )) && keep[$f]=1
-      if [[ -z ${seen[$w]:-} ]]; then   # first seen = newest dump of that week
-        seen[$w]=1; nweek=$((nweek+1))
-        (( nweek <= ARCHIVE_BACKUP_KEEP_WEEKLY )) && keep[$f]=1
+      day=${f#archive-}; day=${day:0:8}
+      if [[ ! $day =~ ^[0-9]{8}$ ]]; then
+        echo "backup: keep $f: its name holds no date" >&2; keep[$f]=1; continue
       fi
+      if [[ -z ${day_seen[$day]:-} ]]; then
+        day_seen[$day]=1; nday=$((nday+1))
+        if (( nday <= ARCHIVE_BACKUP_KEEP_DAILY )); then keep[$f]=1; oldest_day=$day; continue; fi
+      fi
+      older+=("$f")
+    done
+    # The weekly pool starts one week before the week of the oldest day that the daily pool kept, so the two
+    # pools never claim the same week and neither one counts the weeks of the other.
+    cutoff=$(date -u -d "${oldest_day:0:4}-${oldest_day:4:2}-${oldest_day:6:2}" +%G-%V) \
+      || { echo "backup: keep every dump of $dir: the days of its names are no dates" >&2; continue; }
+    nweek=0
+    for f in "${older[@]+"${older[@]}"}"; do   # newest first, outside the daily pool
+      day=${f#archive-}; day=${day:0:8}
+      if ! week=$(date -u -d "${day:0:4}-${day:4:2}-${day:6:2}" +%G-%V 2>/dev/null); then
+        echo "backup: keep $f: $day is no date" >&2; keep[$f]=1; continue
+      fi
+      [[ $week < $cutoff ]] || continue
+      [[ -z ${week_seen[$week]:-} ]] || continue
+      week_seen[$week]=1; nweek=$((nweek+1))
+      (( nweek <= ARCHIVE_BACKUP_KEEP_WEEKLY )) && keep[$f]=1
     done
     for f in "${all[@]}"; do [[ -n ${keep[$f]:-} ]] || rm -f "$dir/$f" "$dir/$f.sha256"; done
-    unset keep seen all
+    unset keep day_seen week_seen older all
   done
   echo "backup: wrote $file ($(stat -c %s "$file") bytes, $method level $level)"
   ;;

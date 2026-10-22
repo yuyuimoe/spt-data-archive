@@ -6,9 +6,11 @@ Errors (exit code 1):
   * A relative Markdown link points to a file that does not exist.
   * An ADR is missing a required header field or section.
   * The ADR index does not list an ADR, or lists a different status than the ADR file.
-  * A scenario claims a test that it does not have: a file that the test project links holds a
-    scenario tagged @unverified, or a file that it does not link holds a scenario without that tag.
-    A linked file may keep @unverified on a scenario that has no steps yet: the runner skips it (UnverifiedScenarios.cs).
+  * A scenario claims a test that it does not have: a file that the test project does not link holds a
+    scenario without the tag @unverified. A file that the project links may keep the tag on a scenario
+    that has no steps yet, but only while the test project holds a hook that skips such a scenario
+    (tests/SptArchive.Tests/Specs/UnverifiedScenarios.cs): the runner reports it as skipped, so it is
+    never reported as passing.
 
 Warnings (exit code 0):
   * A prose sentence has more than 25 words (Simplified Technical English).
@@ -32,6 +34,7 @@ MARKDOWN = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md")])
 FEATURES = sorted((ROOT / "docs").rglob("*.feature"))
 ADR_DIR = ROOT / "docs" / "adr"
 TESTS_PROJECT = ROOT / "tests" / "SptArchive.Tests" / "SptArchive.Tests.csproj"
+SPECS_DIR = ROOT / "tests" / "SptArchive.Tests" / "Specs"
 
 ADR_FILE = re.compile(r"^(\d{4})-.+\.md$")
 ADR_SECTIONS = ["Context", "Decision", "Options Considered", "Trade-off Analysis",
@@ -79,9 +82,28 @@ def bound_features() -> set[Path]:
     return bound
 
 
+def skip_hook() -> str | None:
+    """The Reqnroll hook that turns an @unverified scenario into a skipped one, or None if it is gone.
+
+    A tag stays honest only while the runner skips the scenario, so a linked file may keep @unverified
+    only while this hook exists (TD-62).
+    """
+    for source in SPECS_DIR.glob("*.cs"):
+        text = source.read_text(encoding="utf-8")
+        if re.search('\\[BeforeScenario\\("unverified"[^\\]]*\\)\\]', text) and "Assert.Skip" in text:
+            return rel(source)
+    return None
+
+
 def check_feature_tags() -> None:
-    """A scenario that runs has no @unverified tag, and one that does not run has it (TD-62)."""
+    """A scenario that runs has no @unverified tag, and one that does not run has it (TD-62).
+
+    A file may be bound in part: a scenario that keeps the tag in a linked file is skipped by the hook
+    of the test project, so it is reported as skipped and never as passing. The hook has to exist for
+    that claim to hold, so its absence is an error as well.
+    """
     bound = bound_features()
+    hook = skip_hook()
 
     for feature in FEATURES:
         document = Parser().parse(feature.read_text(encoding="utf-8"))
@@ -94,11 +116,12 @@ def check_feature_tags() -> None:
             unverified = "@unverified" in tags
             name = scenario["name"]
 
-            # In a linked file, @unverified is honest: UnverifiedScenarios.cs makes the runner skip the scenario,
-            # so it is reported as skipped and never as passing.
             if feature not in bound and not unverified:
                 errors.append(
                     f"{rel(feature)}: the scenario \"{name}\" claims a passing test, but the test project does not run this file and the scenario has no @unverified tag")
+            if feature in bound and unverified and hook is None:
+                errors.append(
+                    f"{rel(feature)}: the scenario \"{name}\" keeps @unverified, but no hook of the test project skips it; a scenario that runs must pass, so remove the tag or add the hook")
 
 
 def check_links() -> None:

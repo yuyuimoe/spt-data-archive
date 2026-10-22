@@ -18,6 +18,11 @@ namespace SptArchive.Tests;
 /// </summary>
 public sealed class ConcurrentRunTests : IAsyncLifetime
 {
+    /// <summary>This class commits its imports, so it writes into a database of its own
+    /// (<see cref="ArchiveDatabase.OwnDatabaseAsync"/>): the shared archive must not hold its rows, because
+    /// every other test that runs at the same time reads the shared one.</summary>
+    private static string Database => ArchiveDatabase.OwnDatabaseAsync("concurrent").GetAwaiter().GetResult();
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "sptarchive-parallel-" + Guid.NewGuid().ToString("N"));
     private readonly string _secondRoot = Path.Combine(Path.GetTempPath(), "sptarchive-parallel-" + Guid.NewGuid().ToString("N"));
 
@@ -49,7 +54,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
             }
         }
 
-        await using var connection = new NpgsqlConnection(ArchiveDatabase.OwnerConnectionString);
+        await using var connection = new NpgsqlConnection(Database);
         await connection.OpenAsync();
 
         foreach (var modGuid in _modGuids)
@@ -97,7 +102,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         // The lock of the mod is held here, so both jobs pass their own checks and queue on it: this is
         // the case where two Archivers read the same export, and both believe it is new.
-        await using var holder = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var holder = ArchiveDatabase.CreateContext(Database);
         await using var held = await holder.Database.BeginTransactionAsync(cancellationToken);
         await RunLocks.ModExclusiveAsync(holder, _modGuids[0], cancellationToken);
 
@@ -109,7 +114,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(180), cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         var runs = await db.ArchiveRuns
             .Where(run => run.TargetModGuid == _modGuids[0])
@@ -143,7 +148,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
                 JobAsync(_secondRoot, _modGuids[1], Release, cancellationToken))
             .WaitAsync(TimeSpan.FromSeconds(180), cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         var runs = await db.ArchiveRuns
             .Where(run => run.StartedAt > DateTimeOffset.UtcNow.AddMinutes(-5) && run.Kind == ArchiveRunKind.Mod)
@@ -168,7 +173,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         await RunJobAsync(_root, _modGuids[0], Release, cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var row = await db.ArchiveRuns.SingleAsync(run => run.Id == dead, cancellationToken);
 
         Assert.Equal(ArchiveRun.Interrupted, row.Status);
@@ -190,7 +195,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         await RunJobAsync(_root, _modGuids[0], Release, cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var row = await db.ArchiveRuns.SingleAsync(run => run.Id == live, cancellationToken);
 
         Assert.Equal(ArchiveRun.Running, row.Status);
@@ -210,7 +215,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
         }));
         RunTree.File(_root, "run/release.json", JsonSerializer.Serialize(new { sptVersion = Release }));
 
-        await using var holder = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var holder = ArchiveDatabase.CreateContext(Database);
         await using var held = await holder.Database.BeginTransactionAsync(cancellationToken);
         await RunLocks.ReleaseExclusiveAsync(holder, Release, cancellationToken);
 
@@ -222,7 +227,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(180), cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         var runs = await db.ArchiveRuns
             .Where(run => run.SptVersion == Release && run.Kind == ArchiveRunKind.Official)
@@ -247,13 +252,13 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         // Another import registers the release and has not committed. The late import is between its own
         // check and its own insert, which is the window that a check-then-insert cannot survive.
-        await using var blocker = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var blocker = ArchiveDatabase.CreateContext(Database);
         await using var held = await blocker.Database.BeginTransactionAsync(cancellationToken);
 
         blocker.SptVersions.Add(new SptVersion { Version = fresh, VersionParts = SptVersion.ParseParts(fresh) });
         await blocker.SaveChangesAsync(cancellationToken);
 
-        await using var late = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var late = ArchiveDatabase.CreateContext(Database);
         var registering = SptVersionRegistry.EnsureAsync(late, fresh, cancellationToken);
 
         // The insert of the late import waits on the unique index, and the violation comes after the commit.
@@ -261,14 +266,14 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
         await held.CommitAsync(cancellationToken);
         await registering.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         Assert.Single(await db.SptVersions.Where(row => row.Version == fresh).ToListAsync(cancellationToken));
     }
 
     /// <summary>Removes a release the test owns, so a left-over row cannot stand in for the race.</summary>
     private static async Task DropReleaseAsync(string release)
     {
-        await using var connection = new NpgsqlConnection(ArchiveDatabase.OwnerConnectionString);
+        await using var connection = new NpgsqlConnection(Database);
         await connection.OpenAsync();
 
         foreach (var sql in new[]
@@ -295,7 +300,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
         };
 
         var job = new ArchiveJob(
-            new OwnerFactory(),
+            new OwnerFactory(Database),
             [],
             new RunImporter(Options.Create(options), NullLogger<RunImporter>.Instance),
             new NullCache(),
@@ -317,7 +322,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
         };
 
         var job = new ArchiveJob(
-            new OwnerFactory(),
+            new OwnerFactory(Database),
             [],
             new RunImporter(Options.Create(options), NullLogger<RunImporter>.Instance),
             new NullCache(),
@@ -354,7 +359,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
 
         while (true)
         {
-            await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+            await using var db = ArchiveDatabase.CreateContext(Database);
 
             var open = official
                 ? await db.ArchiveRuns.CountAsync(
@@ -384,7 +389,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
     /// <summary>The row a killed process left: still running, and its last beat is the one given.</summary>
     private async Task<Guid> SeedRunningAsync(string release, DateTimeOffset heartbeat, CancellationToken cancellationToken)
     {
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         var run = new ArchiveRun
         {
@@ -408,7 +413,7 @@ public sealed class ConcurrentRunTests : IAsyncLifetime
     /// <summary>The archive holds the official data of a release before it holds a run on it (ADR-0035).</summary>
     private async Task SeedOfficialDataAsync(string release, CancellationToken cancellationToken)
     {
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         if (await db.Items.AnyAsync(item => item.SptVersion == release, cancellationToken))
         {

@@ -32,6 +32,9 @@ public sealed class BackupSteps : IDisposable
     private string? _dump;
     private string _restored = "";
     private string _notADump = "";
+    private string? _shimDir;
+    private readonly List<string> _dailyDumps = [];
+    private readonly List<string> _weeklyDumps = [];
 
     private ScriptResult _result = new(-1, "", "");
     private ScriptResult _verifyResult = new(-1, "", "");
@@ -71,12 +74,12 @@ public sealed class BackupSteps : IDisposable
     public async Task WhenTheBackupStepRuns()
     {
         _result = await RunScriptAsync(["dump"], DumpEnvironment());
-        Assert.True(_result.ExitCode == 0, $"backup.sh dump failed: {_result}");
     }
 
     [Then("a dump file exists with the date of the run in its name")]
     public void ThenADumpFileExistsWithTheDateOfTheRun()
     {
+        Assert.True(_result.ExitCode == 0, $"backup.sh dump failed: {_result}");
         var dumps = Directory.GetFiles(_backupDir, "archive-*.dump");
         var dump = Assert.Single(dumps);
 
@@ -100,6 +103,101 @@ public sealed class BackupSteps : IDisposable
         Assert.True(File.Exists(copy), $"no copy at {copy}");
         Assert.Equal(Sha256(_dump), Sha256(copy));
         Assert.NotEqual(Path.GetFullPath(_backupDir), Path.GetFullPath(_copyDir));
+    }
+
+    // ---- Old dumps are pruned -------------------------------------------------------------------
+
+    [Given("7 daily dumps and 4 weekly dumps exist")]
+    public async Task GivenDailyDumpsAndWeeklyDumpsExist()
+    {
+        await CreateSourceAsync();
+        Directory.CreateDirectory(_backupDir);
+
+        // Seven dumps on the seven days before today, oldest first, and four on the same weekday in each
+        // of the four earlier weeks. The two pools are apart, so every weekly dump survives today's dump.
+        var today = DateTime.UtcNow.Date;
+        for (var day = 7; day >= 1; day--)
+        {
+            _dailyDumps.Add(WriteOldDump(day, today.AddDays(-day)));
+        }
+
+        for (var week = 2; week <= 5; week++)
+        {
+            _weeklyDumps.Add(WriteOldDump(week, today.AddDays(-7 * week)));
+        }
+    }
+
+    [When("a new dump is created")]
+    public async Task WhenANewDumpIsCreated()
+    {
+        _result = await RunScriptAsync(["dump"], DumpEnvironment());
+        Assert.True(_result.ExitCode == 0, $"backup.sh dump failed: {_result}");
+
+        var fresh = Directory.GetFiles(_backupDir, "archive-*.dump")
+            .Where(file => !_dailyDumps.Contains(file) && !_weeklyDumps.Contains(file))
+            .ToArray();
+        _dump = Assert.Single(fresh);
+    }
+
+    [Then("the oldest daily dump is removed")]
+    public void ThenTheOldestDailyDumpIsRemoved()
+    {
+        Assert.Equal(7, _dailyDumps.Count);
+        var oldest = _dailyDumps[0];
+        Assert.False(File.Exists(oldest), $"{Path.GetFileName(oldest)} was not pruned");
+        Assert.False(File.Exists(oldest + ".sha256"), "the checksum of the pruned dump was kept");
+
+        // Six days of history and today: eight days hold a dump, seven of them stay.
+        foreach (var kept in _dailyDumps.Skip(1))
+        {
+            Assert.True(File.Exists(kept), $"{Path.GetFileName(kept)} was pruned");
+        }
+
+        Assert.NotNull(_dump);
+        Assert.True(File.Exists(_dump), "the dump of the run was pruned");
+    }
+
+    [Then("the weekly dumps are kept")]
+    public void ThenTheWeeklyDumpsAreKept()
+    {
+        Assert.Equal(4, _weeklyDumps.Count);
+        foreach (var kept in _weeklyDumps)
+        {
+            Assert.True(File.Exists(kept), $"{Path.GetFileName(kept)} was pruned");
+        }
+
+        // Six daily dumps after pruning, four weekly dumps and the dump of the run. Nothing else survives.
+        Assert.Equal(_dailyDumps.Count - 1 + _weeklyDumps.Count + 1, Directory.GetFiles(_backupDir, "archive-*.dump").Length);
+    }
+
+    // ---- A failed run produces no dump ----------------------------------------------------------
+
+    [Given("a failed archive run")]
+    public async Task GivenAFailedArchiveRun()
+    {
+        await CreateSourceAsync();
+
+        // The fault is the dump, not the script: a pg_dump that dies, as it does when the host is gone or
+        // the disk is full. The script, its temporary name and its cleanup are the real ones.
+        _shimDir = Path.Combine(_root, "shims");
+        Directory.CreateDirectory(_shimDir);
+        var shim = Path.Combine(_shimDir, "pg_dump");
+        await File.WriteAllTextAsync(shim, "#!/usr/bin/env bash\necho 'pg_dump: error: connection to server was lost' >&2\nexit 1\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Then("no new dump file is created")]
+    public void ThenNoNewDumpFileIsCreated()
+    {
+        Assert.NotEqual(0, _result.ExitCode);
+        Assert.Contains("pg_dump failed", _result.Stderr);
+
+        // Neither the half-written file nor a checksum of it survives.
+        Assert.Empty(Directory.GetFiles(_backupDir, "archive-*.dump"));
+        Assert.Empty(Directory.GetFiles(_backupDir, "*.partial"));
     }
 
     // ---- A dump restores into an empty database -------------------------------------------------
@@ -330,7 +428,10 @@ public sealed class BackupSteps : IDisposable
               if [[ $arg == *.dump ]]; then printf 'damaged' >> "${@: -1}/$(basename "$arg")"; fi
             done
             """.Replace("\r", "") + "\n");
-        File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(shim, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
 
         var environment = DumpEnvironment();
         var original = Environment.GetEnvironmentVariable("PATH") ?? "";
@@ -386,6 +487,15 @@ public sealed class BackupSteps : IDisposable
         _dump = Assert.Single(Directory.GetFiles(_backupDir, "archive-*.dump"));
     }
 
+    /// <summary>An old dump of an earlier day. The prune reads the date in the name and never the content.</summary>
+    private string WriteOldDump(int index, DateTime day)
+    {
+        var path = Path.Combine(_backupDir, $"archive-{day:yyyyMMdd}T{index:D2}0000Z.dump");
+        File.WriteAllText(path, "an old dump: the prune reads its name only");
+        File.WriteAllText(path + ".sha256", "0000  " + Path.GetFileName(path) + "\n");
+        return path;
+    }
+
     private async Task RestoreIntoNewDatabaseAsync()
     {
         Assert.NotNull(_dump);
@@ -417,6 +527,14 @@ public sealed class BackupSteps : IDisposable
         var environment = BaseEnvironment();
         environment["ARCHIVE_BACKUP_DIR"] = _backupDir;
         environment["ARCHIVE_BACKUP_COPY_DIR"] = _copyDir;
+
+        if (_shimDir is not null)
+        {
+            var original = Environment.GetEnvironmentVariable("PATH") ?? "";
+            environment["ORIGINAL_PATH"] = original;
+            environment["PATH"] = _shimDir + Path.PathSeparator + original;
+        }
+
         return environment;
     }
 

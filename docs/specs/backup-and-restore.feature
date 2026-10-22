@@ -9,7 +9,6 @@ Feature: Back up and restore the archive
     Then a dump file exists with the date of the run in its name
     And a copy of the dump exists off the host
 
-  @unverified
   Scenario: A failed run produces no dump
     Given a failed archive run
     When the backup step runs
@@ -26,7 +25,6 @@ Feature: Back up and restore the archive
     Then the role "archive_reader" can read every table
     And the role "archive_reader" cannot write to any table
 
-  @unverified
   Scenario: Old dumps are pruned
     Given 7 daily dumps and 4 weekly dumps exist
     When a new dump is created

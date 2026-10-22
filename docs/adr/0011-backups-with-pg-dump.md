@@ -16,6 +16,15 @@ We will take a custom-format dump (`pg_dump -Fc`) after each successful run. We 
 
 An amendment of 2026-10-21 covers compression. The dump is always compressed, with gzip level 6 or higher. `xz` at the same level is also acceptable. A plain custom-format dump of the development archive is 210 MB and the compressed one is 41 MB, so the choice is not cosmetic. The archive keeps every server release (ADR-0014) and grows. The driver asked for this floor. `scripts/backup.sh` refuses a level below 6.
 
+An amendment of 2026-10-22 covers retention, which the driver asked for. The script keeps two pools apart, and
+each one counts its own calendar unit. The daily pool holds the newest dump of each of the seven most recent
+days that hold a dump. The weekly pool holds the newest dump of each of the four most recent ISO weeks that end
+before the week of the oldest day the daily pool kept. No week reaches both pools. The day comes from the date
+in the file name, and the week is its ISO year and week (`%G-%V`). A leap year changes nothing, and neither does
+a month of 30 or 31 days, the week that holds the turn of the year, or a clock change. No count of 86 400
+seconds enters the calculation. A dump whose name holds no date is kept, and the script names it on standard
+error.
+
 ## Options Considered
 
 | Dimension         | `pg_dump` after each run (chosen) | WAL archiving with pgBackRest | Volume snapshots   | No backup         |
@@ -40,7 +49,6 @@ The data changes only at the end of a run, so one dump per run captures every st
 ## Verification
 
 ```gherkin
-@backlog
 Feature: Backups
 
   Scenario: A successful run produces a dump
@@ -53,7 +61,16 @@ Feature: Backups
     Given a dump file from a successful run
     When I restore it into a new empty database
     Then the restored tables have the same row counts as the source database
+
+  Scenario: Old dumps are pruned
+    Given 7 daily dumps and 4 weekly dumps exist
+    When a new dump is created
+    Then the oldest daily dump is removed
+    And the weekly dumps are kept
 ```
+
+All nine scenarios of `docs/specs/backup-and-restore.feature` run as tests on 2026-10-22
+(`tests/SptArchive.Tests/Specs/BackupSteps.cs`), against a throwaway database and the real script.
 
 ## Action Items
 

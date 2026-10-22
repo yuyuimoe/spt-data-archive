@@ -16,6 +16,11 @@ namespace SptArchive.Tests;
 /// </summary>
 public sealed class OfficialImportTests : IAsyncLifetime
 {
+    /// <summary>This class commits its imports, so it writes into a database of its own
+    /// (<see cref="ArchiveDatabase.OwnDatabaseAsync"/>): the shared archive must not hold its rows, because
+    /// every other test that runs at the same time reads the shared one.</summary>
+    private static string Database => ArchiveDatabase.OwnDatabaseAsync("official-import").GetAwaiter().GetResult();
+
     private const string ModGuid = "com.example.thermal";
     private const string ExporterGuid = RunDirectory.ToolModGuid;
 
@@ -34,7 +39,7 @@ public sealed class OfficialImportTests : IAsyncLifetime
             Directory.Delete(_root, recursive: true);
         }
 
-        await using var connection = new NpgsqlConnection(ArchiveDatabase.OwnerConnectionString);
+        await using var connection = new NpgsqlConnection(Database);
         await connection.OpenAsync();
 
         foreach (var sql in new[]
@@ -113,7 +118,7 @@ public sealed class OfficialImportTests : IAsyncLifetime
 
         await RunJobAsync(cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         Assert.Empty(await db.ArchiveRuns.Where(run => run.SptVersion == _release).ToListAsync(cancellationToken));
         Assert.Empty(await db.SptVersions.Where(row => row.Version == _release).ToListAsync(cancellationToken));
@@ -127,7 +132,7 @@ public sealed class OfficialImportTests : IAsyncLifetime
 
         await RunJobAsync(cancellationToken);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = Assert.Single(await db.ArchiveRuns.Where(row => row.SptVersion == _release).ToListAsync(cancellationToken));
 
         Assert.Equal(ArchiveRunKind.Official, run.Kind);
@@ -144,7 +149,7 @@ public sealed class OfficialImportTests : IAsyncLifetime
         };
 
         var job = new ArchiveJob(
-            new OwnerFactory(),
+            new OwnerFactory(Database),
             [],
             new RunImporter(Options.Create(options), NullLogger<RunImporter>.Instance),
             new NullCache(),

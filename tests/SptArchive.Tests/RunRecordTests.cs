@@ -20,6 +20,11 @@ namespace SptArchive.Tests;
 /// </summary>
 public sealed class RunRecordTests : IAsyncLifetime
 {
+    /// <summary>This class commits its imports, so it writes into a database of its own
+    /// (<see cref="ArchiveDatabase.OwnDatabaseAsync"/>): the shared archive must not hold its rows, because
+    /// every other test that runs at the same time reads the shared one.</summary>
+    private static string Database => ArchiveDatabase.OwnDatabaseAsync("run-record").GetAwaiter().GetResult();
+
     private const string AddedId = "dddddddddddddddddddddddd";
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "sptarchive-record-" + Guid.NewGuid().ToString("N"));
@@ -42,7 +47,7 @@ public sealed class RunRecordTests : IAsyncLifetime
             Directory.Delete(_root, recursive: true);
         }
 
-        await using var connection = new NpgsqlConnection(ArchiveDatabase.OwnerConnectionString);
+        await using var connection = new NpgsqlConnection(Database);
         await connection.OpenAsync();
 
         foreach (var sql in new[]
@@ -73,7 +78,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync();
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = await db.ArchiveRuns.SingleAsync(row => row.TargetModGuid == _modGuid, TestContext.Current.CancellationToken);
 
         Assert.Equal(ArchiveRunKind.Mod, run.Kind);
@@ -106,7 +111,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync();
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = await db.ArchiveRuns.SingleAsync(row => row.TargetModGuid == _modGuid, TestContext.Current.CancellationToken);
 
         Assert.Equal(ArchiveRun.Failed, run.Status);
@@ -127,7 +132,7 @@ public sealed class RunRecordTests : IAsyncLifetime
         await RunJobAsync();
         await RunJobAsync(force: true);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var runs = await db.ArchiveRuns.Where(row => row.TargetModGuid == _modGuid).OrderBy(row => row.StartedAt).ToListAsync(TestContext.Current.CancellationToken);
         var dataset = await db.ModDatasets.SingleAsync(row => row.ModGuid == _modGuid, TestContext.Current.CancellationToken);
 
@@ -149,7 +154,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync();
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var observation = await db.ModDataObservations.SingleAsync(row => row.Dataset!.ModGuid == _modGuid, TestContext.Current.CancellationToken);
 
         Assert.True(observation.TargetUnverified);
@@ -162,7 +167,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync(configuredGuid: null);
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = await db.ArchiveRuns.SingleAsync(row => row.TargetModGuid == _modGuid, TestContext.Current.CancellationToken);
         var observation = await db.ModDataObservations.SingleAsync(row => row.ArchiveRunId == run.Id, TestContext.Current.CancellationToken);
 
@@ -177,7 +182,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync(configuredGuid: "com.example.other");
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = await db.ArchiveRuns.SingleAsync(row => row.TargetModGuid == "com.example.other", TestContext.Current.CancellationToken);
 
         Assert.Equal(ArchiveRun.Failed, run.Status);
@@ -197,7 +202,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync();
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = await db.ArchiveRuns.SingleAsync(row => row.TargetModGuid == _modGuid, TestContext.Current.CancellationToken);
 
         Assert.Equal(ArchiveRun.Succeeded, run.Status);
@@ -214,7 +219,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
         await RunJobAsync();
 
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
         var run = await db.ArchiveRuns.SingleAsync(row => row.TargetModGuid == _modGuid, TestContext.Current.CancellationToken);
 
         using var result = JsonDocument.Parse(run.Result!);
@@ -254,7 +259,7 @@ public sealed class RunRecordTests : IAsyncLifetime
     private async Task EnsureOfficialImportAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var db = ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        await using var db = ArchiveDatabase.CreateContext(Database);
 
         if (await db.Items.AnyAsync(item => item.SptVersion == _release, cancellationToken))
         {
@@ -281,7 +286,7 @@ public sealed class RunRecordTests : IAsyncLifetime
 
     private sealed class OwnerFactory : IDbContextFactory<ArchiveDbContext>
     {
-        public ArchiveDbContext CreateDbContext() => ArchiveDatabase.CreateContext(ArchiveDatabase.OwnerConnectionString);
+        public ArchiveDbContext CreateDbContext() => ArchiveDatabase.CreateContext(Database);
     }
 
     private sealed class NullCache : IDistributedCache
