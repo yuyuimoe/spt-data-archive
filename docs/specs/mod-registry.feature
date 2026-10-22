@@ -11,7 +11,6 @@ Feature: Keep mod data apart from official data
   # ADR-0013 keyed the mod tables by dataset, not by mod version: two versions with the same
   # content share one dataset, so the dataset is what a mod row belongs to.
 
-  @unverified
   Scenario: A mod item must belong to a dataset
     When I insert a mod item with a dataset id that is not in the table "mod_datasets"
     Then the database rejects the row with a foreign key error
@@ -57,31 +56,26 @@ Feature: Keep mod data apart from official data
     Then the official item "A1" still exists
     And the runbook states that the dataset stays until a prune policy exists
 
-  @unverified
   Scenario: Two mods can add the same item id
     Given the mods "mod-x" and "mod-y"
     When both mods add an item with the id "C1"
     Then both rows exist in the table "mod_items"
 
-  @unverified
   Scenario: Two versions of one mod can be registered
     When I register the mod "com.example.mod" in the versions "1.0.0" and "1.1.0"
     Then both versions exist in the table "mods"
 
-  @unverified
   Scenario: The same mod version cannot be registered twice
     Given the mod "com.example.mod" in the version "1.0.0" is registered
     When I register it again with the same version
     Then the database rejects the row with a unique constraint error
 
-  @unverified
   Scenario: A mod can add stock to an official trader
     Given the official trader "T1"
     When the mod "mod-x" adds an assort row for the trader "T1"
     Then the table "mod_trader_assort_items" has that row
     And the table "trader_assort_items" has no new row
 
-  @unverified
   Scenario: The official Archiver run does not touch mod rows
     Given the mod "mod-x" has a mod item "B1"
     When the Archiver imports the official data
@@ -91,7 +85,6 @@ Feature: Keep mod data apart from official data
   # ADR-0013. A dataset is the content of one mod version. An observation is one
   # attempt to load that mod version on one server version.
 
-  @unverified
   Scenario: A mod version states its content once
     Given the mod "com.example.mod" in the version "1.0.0"
     When the Archiver archives that mod version
@@ -105,14 +98,12 @@ Feature: Keep mod data apart from official data
     Then the observation of "1.1.0" points at the dataset "D1"
     And the table "mod_datasets" has one row for that mod
 
-  @unverified
   Scenario: A mod version is observed on a server version
     Given the mod "com.example.mod" in the version "1.0.0"
     When the Archiver archives that mod version on the server version "4.0.13"
     Then the observation states the mod version "1.0.0" and the server version "4.0.13"
     And the observation points at the dataset of that mod version
 
-  @unverified
   Scenario: The server version of a dataset is not part of the dataset
     Given the dataset "D1" of the mod "com.example.mod"
     When the archive observes that mod version on "4.0.13" and on "4.0.14"
@@ -147,14 +138,12 @@ Feature: Keep mod data apart from official data
     Then the observation of the patch states the base in the dependency set
     And the dataset of the patch holds only the rows the patch adds or changes
 
-  @unverified
   Scenario: A run that changes nothing says so
     Given the mod "com.example.weapons.415" in the version "1.1.2"
     When the export of that mod version equals its baseline export
     Then the run stores a dataset with no template rows
     And the run logs that the mod version changed nothing
 
-  @unverified
   Scenario: A mod that is silent is not a success
     Given the mod "com.example.mod" in the version "1.0.0"
     When the export of that mod version does not hold the mod GUID
@@ -174,7 +163,6 @@ Feature: Keep mod data apart from official data
     And that row states the old value from the official table of "4.0.13"
     And the official row of "A1" is not changed
 
-  @unverified
   Scenario: A mod that adds an item is recorded as an addition
     Given a mod that adds the item "B1" with the parent "node-weapons"
     When the Archiver archives that mod
@@ -182,7 +170,6 @@ Feature: Keep mod data apart from official data
     And that row states the parent "node-weapons"
     And every path row of "B1" states no old value
 
-  @unverified
   Scenario: A mod cannot add an item under the id of an official item
     Given the official item "A1"
     And a mod that writes the template id "A1"
@@ -190,7 +177,6 @@ Feature: Keep mod data apart from official data
     Then the row of "A1" states the operation "modified"
     And no row states the operation "added" for "A1"
 
-  @unverified
   Scenario: A new property of an old item is not an addition
     Given the official item "A1" has no property "_props/CanSellOnRagfair"
     When a mod sets that property to true
@@ -228,7 +214,6 @@ Feature: Keep mod data apart from official data
   # rows, and (for an added object) its source in "mod_database_objects". The rows come in addition
   # to the canonical hash of the file (ADR-0029, amendment 4), so the content hash does not move.
 
-  @unverified
   Scenario: A change to an old location names the map and the value
     Given the baseline holds the location "woods" with "Insurance" true in its base file
     And a mod run sets "Insurance" to false
@@ -237,14 +222,12 @@ Feature: Keep mod data apart from official data
     And the table "mod_change_paths" states the path "/base/Insurance" for it
     And that row states the old value "true" and the new value "false"
 
-  @unverified
   Scenario: A boss chance that rotates on every boot is not a change
     Given the baseline holds the location "woods" with a boss chance of 35
     And a mod run holds the boss chance 0 and changes nothing else of that map
     When the Archiver archives that run
     Then no row of the kind "location" exists for "woods"
 
-  @unverified
   Scenario: A map that a mod adds is a location with its files
     Given a mod run holds the location "arena_airpit" and the baseline does not
     When the Archiver archives that run
@@ -253,7 +236,6 @@ Feature: Keep mod data apart from official data
     And the table "mod_database_objects" holds one row for each file of the map, named by its part
     And the table "mod_id_maps" pairs "arena_airpit" with that address
 
-  @unverified
   Scenario: A change to a bot type names the file and the value
     Given the baseline holds the bot type "assault" with "mod_scope" 50
     And a mod run sets "mod_scope" to 80
@@ -261,7 +243,6 @@ Feature: Keep mod data apart from official data
     Then the table "mod_templates" has one row of the kind "bot" for "types/assault" with the operation "modified"
     And the table "mod_change_paths" states the path "/chances/weaponMods/mod_scope" with the old value 50 and the new value 80
 
-  @unverified
   Scenario: A hideout part is named by its id when the baseline holds it
     Given the baseline holds the hideout recipe "R1" that asks for 2 of an item
     And a mod run asks for 3
@@ -276,7 +257,6 @@ Feature: Keep mod data apart from official data
     Then both runs name the recipe with one content ULID
     And the id map of each run pairs its own raw id with that address
 
-  @unverified
   Scenario: A price is named by the item it prices
     Given the baseline prices the item "A1" at 1000
     And a mod run prices it at 1200 and prices the added item "B1" at 4000
@@ -285,7 +265,6 @@ Feature: Keep mod data apart from official data
     And its path row is the whole value, with the old value 1000 and the new value 1200
     And the price of "B1" is named by the address of the item "B1"
 
-  @unverified
   Scenario: A handbook entry names its category by address
     Given a mod run adds the handbook category "K2" and the handbook entry of the added item "B1" under it
     When the Archiver archives that run
@@ -293,7 +272,6 @@ Feature: Keep mod data apart from official data
     And that row states the address of "K2" as its parent
     And "mod_database_objects" holds the entry as the run wrote it
 
-  @unverified
   Scenario: An item that the run minted is named by its address in every changed value
     Given a mod run adds the item "B1" with an id that the run minted
     And a bot type of that run holds the id of "B1" as a key and as a value
@@ -301,7 +279,6 @@ Feature: Keep mod data apart from official data
     Then the path of that key and the new value name the address of "B1"
     And a second run that mints another id for "B1" writes the same paths and the same values
 
-  @unverified
   Scenario: The address of a change names the element and not its place in the array
     Given the item "B1" has the slots "a" and "b", in that order
     And a second mod run holds the same slots in the order "b" and "a"
@@ -309,21 +286,18 @@ Feature: Keep mod data apart from official data
     Then the table "mod_change_paths" holds the same path for both runs
     And that path names the slot "a" and holds no index of the slot
 
-  @unverified
   Scenario: A list that only moves its elements makes no row, and the file hash still records it
     Given a mod run whose location file holds the same spawn points in another order
     When the Archiver archives that run
     Then the table "mod_change_paths" holds no row for that list
     And the canonical hash of that file is part of the content hash of the dataset
 
-  @unverified
   Scenario: An array element with no identity keeps its index and the run warns
     Given an array whose elements have none of the identity fields
     When the Archiver archives a run that changes the second element
     Then the path of the change holds the index of that element
     And the warnings of the run state the file and the shape of the element
 
-  @unverified
   Scenario: Two elements with one identity keep their index and the run warns
     Given an array with two elements that share the same "_name"
     When the Archiver archives a run that changes the second element
@@ -331,7 +305,6 @@ Feature: Keep mod data apart from official data
     And the first element keeps its own path
     And the warnings of the run state that two elements share the identity
 
-  @unverified
   Scenario: The rows of these objects do not move the content hash
     Given a mod run that changes a location, a bot type, a hideout part, a price and a handbook entry
     When I compute the content hash of that run
@@ -345,7 +318,6 @@ Feature: Keep mod data apart from official data
     Then the canonical hash of "globals.json" is part of the content hash
     And the result of the run names "globals.json" as a file with no row
 
-  @unverified
   Scenario: An object row belongs to the dataset and never to an official table
     Given a mod run that adds the location "arena_airpit"
     When the Archiver archives that run

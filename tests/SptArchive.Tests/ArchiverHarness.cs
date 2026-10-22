@@ -229,12 +229,13 @@ internal static class ArchiverHarness
         IEnumerable<IImporter> importers,
         IDistributedCache cache,
         ILogger<ArchiveJob> logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger<RunImporter>? runLogger = null)
     {
         var job = new ArchiveJob(
             new OwnerFactory(connectionString),
             importers,
-            new RunImporter(Options.Create(options), NullLogger<RunImporter>.Instance),
+            new RunImporter(Options.Create(options), runLogger ?? NullLogger<RunImporter>.Instance),
             cache,
             Options.Create(options),
             new NullLifetime(),
