@@ -6,8 +6,9 @@ Errors (exit code 1):
   * A relative Markdown link points to a file that does not exist.
   * An ADR is missing a required header field or section.
   * The ADR index does not list an ADR, or lists a different status than the ADR file.
-  * A scenario claims a test that it does not have: a file that the test project links holds a
-    scenario tagged @unverified, or a file that it does not link holds a scenario without that tag.
+  * A scenario claims a test that it does not have: a file that the test project does not link holds a
+    scenario without the tag @unverified. (A scenario with the tag in a file that the project links is
+    allowed: the hook SkipUnverified of QueryApiSteps skips it, so the tag stays true.)
 
 Warnings (exit code 0):
   * A prose sentence has more than 25 words (Simplified Technical English).
@@ -79,7 +80,11 @@ def bound_features() -> set[Path]:
 
 
 def check_feature_tags() -> None:
-    """A scenario that runs has no @unverified tag, and one that does not run has it (TD-62)."""
+    """A scenario that runs has no @unverified tag, and one that does not run has it (TD-62).
+
+    A file may be bound in part: a scenario that keeps the tag in a linked file is skipped by the hook
+    SkipUnverified of the test project, so it does not claim a test either.
+    """
     bound = bound_features()
 
     for feature in FEATURES:
@@ -93,10 +98,7 @@ def check_feature_tags() -> None:
             unverified = "@unverified" in tags
             name = scenario["name"]
 
-            if feature in bound and unverified:
-                errors.append(
-                    f"{rel(feature)}: the scenario \"{name}\" is tagged @unverified, but the test project runs this file")
-            elif feature not in bound and not unverified:
+            if feature not in bound and not unverified:
                 errors.append(
                     f"{rel(feature)}: the scenario \"{name}\" claims a passing test, but the test project does not run this file and the scenario has no @unverified tag")
 

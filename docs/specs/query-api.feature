@@ -94,7 +94,6 @@ Feature: Query the archive through a read-only GraphQL API
       | asks for a page larger than 200 |
       | nests deeper than 10 levels     |
 
-  @unverified
   Scenario: A slow query is stopped
     Given a query that runs longer than 10 seconds
     When I send it
@@ -102,7 +101,6 @@ Feature: Query the archive through a read-only GraphQL API
 
   # ------------------------------------------------------------------ Cache
 
-  @unverified
   Scenario: A repeated query is answered from the cache
     Given the cache is empty
     When I send the same query twice
@@ -110,25 +108,21 @@ Feature: Query the archive through a read-only GraphQL API
     And the second response has the header "X-Cache" with the value "HIT"
     And both responses have the same body
 
-  @unverified
   Scenario: A new archive run makes old cached answers unreachable
     Given a cached answer exists
     When the Archiver finishes a successful run
     And I send the same query
     Then the response has the header "X-Cache" with the value "MISS"
 
-  @unverified
   Scenario: Responses with errors are not cached
     Given a query that returns GraphQL errors
     When I send it twice
     Then both responses have the header "X-Cache" with the value "MISS"
 
-  @unverified
   Scenario: A large request body is not cached
     When I send a query body larger than 32 KB
     Then the response has no "X-Cache" header
 
-  @unverified
   Scenario: The Api works when Redis is down
     Given Redis is not reachable
     When I send a valid query
@@ -186,13 +180,11 @@ Feature: Query the archive through a read-only GraphQL API
     When I query "sptVersions"
     Then the answer lists "4.0.13" before "4.0.12"
 
-  @unverified
   Scenario: One release does not answer for another release
     Given the archive holds the releases "4.0.12" and "4.0.13"
     When I query "items" for "4.0.12" and then for "4.0.13"
     Then both responses have the header "X-Cache" with the value "MISS"
 
-  @unverified
   Scenario: The same query twice is answered from the cache
     Given the cache holds no answer for the query
     When I send the same query twice
@@ -200,12 +192,10 @@ Feature: Query the archive through a read-only GraphQL API
     And the second response has the header "X-Cache" with the value "HIT"
     And the second body is the same as the first body
 
-  @unverified
   Scenario: An error is never cached
     When I send a query that asks for a release the archive does not hold, twice
     Then both responses have the header "X-Cache" with the value "MISS"
 
-  @unverified
   Scenario: A cache that is down costs one slow request
     Given the cache is not reachable
     When I send five queries
@@ -213,7 +203,6 @@ Feature: Query the archive through a read-only GraphQL API
     And no response has the header "X-Cache"
     And only one of them waited for the cache
 
-  @unverified
   Scenario: Requests that miss together run one query
     Given the cache holds no answer for the query
     When twenty clients send the same query at the same time
@@ -221,21 +210,18 @@ Feature: Query the archive through a read-only GraphQL API
     And one response has the header "X-Cache" with the value "MISS"
     And the other responses have the header "X-Cache" with the value "SHARED"
 
-  @unverified
   Scenario: A client repeats a request with an idempotency key
     When I send a query with the idempotency key "order-42-abc"
     And I send the same query with the same idempotency key
     Then the second response has the same body as the first
     And it has the header "Idempotency-Replayed" with the value "true"
 
-  @unverified
   Scenario: An idempotency key cannot answer a different request
     When I send a query with the idempotency key "order-42-abc"
     And I send another query with the same idempotency key
     Then the response is a "409"
     And the error code is "IDEMPOTENCY_KEY_REUSED"
 
-  @unverified
   Scenario: A malformed idempotency key is refused
     When I send a query with the idempotency key "short"
     Then the response is a "400"
@@ -243,7 +229,6 @@ Feature: Query the archive through a read-only GraphQL API
 
   # ----------------------------------------------------------------- Limits
 
-  @unverified
   Scenario: A request body over 1 MB is refused
     When I send a query body larger than 1,000,000 bytes
     Then the response is not a successful answer
@@ -266,14 +251,12 @@ Feature: Query the archive through a read-only GraphQL API
 
   # ----------------------------------------------------------------- Health
 
-  @unverified
   Scenario: The health endpoint answers
     When I request "/healthz"
     Then the response status is 200
 
   # ------------------------------------------------------------ The guard
 
-  @unverified
   Scenario: A client that asks too often is refused
     Given the Api allows a burst of two requests
     When one client sends three requests in a row
@@ -281,40 +264,34 @@ Feature: Query the archive through a read-only GraphQL API
     And the error code is "RATE_LIMITED"
     And the response has the header "Retry-After"
 
-  @unverified
   Scenario: The health check is never refused
     Given the Api allows a burst of two requests
     When one client sends ten requests to "/healthz"
     Then every response status is 200
 
-  @unverified
   Scenario: An answer is compressed when the client asks for it
     Given a client accepts "gzip"
     When the client sends a query
     Then the response has the header "Content-Encoding: gzip"
     And it decodes to the same JSON as the uncompressed answer
 
-  @unverified
   Scenario: The cache stores one answer for every client
     Given a client asked for a query with "Accept-Encoding: gzip"
     When another client asks for the same query without accepting compression
     Then the answer is readable without decoding
     And the response has the header "X-Cache: HIT"
 
-  @unverified
   Scenario: Every answer carries the security headers
     When a client sends a query
     Then the response has the header "X-Content-Type-Options: nosniff"
     And it has the header "Referrer-Policy: no-referrer"
     And it has the header "X-Frame-Options: DENY"
 
-  @unverified
   Scenario: A client behind the proxy is charged to its own address
     Given the Api believes the address of one proxy
     And two clients behind the proxy each send four requests while the Api allows a burst of three
     Then each client receives three answers and then a refusal
 
-  @unverified
   Scenario: A forged forwarding header moves no bucket
     Given the Api believes the address of one proxy
     When a client behind the proxy sends a header that names another address
@@ -337,7 +314,6 @@ Feature: Query the archive through a read-only GraphQL API
     Then the answer has the item "A1"
     And the answer does not have the item "B1"
 
-  @unverified
   Scenario: A path reaches into an object and an array
     Given the item "A1" has the property "Nested" with the list [1, 2] in its "props" column
     When I query "items" where "props" has the value 2 at the path "Nested", "list", "1"
@@ -482,7 +458,6 @@ Feature: Query the archive through a read-only GraphQL API
     When I query "items" where the name starts with "A" and "props" has the value 5 at the path "Slots"
     Then the answer has the items "A1" and "A2"
 
-  @unverified
   Scenario: A filtered answer is cached like any other
     When I send a path filter for the value 5 and then for the value 3
     Then both responses have the header "X-Cache" with the value "MISS"

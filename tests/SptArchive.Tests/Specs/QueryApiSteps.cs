@@ -470,9 +470,15 @@ public sealed partial class QueryApiSteps(QueryWorld world) : IDisposable
     public Task GivenTheItemHasTheProperty(string item, string property, string number) =>
         AddItemAsync(item, Props((property, number)));
 
-    [Given(@"^the item ""([^""]*)"" has the property ""([^""]*)"" with the (?:list|object|JSON value) (.+) in its ""props"" column$")]
-    public Task GivenTheItemHasThePropertyWith(string item, string property, string json) =>
+    [Given(@"^the item ""([^""]*)"" has the property ""([^""]*)"" with the (object|JSON value) (.+) in its ""props"" column$")]
+    public Task GivenTheItemHasThePropertyWith(string item, string property, string kind, string json) =>
         AddItemAsync(item, Props((property, json)));
+
+    // The scenario "A path reaches into an object and an array" reaches the list through the path "Nested", "list",
+    // "1", so the property "Nested" is an object that holds the list under the name "list".
+    [Given(@"^the item ""([^""]*)"" has the property ""([^""]*)"" with the list (.+) in its ""props"" column$")]
+    public Task GivenTheItemHasThePropertyWithTheList(string item, string property, string json) =>
+        AddItemAsync(item, Props((property, $"{{\"list\":{json}}}")));
 
     [Given(@"^the items ""([^""]*)"" and ""([^""]*)"" have the property ""([^""]*)"" ([0-9]+) in their ""props"" column$")]
     public async Task GivenTheItemsHaveTheProperty(string first, string second, string property, string number)
