@@ -1,7 +1,8 @@
 # ADR-0040: Filter a jsonb column by the value at a path
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
+**Ratified:** 2026-10-21 by Yui
 **Deciders:** Yui
 
 ## Context
@@ -107,6 +108,35 @@ document, and the cost of reading it must be stated and charged. The catalogue o
     budget lives in the global state of the operation, so every field of one request pays into the same total
     and two clients never share one. A page of two hundred documents of two megabytes would be 400 MB, which
     neither the cache nor a client wants.
+
+## Amendment 2 (2026-10-22)
+
+The audit of 2026-10-21 found that a page of `modFiles` had no byte limit: the import stores the text of a
+configuration file up to 2 MB, and the Api served it in the same page as the manifest, so
+`modFiles(first: 200) { contentText }` could answer 400 MB (TD-59). The cost limit counts fields and objects
+and never bytes, and `Cache:MaxResponseBytes` stops the cache from *storing* such an answer, not the Api from
+building it. The amendements below bound the bytes. They change no other decision.
+
+15. **The text of a configuration file is a guarded field of its own.** `contentText` and `content` are read
+    by a resolver, and the stored text and document are never projected with the row: the statement that reads
+    them carries the limit in itself (`kind = 'config' AND size <= limit`), so a text above the limit is never
+    assembled in memory. A file that is not a configuration file answers `null`, because the import stores no
+    text for any other kind (ADR-0029).
+
+16. **A row pays for its bytes once, whichever field reads them.** The text and the document of a file come
+    from the same stored bytes, so a client that asks for both pays the size of the file one time. The budget
+    lives in the global state of the operation, as the budget of whole documents does (decision 14).
+
+17. **The limits are `FileText:MaxValueBytes` (2 MB) and `FileText:MaxRequestBytes` (4 MB), and the codes are
+    `CONTENT_TEXT_TOO_LARGE` and `CONTENT_TEXT_REQUEST_LIMIT`.** The per-value limit is the cap that the
+    import already applies to one file, so a text that the archive holds is served and nothing larger is. A
+    text costs 10 times a small field, so a page of two hundred files stays inside `MaxFieldCost` and the byte
+    budget is what bounds such a page. The counted size is the size of the file on disk, which is an upper
+    bound of the bytes of its text, so the count never underestimates.
+
+Measured on 2026-10-21 before the change: 171 files, 4 of them with text, the largest 94,728 bytes
+(`AllTheClothes/config/config.jsonc`), so no page was large on that archive. The limit is for the mod that
+ships a 2 MB configuration.
 
 ## Options Considered
 
@@ -220,6 +250,25 @@ Feature: A client filters a jsonb column by the value at a path
     Then the response has the header "X-Cache" with the value "HIT"
 ```
 
+The two limits of a text are the behaviour of `docs/specs/mod-api.feature`, under "The files":
+
+```gherkin
+Feature: Read a mod dataset through the Api
+
+  Scenario: The text of one file above the limit of the Api is refused
+    Given the Api serves at most 5 bytes of one configuration text
+    When I query "modFile" with the dataset id of "D1" and the path of its configuration file
+    Then the answer is the error "CONTENT_TEXT_TOO_LARGE"
+
+  Scenario: A page of configuration texts above the limit of the Api is refused
+    Given the Api serves at most 9 bytes of configuration text in one request
+    When I query "modFiles" with the dataset id of "D1"
+    Then the answer is the error "CONTENT_TEXT_REQUEST_LIMIT"
+```
+
+Both run inside `dotnet test` (ADR-0012), and the unit tests of the same limits are in
+`tests/SptArchive.Tests/FileTextTests.cs`.
+
 ## Action Items
 
 1. [x] Add `JsonPathFunctions` to Core and map it in `ArchiveDbContext`.
@@ -233,7 +282,8 @@ Feature: A client filters a jsonb column by the value at a path
    (`RawJson.cs`, `ObjectApiTests`, three scenarios of `mod-api.feature`).
 9. [x] Promote the size of the source to `mod_database_objects.bytes` (`20261021213335_AddObjectRowSize`).
 10. [ ] Describe the shape of a document, so that a client filters it without reading it (TD-68).
-11. [ ] Bound the text of a configuration file in bytes, which is the same problem one table over (TD-59).
+11. [x] Bound the text of a configuration file in bytes, which is the same problem one table over (TD-59,
+    amendment 2, done 2026-10-22).
 
 ## Links
 

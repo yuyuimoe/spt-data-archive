@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 438 tests pass against a real Postgres: 416 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 445 tests pass against a real Postgres: 421 xUnit tests and the 24 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 438 tests (22 are scenarios); needs the development database (below)
+dotnet test SptArchive.slnx             # 445 tests (24 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -117,9 +117,9 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, eleven migrations are applied, and 438 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 416 xUnit
-  tests and 22 Gherkin scenarios.
+- **Done:** the solution builds, eleven migrations are applied, and 445 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 421 xUnit
+  tests and 24 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -152,6 +152,11 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   default, 132 MB to 45 MB, but a read assembles 175 MB in 138 ms, which is why the refusal comes first. A row of a map is one file of the map, and for a loose-loot file it is one spawn
   point, named by the `template.Id` that the map author wrote: its `part` reads `looseLoot/spawnpoints/<name>`
   (ADR-0043).
+- **The text of a configuration file is bounded too.** `contentText` and `content` of `modFiles` are guarded
+  fields: `FileText:MaxValueBytes` (2 MB) refuses one text with `CONTENT_TEXT_TOO_LARGE`,
+  `FileText:MaxRequestBytes` (4 MB) refuses a page with `CONTENT_TEXT_REQUEST_LIMIT`, and a row pays for its
+  bytes once whichever field reads it. The stored text is never projected with the row, and the statement
+  carries the limit in itself (ADR-0040, amendment 2; TD-59 is done).
 - **The Api reads a mod dataset.** `modDatasets` and `modDataset` serve the content of one mod version, with
   `modTemplates` (the operation of each touched object), `modChangePaths` (one row per changed value, with the
   old and the new value as JSON), `modFiles` and `modFile` (the manifest and the text of a configuration file),
@@ -190,7 +195,7 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
   and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
   on a schedule yet (TD-03).
-- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 22 scenarios of
+- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 24 scenarios of
   `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
   each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
 - **A loose-loot file is split into its spawn points.** ADR-0043 is Accepted, implemented and measured: a
@@ -230,11 +235,11 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   20.0 copies for 20 versions, so no engine deduplicates and TD-71 is the real disk cost: 97.7% of the locale
   entries of 4.1.6 are byte-identical to one of 4.0.13, and `locale_entries` is 448 MB of the 609 MB of the
   development archive. The measurements are in [docs/research/storage-engine.md](docs/research/storage-engine.md).
-- **Open decisions:** ADR-0038 (a rate limit, compression and the pool cap at the Api), ADR-0039 (TLS at a
-  proxy), ADR-0040 (a jsonb filter by path, the whole-document field and its limits; the form of `eq` stays
-  open, TD-65) and ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a
-  handbook entry, and amendment 1, which refuses a copy of a file above the limit of the Api, TD-74) are
-  Proposed and await Yui.
+- **No decision waits for the driver.** ADR-0038 (a rate limit, compression and the pool cap at the Api) and
+  ADR-0039 (TLS at a proxy) are Accepted and ratified by Yui on 2026-10-21. ADR-0040 (a jsonb filter by path,
+  the whole-document field and its limits, and amendment 2, which bounds the text of a configuration file) and
+  ADR-0041 (a row for a change to a location, a bot type, a hideout part, a price and a handbook entry, and
+  amendment 1, which refuses a copy of a file above the limit of the Api, TD-74) are Accepted.
   ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0042 (an address pool and a value pool behind the change rows) is Accepted, and its

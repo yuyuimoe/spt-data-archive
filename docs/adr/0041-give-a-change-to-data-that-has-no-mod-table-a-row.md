@@ -1,7 +1,8 @@
 # ADR-0041: Give a change to data that has no mod table a row
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
+**Ratified:** 2026-10-21 by Yui
 **Deciders:** Yui
 
 ## Context

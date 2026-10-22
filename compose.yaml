@@ -66,6 +66,10 @@ services:
       # request beneath it (ADR-0040, amendment 1).
       RawJson__MaxValueBytes: ${RAW_JSON_MAX_VALUE_BYTES:-2000000}
       RawJson__MaxRequestBytes: ${RAW_JSON_MAX_REQUEST_BYTES:-4000000}
+      # The text of a configuration file is bounded in bytes too: a page of texts is 400 MB otherwise
+      # (ADR-0040, amendment 2).
+      FileText__MaxValueBytes: ${FILE_TEXT_MAX_VALUE_BYTES:-2000000}
+      FileText__MaxRequestBytes: ${FILE_TEXT_MAX_REQUEST_BYTES:-4000000}
     # No ports: the proxy publishes the only door. A client reaches the Api over TLS (ADR-0039).
     expose:
       - "8080"

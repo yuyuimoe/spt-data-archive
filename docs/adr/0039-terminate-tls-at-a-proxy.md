@@ -1,7 +1,8 @@
 # ADR-0039: Terminate TLS at a proxy, and name the client there
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
+**Ratified:** 2026-10-21 by Yui
 **Deciders:** Yui
 
 ## Context

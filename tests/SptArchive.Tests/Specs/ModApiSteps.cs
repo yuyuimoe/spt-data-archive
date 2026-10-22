@@ -54,6 +54,8 @@ public sealed class ModApiSteps
 
     private TestScope? _scope;
     private int? _maxDocumentBytes;
+    private int? _maxTextBytes;
+    private int? _maxRequestTextBytes;
     private ArchiveRun? _runOfD1;
     private ArchiveRun? _officialRun;
     private string _lastField = "";
@@ -189,6 +191,12 @@ public sealed class ModApiSteps
 
     [Given("the Api serves at most {int} bytes of one document")]
     public void GivenTheApiServesAtMostBytesOfOneDocument(int bytes) => _maxDocumentBytes = bytes;
+
+    [Given("the Api serves at most {int} bytes of one configuration text")]
+    public void GivenTheApiServesAtMostBytesOfOneConfigurationText(int bytes) => _maxTextBytes = bytes;
+
+    [Given("the Api serves at most {int} bytes of configuration text in one request")]
+    public void GivenTheApiServesAtMostBytesOfConfigurationTextInOneRequest(int bytes) => _maxRequestTextBytes = bytes;
 
     [Given("the dataset {string} holds the file {string}")]
     public async Task GivenTheDatasetHoldsTheFile(string dataset, string path)
@@ -670,7 +678,12 @@ public sealed class ModApiSteps
         _responses[field] = await ApiHarness.JsonAsync(
             await ScopeAsync(),
             query,
-            rawJson: _maxDocumentBytes is { } bytes ? limits => limits.MaxValueBytes = bytes : null);
+            rawJson: _maxDocumentBytes is { } bytes ? limits => limits.MaxValueBytes = bytes : null,
+            fileText: _maxTextBytes is null && _maxRequestTextBytes is null ? null : limits =>
+            {
+                limits.MaxValueBytes = _maxTextBytes ?? limits.MaxValueBytes;
+                limits.MaxRequestBytes = _maxRequestTextBytes ?? limits.MaxRequestBytes;
+            });
     }
 
     private JsonElement Response() => _responses[_lastField];

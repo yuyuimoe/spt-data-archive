@@ -1,7 +1,8 @@
 # ADR-0038: Refuse a flood at the Api, and compress what it answers
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-10-21
+**Ratified:** 2026-10-21 by Yui
 **Deciders:** Yui
 
 ## Context

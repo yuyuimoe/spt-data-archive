@@ -89,6 +89,16 @@ Feature: Read a mod dataset through the Api
     And it states the text that the mod read
     And it states the parsed document as JSON
 
+  Scenario: The text of one file above the limit of the Api is refused
+    Given the Api serves at most 5 bytes of one configuration text
+    When I query "modFile" with the dataset id of "D1" and the path of its configuration file
+    Then the answer is the error "CONTENT_TEXT_TOO_LARGE"
+
+  Scenario: A page of configuration texts above the limit of the Api is refused
+    Given the Api serves at most 9 bytes of configuration text in one request
+    When I query "modFiles" with the dataset id of "D1"
+    Then the answer is the error "CONTENT_TEXT_REQUEST_LIMIT"
+
   Scenario: A file that the dataset does not hold returns null
     When I query "modFile" with the dataset id of "D1" and a path that the dataset does not hold
     Then the result is null

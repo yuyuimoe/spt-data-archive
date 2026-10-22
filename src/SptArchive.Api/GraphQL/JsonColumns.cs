@@ -120,11 +120,6 @@ public sealed class ModChangePathJson : ObjectTypeExtension<ModChangePath>
     }
 }
 
-public sealed class ModFileJson : ObjectTypeExtension<ModFile>
-{
-    protected override void Configure(IObjectTypeDescriptor<ModFile> d) => d.Json(x => x.Content);
-}
-
 public sealed class ModDataObservationJson : ObjectTypeExtension<ModDataObservation>
 {
     protected override void Configure(IObjectTypeDescriptor<ModDataObservation> d) => d.Json(x => x.DependencySet);

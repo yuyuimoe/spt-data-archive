@@ -15,6 +15,9 @@ public static class GraphQLSetup
         // The limits that the whole-document field enforces (ADR-0040, decision 8).
         services.AddOptions<RawJsonOptions>();
 
+        // The limits that the text of a configuration file enforces (ADR-0040, amendment 2).
+        services.AddOptions<FileTextOptions>();
+
         return services
             // Every real query is a few hundred bytes. A larger body is refused before it is parsed.
             .AddGraphQLServer(maxAllowedRequestSize: MaxRequestBytes)
@@ -114,4 +117,10 @@ public static class GraphQLSetup
     /// that a request may carry are bounded by <see cref="RawJsonOptions" /> when it runs.
     /// </summary>
     public const double RawJsonCost = 100;
+
+    /// <summary>
+    /// The cost of the text of a configuration file, and of its parsed document. A page of two hundred files
+    /// fits the cost limit, so the byte budget of the field is what bounds such a page (ADR-0040, amendment 2).
+    /// </summary>
+    public const double FileTextCost = 10;
 }
