@@ -95,10 +95,52 @@ public static class ModTemplateKind
     /// <summary>One category or one item entry of <c>templates/handbook.json</c> (ADR-0041).</summary>
     public const string Handbook = "handbook";
 
-    public static readonly string[] All = [Item, Quest, Trader, Customization, Assort, Location, Bot, Hideout, Price, Handbook];
+    /// <summary>One element of <c>templates/dialogue.json</c>, named by its <c>Id</c>. A changed line is a path (ADR-0044).</summary>
+    public const string Dialogue = "dialogue";
 
-    /// <summary>The kinds whose source is an object of the server database that has no table of its own (ADR-0041).</summary>
-    public static readonly string[] DatabaseObjects = [Location, Bot, Hideout, Price, Handbook];
+    /// <summary>One item preset of <c>globals.json</c>, named by the preset id (ADR-0044).</summary>
+    public const string Preset = "preset";
+
+    /// <summary>One entry of <c>bot_presets</c> in <c>globals.json</c>, named by its <c>Role</c> (ADR-0044).</summary>
+    public const string BotPreset = "bot-preset";
+
+    /// <summary>One entry of <c>BotWeaponScatterings</c> in <c>globals.json</c>, named by its <c>Name</c> (ADR-0044).</summary>
+    public const string Scattering = "scattering";
+
+    /// <summary>A key of <c>globals.json</c> that holds no list, such as <c>config</c>, kept as one object (ADR-0044).</summary>
+    public const string Global = "global";
+
+    /// <summary><c>settings.json</c>, kept as one object whose changed keys are paths (ADR-0044).</summary>
+    public const string Setting = "setting";
+
+    /// <summary>One edition of <c>templates/profiles.json</c>, named by the edition (ADR-0044).</summary>
+    public const string Profile = "profile";
+
+    /// <summary>One object of <c>templates/achievements.json</c>, named by its <c>id</c> (ADR-0044).</summary>
+    public const string Achievement = "achievement";
+
+    /// <summary>One object of <c>templates/customisationStorage.json</c>, named by its <c>id</c> (ADR-0044).</summary>
+    public const string Storage = "storage";
+
+    /// <summary>One string of <c>templates/character.json</c>, named by the string (ADR-0044).</summary>
+    public const string Character = "character";
+
+    /// <summary>True for a kind that ADR-0044 reads out of one of the seven files that held no row.</summary>
+    public static bool IsFileRow(string kind) =>
+        kind is Dialogue or Preset or BotPreset or Scattering or Global or Setting or Profile or Achievement or Storage or Character;
+
+    public static readonly string[] All =
+    [
+        Item, Quest, Trader, Customization, Assort, Location, Bot, Hideout, Price, Handbook,
+        Dialogue, Preset, BotPreset, Scattering, Global, Setting, Profile, Achievement, Storage, Character,
+    ];
+
+    /// <summary>The kinds whose source is an object of the server database that has no table of its own (ADR-0041, ADR-0044).</summary>
+    public static readonly string[] DatabaseObjects =
+    [
+        Location, Bot, Hideout, Price, Handbook,
+        Dialogue, Preset, BotPreset, Scattering, Global, Setting, Profile, Achievement, Storage, Character,
+    ];
 }
 
 /// <summary>The operation of one template under a dataset (ADR-0017).</summary>

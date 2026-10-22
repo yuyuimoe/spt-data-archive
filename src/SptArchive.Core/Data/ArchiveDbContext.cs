@@ -242,7 +242,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_id_map_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')"));
+                KindCheck(ModTemplateKind.All)));
         });
 
         b.Entity<ModTemplate>(e =>
@@ -255,7 +255,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')"));
+                KindCheck(ModTemplateKind.All)));
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_templates_op",
@@ -276,7 +276,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
 
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_database_objects_kind",
-                "kind IN ('location', 'bot', 'hideout', 'price', 'handbook')"));
+                KindCheck(ModTemplateKind.DatabaseObjects)));
         });
 
         b.Entity<ModChangePath>(e =>
@@ -293,7 +293,7 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             // Every kind of data states its paths (ADR-0032, decision 1), not only an item.
             e.ToTable(t => t.HasCheckConstraint(
                 "ck_mod_change_paths_kind",
-                "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')"));
+                KindCheck(ModTemplateKind.All)));
 
             e.ToTable(t => t.HasCheckConstraint("ck_mod_change_paths_op", "op IN ('set', 'remove')"));
         });
@@ -386,4 +386,8 @@ public class ArchiveDbContext(DbContextOptions<ArchiveDbContext> options) : DbCo
             e.Property(x => x.Upd).HasColumnType("jsonb");
             e.Property(x => x.BarterScheme).HasColumnType("jsonb");
         });
+
+    /// <summary>The check that a kind column holds one of the kinds the archive knows (ADR-0017, ADR-0041, ADR-0044).</summary>
+    private static string KindCheck(IEnumerable<string> kinds) =>
+        "kind IN (" + string.Join(", ", kinds.Select(kind => "'" + kind + "'")) + ")";
 }

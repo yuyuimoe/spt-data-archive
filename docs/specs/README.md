@@ -9,6 +9,7 @@ The `.feature` files in this folder describe what the system does. They are writ
 | [archive-official-data.feature](archive-official-data.feature) | The Archiver copies the server data into PostgreSQL |
 | [query-api.feature](query-api.feature) | The public read-only GraphQL API, its limits and its cache |
 | [mod-api.feature](mod-api.feature) | The Api surface of a mod dataset: its templates, change paths, files, addresses and runs |
+| [file-rows.feature](file-rows.feature) | One row for each object of the seven files that a run changes (ADR-0044) |
 | [mod-registry.feature](mod-registry.feature) | Mod data stays apart from official data |
 | [backup-and-restore.feature](backup-and-restore.feature) | Dumps and restores |
 

@@ -399,7 +399,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_change_paths", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_change_paths_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')");
+                            t.HasCheckConstraint("ck_mod_change_paths_kind", "kind IN ('item', 'quest', 'trader', 'customization', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook', 'dialogue', 'preset', 'bot-preset', 'scattering', 'global', 'setting', 'profile', 'achievement', 'storage', 'character')");
 
                             t.HasCheckConstraint("ck_mod_change_paths_op", "op IN ('set', 'remove')");
                         });
@@ -578,7 +578,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_database_objects", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_database_objects_kind", "kind IN ('location', 'bot', 'hideout', 'price', 'handbook')");
+                            t.HasCheckConstraint("ck_mod_database_objects_kind", "kind IN ('location', 'bot', 'hideout', 'price', 'handbook', 'dialogue', 'preset', 'bot-preset', 'scattering', 'global', 'setting', 'profile', 'achievement', 'storage', 'character')");
                         });
                 });
 
@@ -727,7 +727,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_id_maps", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_id_map_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')");
+                            t.HasCheckConstraint("ck_mod_id_map_kind", "kind IN ('item', 'quest', 'trader', 'customization', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook', 'dialogue', 'preset', 'bot-preset', 'scattering', 'global', 'setting', 'profile', 'achievement', 'storage', 'character')");
                         });
                 });
 
@@ -931,7 +931,7 @@ namespace SptArchive.Core.Migrations
 
                     b.ToTable("mod_templates", null, t =>
                         {
-                            t.HasCheckConstraint("ck_mod_templates_kind", "kind IN ('item', 'customization', 'quest', 'trader', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook')");
+                            t.HasCheckConstraint("ck_mod_templates_kind", "kind IN ('item', 'quest', 'trader', 'customization', 'assort', 'location', 'bot', 'hideout', 'price', 'handbook', 'dialogue', 'preset', 'bot-preset', 'scattering', 'global', 'setting', 'profile', 'achievement', 'storage', 'character')");
 
                             t.HasCheckConstraint("ck_mod_templates_op", "op IN ('added', 'modified', 'removed')");
                         });

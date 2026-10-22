@@ -43,6 +43,8 @@ public static class DatabaseObjects
 
     private static readonly string[] HideoutIdFields = ["_id", "id"];
     private static readonly string[] HandbookIdFields = ["Id"];
+    private static readonly string[] DialogueIdFields = ["Id"];
+    private static readonly string[] LowerIdFields = ["id"];
 
     private static readonly JsonDocumentOptions LenientJson = new()
     {
@@ -94,7 +96,7 @@ public static class DatabaseObjects
                 var runSide = reader.Read(members, run);
                 var baselineSide = reader.Read(members, baseline);
 
-                Pair(members[0].Slot.Kind, runSide, baselineSide, addressing, known, objects, idMap, warnings);
+                Pair(runSide, baselineSide, addressing, known, objects, idMap, warnings);
             }
             finally
             {
@@ -145,6 +147,28 @@ public static class DatabaseObjects
             case "templates" when path == "templates/handbook.json":
                 return new Slot(ModTemplateKind.Handbook, path, string.Empty);
 
+            case "templates" when path == "templates/dialogue.json":
+                return new Slot(ModTemplateKind.Dialogue, path, string.Empty);
+
+            case "templates" when path == "templates/profiles.json":
+                return new Slot(ModTemplateKind.Profile, path, string.Empty);
+
+            case "templates" when path == "templates/achievements.json":
+                return new Slot(ModTemplateKind.Achievement, path, string.Empty);
+
+            case "templates" when path == "templates/character.json":
+                return new Slot(ModTemplateKind.Character, path, string.Empty);
+
+            case "templates" when path == "templates/customisationStorage.json":
+                return new Slot(ModTemplateKind.Storage, path, string.Empty);
+
+            // The root files of the server database (ADR-0044). Their objects carry their own kinds.
+            case "globals.json":
+                return new Slot(ModTemplateKind.Global, path, string.Empty);
+
+            case "settings.json":
+                return new Slot(ModTemplateKind.Setting, path, string.Empty);
+
             default:
                 return null;
         }
@@ -154,7 +178,6 @@ public static class DatabaseObjects
 
     /// <summary>Pairs the objects of the two sides by address and writes one contribution for each that differs.</summary>
     private static void Pair(
-        string kind,
         IReadOnlyDictionary<string, Obj> runSide,
         IReadOnlyDictionary<string, Obj> baselineSide,
         Addressing addressing,
@@ -193,6 +216,9 @@ public static class DatabaseObjects
         {
             var inRun = runByAddress.TryGetValue(address, out var after);
             var inBaseline = baselineByAddress.TryGetValue(address, out var before);
+
+            // One file can hold objects of more than one kind: globals.json holds presets and roles.
+            var kind = (inRun ? after! : before!).Kind;
 
             if (inRun && !inBaseline)
             {
@@ -403,7 +429,9 @@ public static class DatabaseObjects
 
         // A location and a bot type are named by their file name: the name is the identity (ADR-0034,
         // decision 3). Any other object has no name of its own, so its content names it, with no id in it.
-        if (obj.Kind is ModTemplateKind.Location or ModTemplateKind.Bot)
+        // The seven files of ADR-0044 are named by the key the author wrote: a preset id, a role, an
+        // edition, an achievement id. None of them is an id that the server mints on a boot.
+        if (obj.Kind is ModTemplateKind.Location or ModTemplateKind.Bot || ModTemplateKind.IsFileRow(obj.Kind))
         {
             return ContentUlid.Create(obj.Kind, obj.RawKey);
         }
@@ -487,7 +515,32 @@ public static class DatabaseObjects
                         break;
 
                     case ModTemplateKind.Price:
-                        ReadPrices(objects, path, root);
+                        ReadMap(objects, path, root, "prices");
+                        break;
+
+                    case ModTemplateKind.Profile:
+                        ReadMap(objects, path, root, "profiles");
+                        break;
+
+                    case ModTemplateKind.Global:
+                        ReadGlobals(objects, path, root);
+                        break;
+
+                    case ModTemplateKind.Dialogue:
+                        ReadLists(objects, path, root, DialogueIdFields, sectionPrefix: string.Empty);
+                        break;
+
+                    case ModTemplateKind.Achievement:
+                    case ModTemplateKind.Storage:
+                        ReadLists(objects, path, root, LowerIdFields, sectionPrefix: Stem(path) + ".");
+                        break;
+
+                    case ModTemplateKind.Character:
+                        ReadStrings(objects, path, root);
+                        break;
+
+                    case ModTemplateKind.Setting:
+                        Keep(objects, new Obj(slot.Kind, Stem(path), Stem(path), hasId: true, path), path, root);
                         break;
 
                     case ModTemplateKind.Handbook:
@@ -607,18 +660,106 @@ public static class DatabaseObjects
         private static string PartOfSpawn(string list, string name) =>
             CanonicalFiles.LooseLoot + "/" + list + "/" + Escape(name);
 
-        /// <summary>The price table maps the id of an item to a number: one object for each item.</summary>
-        private void ReadPrices(Dictionary<string, Obj> objects, string path, JsonElement root)
+        /// <summary>
+        /// A file whose root maps a name to a value: the price table maps the id of an item to a number, and the
+        /// profile file maps an edition to its profile. One object for each key.
+        /// </summary>
+        private void ReadMap(Dictionary<string, Obj> objects, string path, JsonElement root, string section)
         {
             if (root.ValueKind != JsonValueKind.Object)
             {
-                warnings.Add($"{path}: the root is not an object, so no price row is read. Its canonical hash still enters the content hash.");
+                warnings.Add($"{path}: the root is not an object, so no row is read. Its canonical hash still enters the content hash.");
                 return;
             }
 
-            foreach (var price in root.EnumerateObject())
+            foreach (var entry in root.EnumerateObject())
             {
-                Keep(objects, new Obj(slot.Kind, "prices", price.Name, hasId: true, path), path, price.Value);
+                Keep(objects, new Obj(slot.Kind, section, entry.Name, hasId: true, path), path, entry.Value);
+            }
+        }
+
+        /// <summary>
+        /// <c>globals.json</c> (ADR-0044, decision 2 and 3): a preset of <c>ItemPresets</c> is named by its id,
+        /// a bot preset by its <c>Role</c> and <c>BotDifficulty</c>, a scattering by its <c>Name</c>, and every other key (<c>config</c>,
+        /// <c>LocationInfection</c>) is one object whose changed keys are paths.
+        /// </summary>
+        private void ReadGlobals(Dictionary<string, Obj> objects, string path, JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                warnings.Add($"{path}: the root is not an object, so no row is read. Its canonical hash still enters the content hash.");
+                return;
+            }
+
+            foreach (var property in root.EnumerateObject())
+            {
+                switch (property.Name)
+                {
+                    case "ItemPresets" when property.Value.ValueKind == JsonValueKind.Object:
+                        foreach (var preset in property.Value.EnumerateObject())
+                        {
+                            Keep(objects, new Obj(ModTemplateKind.Preset, property.Name, preset.Name, hasId: true, path), path, preset.Value);
+                        }
+
+                        break;
+
+                    case "ItemPresets" when property.Value.ValueKind == JsonValueKind.Array:
+                        ReadKindList(objects, path, property, ModTemplateKind.Preset, ["_id", "id"]);
+                        break;
+
+                    case "bot_presets" when property.Value.ValueKind == JsonValueKind.Array:
+                        ReadKindList(objects, path, property, ModTemplateKind.BotPreset, ["Role"]);
+                        break;
+
+                    case "BotWeaponScatterings" when property.Value.ValueKind == JsonValueKind.Array:
+                        ReadKindList(objects, path, property, ModTemplateKind.Scattering, ["Name"]);
+                        break;
+
+                    default:
+                        Keep(objects, new Obj(ModTemplateKind.Global, "globals", property.Name, hasId: true, path), path, property.Value);
+                        break;
+                }
+            }
+        }
+
+        private void ReadKindList(Dictionary<string, Obj> objects, string path, JsonProperty property, string kind, string[] idFields)
+        {
+            foreach (var element in property.Value.EnumerateArray())
+            {
+                var id = IdOf(element, idFields);
+
+                // A role has one preset for each difficulty (measured: 22 roles, 28 presets), so the pair names it.
+                if (id is not null && kind == ModTemplateKind.BotPreset
+                    && element.TryGetProperty("BotDifficulty", out var difficulty)
+                    && difficulty.ValueKind == JsonValueKind.String)
+                {
+                    id += "/" + difficulty.GetString();
+                }
+
+                if (id is null)
+                {
+                    var hash = ContentHash(new FilePart(path, element), known, ownId: null);
+                    warnings.Add($"{path}: an element of '{property.Name}' has no name, so its content names it.");
+                    Keep(objects, new Obj(kind, property.Name, ContentPrefix + hash, hasId: false, path), path, element);
+                    continue;
+                }
+
+                Keep(objects, new Obj(kind, property.Name, id, hasId: true, path), path, element);
+            }
+        }
+
+        /// <summary>A list of strings has no key to name an object by, so the string is the name (ADR-0044, decision 1).</summary>
+        private void ReadStrings(Dictionary<string, Obj> objects, string path, JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Array)
+            {
+                warnings.Add($"{path}: the root is not a list, so no row is read. Its canonical hash still enters the content hash.");
+                return;
+            }
+
+            foreach (var element in root.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String))
+            {
+                Keep(objects, new Obj(slot.Kind, Stem(path), element.GetString()!, hasId: true, path), path, element);
             }
         }
 
