@@ -82,6 +82,40 @@ source of an added object in a new table.**
     document as `rawJson`, which costs a hundred times a small field and is refused above a limit of bytes
     (ADR-0040, amendment 1). The read-only role can read the table, and it cannot write it.
 
+## Amendment 1: a file above the limit of the Api gets no copy, 2026-10-21
+
+**This amendment is Proposed with the rest of this ADR.** Decision 2 stores the source of an added object
+in `jsonb`. Measured on 2026-10-21, that row buys no read above a limit of bytes that the Api already
+enforces.
+
+- `RawJson.cs` returns null for a document above `RawJson:MaxValueBytes`, which is 2,000,000 bytes by
+default (ADR-0040, amendment 1). A row of 132,164,983 bytes is therefore readable as a size and as nothing
+else.
+- Across the 19 exports of the development machine, 1,949 MB of the 2,028 MB of distinct file content is
+  above that limit.
+- 150,000 imports of one such file for each import would hold about 10.5 TB before compression, and the
+  Api would read none of it.
+
+So a file whose bytes exceed `RawJson:MaxValueBytes` gets no `mod_database_objects` row. It keeps what it
+has today: the canonical hash of ADR-0029, amendment 4, which states that the file moved, and its source
+link when the archive holds one.
+
+1. **The archive keeps the link, not the bytes.** A mod that comes from a repository names the file in that
+   repository, and a mod that comes from a download names the download. `mod_files` states the link in a
+   column of its own, and the Api serves it beside the hash. A client that wants the document follows the
+   link or reads the delta rows of decision 3.
+2. **The link is evidence and not a promise.** A repository moves and a download expires. So the link is
+   served with its `sha256`, and a client can tell whether the bytes that it received are the bytes that
+   the archive compared.
+3. **A file that the archive already splits keeps its rows and loses only the copy.** A locale file and a
+   template file above the limit become `mod_locale_entries` and `mod_items` rows, which are smaller than
+   the file and answer questions that the file cannot. This amendment removes the copy that no read uses,
+   and it removes no row that a read uses.
+4. **A loose-loot file is the exception that keeps a read.** It is above the limit and it holds objects
+   that are below the limit, so it is split into one row for each spawn point (ADR-0043). The 132,164,983
+   bytes of `locations/lighthouse/looseLoot.json` become 3,611 spawn points of 36,558 bytes on average, and
+   `WTT-Armory` adds 2 of them to that file and 21 in total, which take 44,347 bytes.
+
 ## Options Considered
 
 | Dimension | A. Hash only (today) | B. One row per object, whole document | C. Rows per changed value, and a source table per file (chosen) | D. Five `mod_*` tables, one for each kind |
@@ -229,6 +263,9 @@ Feature: A change to data that has no mod table becomes a row
    files are measured; the import is not.
 8. [ ] Decide whether a large file leaves `jsonb` for a compressed value (TD-69), and whether the cluster
    sets `default_toast_compression = lz4`.
+9. [ ] Add the link column of amendment 1 to `mod_files`, and record the link of a mod that comes from a
+   repository or from a download (TD-74).
+10. [ ] Replace the copy of a loose-loot file with one row for each spawn point (ADR-0043).
 
 ## Links
 
