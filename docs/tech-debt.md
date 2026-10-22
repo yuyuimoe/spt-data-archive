@@ -8,6 +8,8 @@ This file lists known debt in the scaffold. Each item has a score. A higher scor
 
 | Score  | 1                | 2             | 3                | 4                | 5                     |
 |--------|------------------|---------------|------------------|------------------|-----------------------|
+| TD-82 | Data | A second version of a mod with the same content leaves no trace. `RunImporter.IsCurrentAsync` ignores the version of the mod, so on the same release the import writes no `mods` row and no observation. Found by the binding of `mod-registry.feature` on 2026-10-22 ("Identical content reuses the dataset" fails). | 3 | 3 | 2 | 24 | The archive cannot say that a version of a mod ran on a release, and the Api cannot answer which versions exist (ADR-0013, ADR-0018). |
+| TD-83 | Data | A key that a run generated (an id of an object that the run created) changes the hash of its file, because the shape of the hash names no keys (`IdTokens.NamesKeys` is false). A second run writes a second dataset with identical rows, which ADR-0034, decision 5, says the archive avoids. The scenario "item that the run created" compares paths and values only, so it passes without catching it. | 3 | 3 | 3 | 18 | The archive stores one dataset twice for each run, and a client sees two mod versions that hold the same data. |
 | Impact | Almost no effect | Small effect  | Slows the team   | Blocks features  | Blocks all work       |
 | Risk   | Harmless         | Low           | Medium           | High             | Data loss or security |
 | Effort | Under 1 hour     | About half a day | 1 to 2 days   | Several days     | More than a week      |
