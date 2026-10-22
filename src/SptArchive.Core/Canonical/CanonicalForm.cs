@@ -69,7 +69,12 @@ public static class CanonicalForm
     /// A path on the volatile list never differs, because both sides hold the token. Whatever this
     /// returns is content: a mod change, or a field whose volatility no entry covers yet.
     /// </summary>
-    public static IReadOnlyList<string> Compare(string relativePath, JsonElement left, JsonElement right, IdTokens? ids = null)
+    public static IReadOnlyList<string> Compare(
+        string relativePath,
+        JsonElement left,
+        JsonElement right,
+        IdTokens? ids = null,
+        ICollection<string>? warnings = null)
     {
         var differences = new List<string>();
 
@@ -81,7 +86,9 @@ public static class CanonicalForm
             new PathCursor(),
             Rules.For(relativePath, left, ids, rootIsTemplate: true),
             Rules.For(relativePath, right, ids, rootIsTemplate: true),
-            differences);
+            differences,
+            warnings,
+            relativePath);
         return differences;
     }
 
@@ -153,7 +160,9 @@ public static class CanonicalForm
         PathCursor path,
         Rules leftRules,
         Rules rightRules,
-        List<string> differences)
+        List<string> differences,
+        ICollection<string>? warnings,
+        string file)
     {
         if (leftRules.IsVolatile(path) || rightRules.IsVolatile(path))
         {
@@ -175,7 +184,7 @@ public static class CanonicalForm
                 if (leftProperties.TryGetValue(name, out var leftValue)
                     && rightProperties.TryGetValue(name, out var rightValue))
                 {
-                    Compare(leftValue, rightValue, path, leftRules, rightRules, differences);
+                    Compare(leftValue, rightValue, path, leftRules, rightRules, differences, warnings, file);
                 }
                 else
                 {
@@ -190,25 +199,7 @@ public static class CanonicalForm
 
         if (left.ValueKind == JsonValueKind.Array && right.ValueKind == JsonValueKind.Array)
         {
-            var leftCount = left.GetArrayLength();
-            var rightCount = right.GetArrayLength();
-
-            for (var index = 0; index < Math.Min(leftCount, rightCount); index++)
-            {
-                path.PushIndex(index);
-                Compare(left[index], right[index], path, leftRules, rightRules, differences);
-                path.Pop();
-            }
-
-            // An index that only one side holds is a path of its own: an added index reads as a set,
-            // a missing one as a remove (ADR-0032, decision 2).
-            for (var index = Math.Min(leftCount, rightCount); index < Math.Max(leftCount, rightCount); index++)
-            {
-                path.PushIndex(index);
-                differences.Add(path.ToJsonPath());
-                path.Pop();
-            }
-
+            CompareArrays(left, right, path, leftRules, rightRules, differences, warnings, file);
             return;
         }
 
@@ -216,6 +207,110 @@ public static class CanonicalForm
             || CanonicalText(left, path, leftRules) != CanonicalText(right, path, rightRules))
         {
             differences.Add(path.ToJsonPath());
+        }
+    }
+
+    /// <summary>
+    /// Compares two arrays element by element. An element is named by its identity when every element of
+    /// both sides has one and none repeats, so the same element at another index is the same address
+    /// (TD-72). Otherwise the array falls back to the index, and says so in <paramref name="warnings"/>.
+    /// </summary>
+    private static void CompareArrays(
+        JsonElement left,
+        JsonElement right,
+        PathCursor path,
+        Rules leftRules,
+        Rules rightRules,
+        List<string> differences,
+        ICollection<string>? warnings,
+        string file)
+    {
+        var leftKeys = ArrayKeys(left, path, leftRules, out var leftReason);
+        var rightKeys = ArrayKeys(right, path, rightRules, out var rightReason);
+
+        if (leftKeys is not null && rightKeys is not null)
+        {
+            var leftByKey = new Dictionary<string, JsonElement>(leftKeys.Count, StringComparer.Ordinal);
+            var rightByKey = new Dictionary<string, JsonElement>(rightKeys.Count, StringComparer.Ordinal);
+
+            for (var index = 0; index < leftKeys.Count; index++)
+            {
+                leftByKey[leftKeys[index]] = left[index];
+            }
+
+            for (var index = 0; index < rightKeys.Count; index++)
+            {
+                rightByKey[rightKeys[index]] = right[index];
+            }
+
+            foreach (var key in leftByKey.Keys.Union(rightByKey.Keys, StringComparer.Ordinal).OrderBy(k => k, StringComparer.Ordinal))
+            {
+                path.PushKey(key);
+
+                if (leftByKey.TryGetValue(key, out var leftElement) && rightByKey.TryGetValue(key, out var rightElement))
+                {
+                    Compare(leftElement, rightElement, path, leftRules, rightRules, differences, warnings, file);
+                }
+                else
+                {
+                    differences.Add(path.ToJsonPath());
+                }
+
+                path.Pop();
+            }
+
+            return;
+        }
+
+        var before = differences.Count;
+        var leftCount = left.GetArrayLength();
+        var rightCount = right.GetArrayLength();
+
+        for (var index = 0; index < Math.Min(leftCount, rightCount); index++)
+        {
+            path.PushIndex(index);
+            Compare(left[index], right[index], path, leftRules, rightRules, differences, warnings, file);
+            path.Pop();
+        }
+
+        // An index that only one side holds is a path of its own: an added index reads as a set,
+        // a missing one as a remove (ADR-0032, decision 2).
+        for (var index = Math.Min(leftCount, rightCount); index < Math.Max(leftCount, rightCount); index++)
+        {
+            path.PushIndex(index);
+            differences.Add(path.ToJsonPath());
+            path.Pop();
+        }
+
+        // Loud, never silent: a path that still holds an index is a path no other mod can share. One line
+        // for each file, array shape and reason, so a file with ten thousand elements adds one line.
+        if (differences.Count > before && warnings is not null && warnings.Count < MaxWarnings)
+        {
+            var warning = $"{file}: the array at {path.ToShape()} cannot be named by identity ({leftReason ?? rightReason}), so its changes are named by index.";
+
+            if (!warnings.Contains(warning))
+            {
+                warnings.Add(warning);
+            }
+        }
+    }
+
+    /// <summary>The most lines the keying adds to one list, so a hostile file cannot fill a log.</summary>
+    private const int MaxWarnings = 1000;
+
+    /// <summary>The identity of each element as the canonical form writes it, or null when the array cannot be keyed.</summary>
+    private static List<string>? ArrayKeys(JsonElement array, PathCursor path, Rules rules, out string? reason)
+    {
+        // The element is probed one step down, where an id of an array is never an own id of a template.
+        path.PushIndex(0);
+
+        try
+        {
+            return ArrayIdentity.Keys(array, value => rules.MapValue(path, value) ?? value, out reason);
+        }
+        finally
+        {
+            path.Pop();
         }
     }
 
@@ -334,6 +429,9 @@ public static class CanonicalForm
         /// <summary>An array step keeps its index for the report, and matches the <c>*</c> of a pattern.</summary>
         public void PushIndex(int index) => _segments.Add("[" + index.ToString(CultureInfo.InvariantCulture) + "]");
 
+        /// <summary>An array step named by identity: a quoted segment, so a key may hold a dot or a bracket.</summary>
+        public void PushKey(string key) => _segments.Add("['" + key.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal) + "']");
+
         public void Pop() => _segments.RemoveAt(_segments.Count - 1);
 
         public bool Matches(string[] pattern)
@@ -365,6 +463,19 @@ public static class CanonicalForm
             }
 
             return false;
+        }
+
+        /// <summary>The position with every array step as <c>[*]</c>, so every element of one array reads the same.</summary>
+        public string ToShape()
+        {
+            var text = "$";
+
+            foreach (var segment in _segments)
+            {
+                text += segment.StartsWith('[') ? "[*]" : "." + segment;
+            }
+
+            return text;
         }
 
         /// <summary>"items[3]._id" reads better in a log than a list of segments.</summary>

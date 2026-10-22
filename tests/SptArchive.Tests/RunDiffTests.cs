@@ -96,16 +96,18 @@ public sealed class RunDiffTests : IDisposable
     }
 
     [Fact]
-    public void A_path_inside_an_array_keeps_its_index()
+    public void A_renamed_element_is_a_remove_and_a_set_by_its_identity()
     {
         var diff = Diff(run: new()
         {
             ["templates/items.json"] = Items(weight: 1.5, slotName: "other_slot"),
         });
 
-        var change = Assert.Single(Assert.Single(diff.Templates).Changes);
-        Assert.Equal("/_props/Slots/0/_name", change.Path);
-        Assert.Equal(("\"mod_slot\"", "\"other_slot\""), (change.OldValue, change.NewValue));
+        // The slot is named by its _name (TD-72): the old name is gone and the new one is added.
+        var changes = Assert.Single(diff.Templates).Changes;
+        Assert.Equal(["/_props/Slots/mod_slot", "/_props/Slots/other_slot"], changes.Select(change => change.Path));
+        Assert.Equal(("{\"_name\":\"mod_slot\"}", null), (changes[0].OldValue, changes[0].NewValue));
+        Assert.Equal((null, "{\"_name\":\"other_slot\"}"), (changes[1].OldValue, changes[1].NewValue));
     }
 
     [Fact]
@@ -221,7 +223,7 @@ public sealed class RunDiffTests : IDisposable
         };
 
         var changes = Assert.Single(Diff(run, baseline).Templates).Changes;
-        Assert.Equal(["/_props/Side/1", "/_props/Side/2"], changes.Select(change => change.Path));
+        Assert.Equal(["/_props/Side/Bear", "/_props/Side/Savage"], changes.Select(change => change.Path));
         Assert.All(changes, change => Assert.Equal((ModChangePathOperation.Set, null), (change.Op, change.OldValue)));
     }
 
@@ -242,7 +244,7 @@ public sealed class RunDiffTests : IDisposable
         Assert.NotNull(template.NewJson);
 
         var change = Assert.Single(template.Changes);
-        Assert.Equal("/_props/Side/1", change.Path);
+        Assert.Equal("/_props/Side/Bear", change.Path);
         Assert.Equal(ModChangePathOperation.Remove, change.Op);
     }
 

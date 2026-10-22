@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Ten migrations exist and are applied, and 410 tests pass against a real Postgres: 388 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Ten migrations exist and are applied, and 420 tests pass against a real Postgres: 398 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 406 tests (22 are scenarios); needs the development database (below)
+dotnet test SptArchive.slnx             # 420 tests (22 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -117,8 +117,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, ten migrations are applied, and 410 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 384 xUnit
+- **Done:** the solution builds, ten migrations are applied, and 420 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 398 xUnit
   tests and 22 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
@@ -198,9 +198,11 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   `templates/dialogue.json` 4,693,993 B with 53 elements, `templates/profiles.json` 1,078,871 B with 9
   editions, `settings.json` 345,329 B, `templates/achievements.json` 121,613 B with 79 objects, and two
   small lists. Four of the seven changed in the 19 exports of the development machine, in six copies of
-  979,698 B, and `templates/dialogue.json` and `settings.json` changed in none of them. A stable address
-  (TD-72) waits behind it: 3,499 of the 3,545 change paths are positional, so no address repeats and the
-  pool of ADR-0042 pays nothing yet. ADR-0043 is Accepted, implemented and measured in ADR-0044: a
+  979,698 B, and `templates/dialogue.json` and `settings.json` changed in none of them. The address of a
+  change is stable (TD-72, done on 2026-10-21): an array element is named by its identity field or by its
+  string value, so rows with a numeric segment fell from 29,341 to 3,382 over four real runs, and an array with a
+  missing or repeated identity keeps its index and logs a warning. The pool of ADR-0042 still pays nothing:
+  those runs hold 1.0 rows for each address and the break-even is 1.6 (TD-77). ADR-0043 is Accepted, implemented and measured in ADR-0044: a
   loose-loot file is a directory of spawn points, and the ten files that `WTT-Armory` moves take
   548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558
   times below the limit of `rawJson`). `FactoryClassic` replaces two maps and writes 404 rows of 4,623,791
@@ -225,8 +227,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   ADR-0012 (Reqnroll for Gherkin) and ADR-0030 (one .NET tool for run, export and import) are Accepted.
   ADR-0036 (several imports at the same time) and ADR-0037 (one query per answer, an idempotency
   key) are Accepted. ADR-0042 (an address pool and a value pool behind the change rows) is Accepted, and its
-  measurement says the pool pays from 1.6 change rows for each address: the archive holds one, so the
-  storage waits for a stable address (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
+  measurement says the pool pays from 1.6 change rows for each address: the archive holds 1.0,
+  so the storage waits for two datasets that change one object (TD-77); the address is stable (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
   Accepted and implemented, ratified by Yui on 2026-10-21. ADR-0044 (one row for each object of every file
   that a run changes) and ADR-0045 (the link to the source of a file, which waits for exporter 1.6.0) are
   Accepted, ratified by Yui on 2026-10-21, and neither is implemented (TD-76). ADR-0005 and ADR-0010 are
