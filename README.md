@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 445 tests (421 xUnit tests and 24 Gherkin scenarios). Eleven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 453 tests (421 xUnit tests and 32 Gherkin scenarios). Eleven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -251,9 +251,10 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 
 ## Known gaps
 
-- **One feature file runs as a test.** Reqnroll runs the 24 scenarios of `docs/specs/mod-api.feature` inside
-  `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
-  (TD-62). The 421 xUnit tests check the schema, the import path, the canonical form and the run import.
+- **Two feature files run as a test.** Reqnroll runs the 24 scenarios of `docs/specs/mod-api.feature` and the 8 of
+  `docs/specs/file-rows.feature` inside `dotnet test` (ADR-0012, ADR-0044). The other five are still claims, all
+  175 of their scenarios tagged `@unverified`, and `scripts/check-docs.py` refuses a tag that contradicts the test
+  project (TD-62). The 421 xUnit tests check the schema, the import path, the canonical form and the run import.
 - **The CI pipeline runs on GitHub.** A push to `master` runs `scripts/ci.sh` on a `postgres:17` service container
   in 89 seconds, and the run of `02a976c` passed every step (run `39647853715`, TD-09). The workflow is one job and
   one script, so a check added to `scripts/ci.sh` reaches the pipeline with no second edit (TD-63: the actions still

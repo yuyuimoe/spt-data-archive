@@ -42,10 +42,10 @@ When a scenario has a passing automated test, remove `@unverified`. A scenario w
 
 ## Slice to work on next
 
-Done: filter a jsonb column by the value at a path (ADR-0040, TD-52, TD-55). The section "Filter by a path" of
-`query-api.feature` is the behavior of that slice, and a test proves each scenario. Done before it: read a mod
-dataset through the Api (ADR-0032, action item 7, and ADR-0033, action item 5), and the 19 scenarios of
-`mod-api.feature` running as tests with Reqnroll (TD-06, ADR-0012).
-Next: the rows of a location and a bot type (TD-45), the baseline cache (ADR-0013), and the binding of the other
-feature files (TD-62).
+Done: one row for each object of the seven files that a run changes, and every scenario of `file-rows.feature`
+runs as a test with Reqnroll (ADR-0044, TD-62). Done before it: filter a jsonb column by the value at a path
+(ADR-0040, TD-52, TD-55). The section "Filter by a path" of `query-api.feature` is the behavior of that slice,
+and a test proves each scenario, and the 24 scenarios of `mod-api.feature` run as tests (TD-06, ADR-0012).
+`scripts/check-docs.py` refuses a tag that contradicts the test project (TD-80).
+Next: the baseline cache (ADR-0013) and the binding of the other five feature files (TD-62).
 Scenarios outside the slice stay `@unverified` or `@backlog`.

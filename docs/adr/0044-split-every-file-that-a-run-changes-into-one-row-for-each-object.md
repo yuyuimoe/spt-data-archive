@@ -266,6 +266,9 @@ Corrections of the Accepted text, each with its evidence:
 - The content hash did not move. The canonical hash of a changed file stays in `UnstoredChanges`, as the file of
   a location does (ADR-0041), so `DatasetHash` reads the same input. `FilesWithoutRows` lists a file only when
   no reader holds it, so it no longer lists these seven.
+- The canonical hash of a file that holds rows is in `table_hashes` of its dataset too, so a client reads the
+  hash of `globals.json` beside the preset rows that explain it. `RunDiff` writes it there on 2026-10-22, and
+  `table_hashes` is no input of the content hash, so no hash moved and no dataset was rewritten.
 
 Measured on 2026-10-21 over the 13 exports of the development machine that hold a `templates` directory,
 against the baseline of 4.1.6. The dataset hash of every one is the same at `7f60f8c` and with the readers

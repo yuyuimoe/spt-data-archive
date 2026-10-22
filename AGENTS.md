@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 445 tests pass against a real Postgres: 421 xUnit tests and the 24 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 453 tests pass against a real Postgres: 421 xUnit tests and the 32 Gherkin scenarios of `mod-api.feature` and `file-rows.feature`, which Reqnroll runs (TD-02, TD-06). The other five feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -115,11 +115,14 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   service container; the run of `02a976c` on `github.com/yuyuimoe/spt-data-archive` passed every step in 89 seconds
   (run `39647853715`, TD-60). On an empty database every step passes and every test passes, so a clean machine and
   an archive machine agree.
-- **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
-  inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, eleven migrations are applied, and 445 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 421 xUnit
-  tests and 24 Gherkin scenarios.
+- **Two feature files run as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 24 scenarios of `docs/specs/mod-api.feature`
+  and the 8 of `docs/specs/file-rows.feature` inside `dotnet test` (ADR-0012, TD-06). The other five feature files
+  stay unbound and every one of their 175 scenarios keeps the tag `@unverified` (TD-62). `check-docs.py` refuses a
+  scenario that lies about itself: a `@unverified` scenario in a file that the test project links, and a scenario
+  without the tag in a file that it does not link.
+- **Done:** the solution builds, eleven migrations are applied, and 453 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59),
+  421 xUnit tests and 32 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
   (ADR-0029, ADR-0031). The Archiver reads a run directory against the baseline of its release into
@@ -195,9 +198,10 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   a checksum, proves that it restores, and prunes old files. The dump is compressed, gzip level 6 or higher,
   and the script refuses a lower level (ADR-0011). `docs/runbooks/backup.md` is the runbook. Nothing runs it
   on a schedule yet (TD-03).
-- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 24 scenarios of
-  `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
-  each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
+- **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 32 scenarios of
+  `docs/specs/mod-api.feature` and `docs/specs/file-rows.feature` inside `dotnet test`, from
+  `tests/SptArchive.Tests/Specs`. The test project links each bound feature file by name; a file that it does not
+  link keeps its `@unverified` tags, and `scripts/check-docs.py` refuses a tag that contradicts the project (TD-62).
 - **A loose-loot file is split into its spawn points.** ADR-0043 is Accepted, implemented and measured: a
   `locations/<map>/looseLoot.json` is a directory of spawn points, and the ten files that `WTT-Armory` moves
   take 548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558

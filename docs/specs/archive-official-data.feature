@@ -221,6 +221,7 @@ Feature: Archive the official server data
 
   # ---------------------------------------------------------- Not built yet
 
+  @unverified
   @backlog
   Scenario Outline: More parts of the server database are archived
     Given the server database has "<part>"

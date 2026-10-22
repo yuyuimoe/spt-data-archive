@@ -19,6 +19,7 @@ Feature: Keep mod data apart from official data
   # ADR-0018. Nothing deletes mod data in the first release. A dataset is always created
   # together with an observation, so a dataset with no observation is a bug, not a state.
 
+  @unverified
   @backlog
   Scenario: An archive run does not delete a mod
     Given the mod "mod-x" in the version "1.0.0" has a dataset and an observation
@@ -26,6 +27,7 @@ Feature: Keep mod data apart from official data
     Then the table "mods" still holds that mod version
     And the observation of that mod version still exists
 
+  @unverified
   @backlog
   Scenario: A mod that leaves the catalog keeps its data
     Given the mod "mod-x" is no longer in the catalog
@@ -33,6 +35,7 @@ Feature: Keep mod data apart from official data
     Then no row of that mod is deleted
     And the dataset of that mod version still exists
 
+  @unverified
   @backlog
   Scenario: An orphan dataset fails the run
     Given the dataset "D1" of the mod "mod-x"
@@ -41,6 +44,7 @@ Feature: Keep mod data apart from official data
     Then the run fails with a message that names "D1"
     And the table "mod_datasets" still holds "D1"
 
+  @unverified
   @backlog
   Scenario: A successful run leaves no orphan dataset
     When an archive run succeeds
@@ -115,6 +119,7 @@ Feature: Keep mod data apart from official data
     Then the dataset "D1" stays one row
     And two observations point at "D1"
 
+  @unverified
   @backlog
   Scenario Outline: A mod that does not load is recorded as an outcome
     Given the mod "com.example.mod" in the version "1.0.0"
@@ -133,6 +138,7 @@ Feature: Keep mod data apart from official data
   # ADR-0021. A patch is a mod whose dependency set holds the mod it patches.
   # The Forge does not declare that dependency, so a human curates it.
 
+  @unverified
   @backlog
   Scenario: A patch is archived with its base in the dependency set
     Given the base mod "com.example.weapons" in the version "1.1.2"
@@ -199,6 +205,7 @@ Feature: Keep mod data apart from official data
     And the table "mod_change_paths" has a row with the path "_props/CanSellOnRagfair"
     And that row states the operation "remove"
 
+  @unverified
   @backlog
   Scenario: The count of additions needs no official data
     Given the dataset "D1" adds "B1" and "B2" and changes "A1"
@@ -206,6 +213,7 @@ Feature: Keep mod data apart from official data
     Then the answer is 2
     And the query reads no official table
 
+  @unverified
   @backlog
   Scenario: An added item states a parent that the baseline does not have
     Given a mod adds the item "B1" with the parent "node-weapons"
@@ -348,6 +356,7 @@ Feature: Keep mod data apart from official data
   # ADR-0013. The catalog states the dependencies. The metadata is the fallback.
   # The chosen set is frozen on the observation.
 
+  @unverified
   @backlog
   Scenario: The dependency set comes from the catalog
     Given the catalog states that "mod-x" needs "com.dep.a" in the range ">=2.0.0 <3.0.0"
@@ -356,6 +365,7 @@ Feature: Keep mod data apart from official data
     Then the observation states the dependency "com.dep.a" in the version "2.4.1"
     And the observation states that the source of that entry is the catalog
 
+  @unverified
   @backlog
   Scenario: A catalog gap is filled from the mod metadata
     Given the catalog states no requirement for "mod-x"
@@ -364,12 +374,14 @@ Feature: Keep mod data apart from official data
     Then the observation states that the source of that entry is the metadata
     And the archive states that the catalog has a gap for "mod-x"
 
+  @unverified
   @backlog
   Scenario: A stored dependency set does not change when the catalog changes
     Given the observation of "mod-x" states the dependency "com.dep.a" in "2.4.1"
     When the catalog states that "2.5.0" also satisfies the range
     Then the observation still states "2.4.1"
 
+  @unverified
   @backlog
   Scenario: Two mods with the same dependency set share one baseline
     Given the mods "mod-a" and "mod-b" declare the same dependency set
@@ -378,6 +390,7 @@ Feature: Keep mod data apart from official data
 
   # ------------------------------------------------------ Isolation of the run
 
+  @unverified
   @backlog
   Scenario: A mod outside its declared server range is skipped
     Given the mod "com.example.mod" declares support for ">=4.0.0 <4.1.0"
@@ -386,6 +399,7 @@ Feature: Keep mod data apart from official data
     Then it starts no container for that mod
     And the observation states the outcome "outside_declared_range"
 
+  @unverified
   @backlog
   Scenario: One bad mod does not stop another mod
     Given the mods "mod-a" and "mod-b"
@@ -394,6 +408,7 @@ Feature: Keep mod data apart from official data
     Then the observation of "mod-a" states the outcome "crashed"
     And "mod-b" has a dataset
 
+  @unverified
   @backlog
   Scenario: The container of a mod has no network
     Given a mod container is ready
@@ -401,6 +416,7 @@ Feature: Keep mod data apart from official data
     Then the container has no network interface
     And the mod cannot reach the internet
 
+  @unverified
   @backlog
   Scenario: A mod container never reads an asset bundle
     Given a mod with the metadata flag "IsBundleMod" set to true
@@ -408,6 +424,7 @@ Feature: Keep mod data apart from official data
     Then the bundle step does not run
     And the container does not read a bundle file
 
+  @unverified
   @backlog
   Scenario: A run fails when the bundle patch is not applied
     Given a target that Harmony must patch

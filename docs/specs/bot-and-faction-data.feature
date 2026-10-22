@@ -90,6 +90,7 @@ Feature: Archive bots, maps and server mechanics
     And the observation holds the reason from the mod log
     And the dataset holds no "globals" row
 
+  @unverified
   @backlog @adr-0025
   Scenario: The curated faction map is small enough to review
     When I list the curated faction rows of the release "4.1.6"

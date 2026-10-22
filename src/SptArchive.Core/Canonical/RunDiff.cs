@@ -71,6 +71,14 @@ public static class RunDiff
             }
 
             unstored[path] = run.TryGetValue(path, out var file) ? CanonicalHash(path, file, addressing) : string.Empty;
+
+            // A file that holds a row states its canonical hash in the table hashes too, so a client reads
+            // the hash of the file next to the rows that explain it (ADR-0044, decision 6). It stays in the
+            // list of unstored changes, which is what the content hash carries, so the hash does not move.
+            if (DatabaseObjects.HoldsRows(path) && unstored[path].Length > 0)
+            {
+                hashes[path] = unstored[path];
+            }
         }
 
         var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
