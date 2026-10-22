@@ -31,10 +31,11 @@ public sealed class DatabaseObjectTests : IDisposable
     public void The_content_hash_of_the_same_run_is_the_value_it_had_before_the_objects_had_rows()
     {
         // The golden value was computed by RunDiff and DatasetHash on 2026-10-21, before a single object
-        // row existed. A row that enters the hash would move it, and a dataset that the archive already
-        // stores would stop being the dataset of its own content.
+        // row existed, and again on 2026-10-22 with TD-83 fixed: the canonical hash of a file now writes an
+        // id in a key as its address, so the hash of this tree moved once. A row that enters the hash would
+        // move it, and a dataset that the archive already stores would stop being the dataset of its content.
         Assert.Equal(
-            "4327747589fa2f1b93d637a37975abfe669353426ca68cfc70f94b837d645aef",
+            "5305a0a6dd0b95974c44bda7dfd7e4ef6cca6f5a95ad771a8113b958a93d9be3",
             DatasetHash.Compute(Diff(), Files));
     }
 
@@ -445,12 +446,11 @@ public sealed class DatabaseObjectTests : IDisposable
     }
 
     [Fact]
-    public void The_content_hash_of_an_unstored_file_still_holds_the_id_the_run_minted()
+    public void A_boot_that_mints_an_id_moves_no_hash_of_a_file_that_has_no_table()
     {
-        // A known limit, not a wish (TD-60). The canonical hash of a file with no table of its own writes
-        // the ids of the run as they are, so a mod that mints an id on every boot moves the content hash
-        // of its own dataset. The rows above do not have this fault. Changing the hash would make every
-        // stored dataset a stranger to its own content, so it needs the driver (ADR-0041, question 1).
+        // TD-83. The canonical hash of a file with no table of its own wrote an id as the run gave it, in a
+        // key as well as in a value, so a mod that minted an id on every boot moved the content hash of its
+        // own dataset and the archive stored the same rows twice (ADR-0034, decision 5).
         const string Minted = "ffffffffffffffffffffffff";
 
         var first = DatasetHash.Compute(Diff(), Files);
@@ -459,7 +459,7 @@ public sealed class DatabaseObjectTests : IDisposable
             .ToDictionary(pair => pair.Key, pair => pair.Value.Replace(ObjectTree.AddedItemId, Minted, StringComparison.Ordinal));
         var second = DatasetHash.Compute(Diff(ObjectTree.Baseline(), again, Path.Combine(_root, "second")), Files);
 
-        Assert.NotEqual(first, second);
+        Assert.Equal(first, second);
     }
 
     // ---- Helpers --------------------------------------------------------------------------------

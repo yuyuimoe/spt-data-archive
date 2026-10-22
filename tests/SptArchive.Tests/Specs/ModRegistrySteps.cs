@@ -890,8 +890,7 @@ internal sealed class ModRegistrySteps(OfficialWorld world)
         Assert.NotEmpty(first);
         Assert.Equal(first, second);
 
-        // What each run wrote is the same: the rows of every dataset of the mod are the paths of the plan. (A bot file is
-        // keyed by item ids, and the hash of a file does not name keys, so the second run writes a dataset of its own.)
+        // What each run wrote is the same: the rows of every dataset of the mod are the paths of the plan.
         await using var db = world.Open();
         var rows = await db.ModChangePaths.ToListAsync(TestContext.Current.CancellationToken);
 
@@ -901,6 +900,28 @@ internal sealed class ModRegistrySteps(OfficialWorld world)
         {
             Assert.Equal(first, dataset.Select(row => $"{row.Kind}|{row.TemplateId}|{row.Path}|{row.Op}|{row.OldValue}|{row.NewValue}").Order(StringComparer.Ordinal));
         }
+    }
+
+    [Then("both runs write one dataset")]
+    public async Task ThenBothRunsWriteOneDataset()
+    {
+        // The id that each run minted is not content (ADR-0034, decision 5), so the two runs are one
+        // dataset and not two with the same rows (ADR-0013).
+        await using var db = world.Open();
+
+        var datasets = await db.ModDatasets
+            .Where(dataset => dataset.ModGuid == _modGuid)
+            .Select(dataset => dataset.Id)
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        var datasetId = Assert.Single(datasets);
+
+        var datasetsInTheRows = await db.ModChangePaths
+            .Select(row => row.DatasetId)
+            .Distinct()
+            .ToListAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal([datasetId], datasetsInTheRows);
     }
 
     [Given("the item {string} has the slots {string} and {string}, in that order")]

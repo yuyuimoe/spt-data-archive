@@ -206,6 +206,35 @@ public sealed class AddressingTests : IDisposable
             addressing.TokensFor($"traders/{TraderId}/assort.json").Token(newTrader));
     }
 
+    [Fact]
+    public void A_minted_id_in_a_key_does_not_name_an_object_that_has_no_name()
+    {
+        // TD-83. An object with no name is named by its content (decision 5), and that content names another
+        // object of the run under an id the run minted. A boot that mints another id must not move the name.
+        const string first = "dddddddddddddddddddddddd";
+        const string second = "6ad5775e327076f93b3b36bf";
+        const string nameless = "111111111111111111111111";
+
+        Write("baseline", CanonicalFiles.Items, Items(Item(ItemId, "Item B", weight: 1.5)));
+        Write("run", CanonicalFiles.Items, Items(
+            Item(ItemId, "Item B", weight: 1.5),
+            Nameless(nameless, first),
+            Item(first, "Cotton clip", weight: 0.1)));
+
+        var one = Addressing.Build(Run, Baseline);
+
+        var otherRun = Path.Combine(_root, "run2");
+        Write("run2", CanonicalFiles.Items, Items(
+            Item(ItemId, "Item B", weight: 1.5),
+            Nameless(nameless, second),
+            Item(second, "Cotton clip", weight: 0.1)));
+
+        var two = Addressing.Build(otherRun, Baseline);
+
+        Assert.True(ContentUlid.IsContentUlid(one.Address(nameless)));
+        Assert.Equal(one.Address(nameless), two.Address(nameless));
+    }
+
     /// <summary>Writes one file of an export, under the baseline or the run of this test.</summary>
     private void Write(string side, string relativePath, string json)
     {
@@ -230,4 +259,8 @@ public sealed class AddressingTests : IDisposable
         + "\"Weight\":" + weight.ToString(System.Globalization.CultureInfo.InvariantCulture)
         + (prefab is null ? string.Empty : ",\"Prefab\":{\"path\":\"" + prefab + "\"}")
         + "}}";
+
+    /// <summary>An item that has no name: its content names it, and the content names another object by id.</summary>
+    private static string Nameless(string id, string referencedId) =>
+        "{\"_id\":\"" + id + "\",\"_parent\":\"\",\"_type\":\"Item\",\"_props\":{\"Mods\":{\"" + referencedId + "\":1}}}";
 }

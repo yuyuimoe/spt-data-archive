@@ -130,7 +130,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   shared `archive` database: before 2026-10-22 a committed release such as `993.x` moved "the latest release" of a
   parallel query, and a page of `modFiles` held a file of another test (TD-81).
 - **Done:** the solution builds, eleven migrations are applied, and 645 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59, TD-82),
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55, TD-59, TD-82,
+  TD-83),
   435 xUnit tests and 210 Gherkin tests, 39 of which are skipped as `@unverified`.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route

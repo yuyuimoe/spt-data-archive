@@ -277,6 +277,7 @@ Feature: Keep mod data apart from official data
     When the Archiver archives that run
     Then the path of that key and the new value name the address of "B1"
     And a second run that mints another id for "B1" writes the same paths and the same values
+    And both runs write one dataset
 
   Scenario: The address of a change names the element and not its place in the array
     Given the item "B1" has the slots "a" and "b", in that order
