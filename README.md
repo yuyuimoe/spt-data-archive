@@ -10,7 +10,7 @@ normalizes those files into relational tables, keeps **official** data and **mod
 and serves them fast.
 
 > **Status: scaffold, runs end to end.** `dotnet build` passes with no warnings and `dotnet test` passes
-> 420 tests (398 xUnit tests and 22 Gherkin scenarios). Ten migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
+> 438 tests (416 xUnit tests and 22 Gherkin scenarios). Eleven migrations are applied and two real releases are archived: 4.0.13 (4,582 items, 677 clothes)
 > and 4.1.6 (4,673 items, 536,414 translations, 558 quests, 12 traders, 10,880 assort rows, 728 clothes).
 > The 4.1.6 data comes from an installation whose mods folder held nothing but the exporter, and the Archiver
 > refuses any other source for official data (ADR-0035).
@@ -253,12 +253,11 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
 
 - **One feature file runs as a test.** Reqnroll runs the 22 scenarios of `docs/specs/mod-api.feature` inside
   `dotnet test` (ADR-0012). The other feature files are still claims, tagged `@unverified` or `@backlog`
-  (TD-62). The 384 xUnit tests check the schema, the import path, the canonical form and the run import.
+  (TD-62). The 416 xUnit tests check the schema, the import path, the canonical form and the run import.
 - **The CI pipeline runs on GitHub.** A push to `master` runs `scripts/ci.sh` on a `postgres:17` service container
   in 89 seconds, and the run of `02a976c` passed every step (run `39647853715`, TD-09). The workflow is one job and
   one script, so a check added to `scripts/ci.sh` reaches the pipeline with no second edit (TD-63: the actions still
   target Node.js 20).
-=======
 - **Mod ingestion is half built.** One run directory becomes a dataset, an observation, its offer rows and one
   `archive_runs` row, and the canonical comparison is the input to the hash (TD-29, ADR-0033). A change to a map, a
   bot type, a hideout part, a price or a handbook entry is a template, its changed values and the source of an
@@ -281,5 +280,15 @@ push of `02a976c` the job passed every step in 89 seconds (run `39647853715`).
   handbook entry join the templates and the changed values, and the source of an added one is kept file by file
   ([ADR-0041](docs/adr/0041-give-a-change-to-data-that-has-no-mod-table-a-row.md)). The canonical hash of the file
   stays in the content hash, so these rows move no dataset.
+- **The seven files that held no row are rows.** `globals.json`, `settings.json`, `templates/dialogue.json`,
+  `profiles.json`, `achievements.json`, `character.json` and `customisationStorage.json` become one row for each
+  object, in ten kinds ([ADR-0044](docs/adr/0044-split-every-file-that-a-run-changes-into-one-row-for-each-object.md),
+  amendment 1, TD-76). The change moves no dataset, because each file keeps its canonical hash in the content
+  hash. A dataset that the archive already holds keeps the rows it had (TD-75).
+- **The address of a change names the object, not its position.** An array element is named by its identity
+  field or, for a string, by its value; an array that has no identity keeps its index and logs a warning
+  (TD-72). The filter groups of an item still hold an index, so no address repeats between the four datasets
+  that write rows, and the pool of
+  [ADR-0042](docs/adr/0042-store-each-address-and-each-value-once.md) waits (TD-77).
 - **JSON columns are `Any` values** in GraphQL (`props`, `data`, `base`, ...), not a typed JSON scalar (TD-15). A client
   filters one by path, and reads the value at a path as JSON (ADR-0040); it cannot select a sub-field.

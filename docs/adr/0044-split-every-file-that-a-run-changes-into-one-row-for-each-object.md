@@ -45,7 +45,7 @@ That is six files and 979,698 bytes. `templates/dialogue.json`, `templates/profi
 `settings.json` are byte-identical to the baseline in all 19 exports.
 
 A client that asks "which item preset did this mod change" gets the canonical hash of `globals.json` and
-nothing it can read, and that file holds 488 item presets. The same client that asks for a translation, an
+nothing it can read, and that file holds 408 item presets in the baseline (`$.ItemPresets`, an object keyed by preset id; `WTT-Armory` holds 488). The same client that asks for a translation, an
 item or an offer gets a row.
 
 ### The correction of 2026-10-21
@@ -74,7 +74,7 @@ that file has.**
    its place, the way ADR-0043 names a spawn point that carries no `template.Id`.
 
 2. **An object that holds objects is a directory too.** `globals.json` holds four parts that a mod edits:
-   `ItemPresets`, 488 presets keyed by preset id; `bot_presets`, a list of 28 objects named by `Role`;
+   `ItemPresets`, 408 presets keyed by preset id; `bot_presets`, a list of 28 objects named by `Role` and `BotDifficulty`;
    `BotWeaponScatterings`, a list of 3 objects named by `Name`; and `LocationInfection`, an object of 10
    numbers. Each of them becomes a row for each object. `templates/profiles.json` holds 9 editions, and
    each edition is a row named by the edition.
@@ -111,7 +111,7 @@ that file has.**
 
 | Dimension | A. The whole file in one row | B. The hash only (today) | C. One row for each object (chosen) |
 |---|---|---|---|
-| Answers "which item preset did the mod change" | No, and the row holds 488 presets | No | Yes, one path under the preset |
+| Answers "which item preset did the mod change" | No, and the row holds 408 presets | No | Yes, one path under the preset |
 | Bytes for `globals.json` | 811,221, below the limit | 0 | The changed presets, and no copy of the rest |
 | Bytes for `templates/dialogue.json` | 4,693,993, above the limit, refused | 0 | The changed lines |
 | Work | None new | None | A reader for each file shape |
@@ -129,7 +129,7 @@ share one shape. A dialogue is a list of objects of lists; a profile is an objec
 file holds a list, a map by preset id, and an object of numbers. ADR-0041 already accepted one reader for
 five tables, and this decision makes that reader a family.
 
-The second side is the number of rows. `globals.json` becomes 488 rows for the presets and 28 for the bot
+The second side is the number of rows. `globals.json` is 408 rows for the presets and 28 for the bot
 presets, where a whole-file row would be one. The archive writes a row only for an object that differs, so a
 dataset pays for what its mod changed.
 
@@ -214,12 +214,81 @@ Feature: Every file that a run changes holds a row for each of its objects
 
 1. [x] Measure the files that hold no row over the 19 exports: the file, the bytes and the objects of each.
    Done on 2026-10-21: seven files, four of them changed in six copies, 979,698 bytes.
-2. [ ] Write the reader of the dialogue, the profile, the globals file, the achievements, the character, the
-   customisation storage and the settings, and one test for each shape.
-3. [ ] Add the kind of each new row to `ModTemplateKind`, and the filter of the Api to it.
-4. [ ] Add the scenarios to `docs/specs`, and remove `@unverified` when the tests pass.
+2. [x] Write the reader of the dialogue, the profile, the globals file, the achievements, the character, the
+   customisation storage and the settings, and one test for each shape. Done on 2026-10-21; see amendment 1.
+3. [x] Add the kind of each new row to `ModTemplateKind`, and the filter of the Api to it. Done on 2026-10-21:
+   ten kinds, and the migration `WidenKindChecks` for the four kind checks. The Api filters on `kind` as a
+   string, so it needed no change.
+4. [ ] Add the scenarios to `docs/specs`, and remove `@unverified` when the tests pass. The eight scenarios of
+   `docs/specs/file-rows.feature` exist and keep `@unverified`: the file is not bound to Reqnroll yet (TD-62). The
+   xUnit tests in `FileRowTests`, `KindCheckTests` and `DatabaseObjectTests` prove the same behavior.
 5. [ ] Rebuild the rows of a dataset that the archive holds (TD-75).
 6. [ ] Link the source of a file (ADR-0045, TD-74).
+
+## Amendment 1 (2026-10-21): what the readers do, and what the measurement corrected
+
+Implemented in `DatabaseObjects.cs`, the reader of ADR-0041 and ADR-0043. A row is a template under the
+dataset; an object that the run adds also has its source in `mod_database_objects`; a modified object has paths
+and no source; a removed object has a template row and no source (the baseline holds the old value).
+
+| File | Root shape | One row is | Kind | Name of the row |
+|---|---|---|---|---|
+| `globals.json` | object of 5 keys | one preset of `ItemPresets` | `preset` | the preset id (the key) |
+| | | one entry of `bot_presets` | `bot-preset` | `Role/BotDifficulty` |
+| | | one entry of `BotWeaponScatterings` | `scattering` | `Name` |
+| | | one other key (`config`, `LocationInfection`) | `global` | the key |
+| `settings.json` | `{"config": {...}}` | the whole file | `setting` | `settings` |
+| `templates/dialogue.json` | `{"elements": [...]}` | one element; a line is a path | `dialogue` | `Id` |
+| `templates/profiles.json` | object of editions | one edition | `profile` | the edition name |
+| `templates/achievements.json` | list of objects | one object | `achievement` | `id` |
+| `templates/customisationStorage.json` | list of objects | one object | `storage` | `id` |
+| `templates/character.json` | list of strings | one string | `character` | the string |
+
+Corrections of the Accepted text, each with its evidence:
+
+- `$.ItemPresets` of `baseline/globals.json` holds 408 presets (an object keyed by preset id). The 488 of the
+  first text is the count of `WTT-Armory`, which adds 80.
+- `$.bot_presets` of the baseline holds 28 entries and only 22 distinct `Role` values: a role has one preset for
+  each difficulty. `Role` alone would have merged them, so `Role/BotDifficulty` names a row (28 distinct).
+- A list of strings is a row for each string, as decision 1 says. A row of the kind `character` has no path,
+  because the same string is the same row.
+- A dialogue line is a path under its element, and the path names the line by its `Id` (TD-72, which landed after
+  this decision): a line carries `Id`, `DialogSide`, `Actions`, `AnimationData`, `IconType` and `Trigger`. No real
+  export changes `templates/dialogue.json`, so the address of a line is proven by a unit test and not by a run.
+- A new kind is written in `mod_database_objects`, so `ck_mod_database_objects_kind` and the three other kind
+  checks (`mod_templates`, `mod_change_paths`, `mod_id_maps`) are widened to the ten kinds by the migration
+  `20261022012549_WidenKindChecks`. `Down` deletes the rows of the new kinds and restores the old lists. This
+  amends ADR-0041, which named five kinds in the check.
+- A reorder inside a stored table makes no row, because the address names the object and not its place.
+  Measured on 2026-10-22 over the 18 exports of the development machine and the four stored files: no file
+  differs in canonical text with zero rows, so no real run loses a change. A run that only reorders would
+  leave no trace at all, and that gap is TD-78.
+- The content hash did not move. The canonical hash of a changed file stays in `UnstoredChanges`, as the file of
+  a location does (ADR-0041), so `DatasetHash` reads the same input. `FilesWithoutRows` lists a file only when
+  no reader holds it, so it no longer lists these seven.
+
+Measured on 2026-10-21 over the 13 exports of the development machine that hold a `templates` directory,
+against the baseline of 4.1.6. The dataset hash of every one is the same at `7f60f8c` and with the readers
+(`WTT-Armory`: `930727a4…0f45` both times). The files of the six copies that changed:
+
+| Export | File | Rows | Source bytes | Paths | Path bytes |
+|---|---|---|---|---|---|
+| `WTT-Armory` | `globals.json` | 80 `preset` added; 1 `global` (`config`) modified | 100,652 | 63 | 5,479 |
+| `WTT-Armory` | `templates/achievements.json` | 8 added | 9,710 | 0 | 0 |
+| `AllTheClothes` | `templates/customisationStorage.json` | 45 added | 2,993 | 0 | 0 |
+| `AllTheClothes` | `templates/character.json` | 79 added | 2,054 | 0 | 0 |
+| `FemalePMCVoice` | `templates/customisationStorage.json` | 1 added | 67 | 0 | 0 |
+| `FemalePMCVoice` | `templates/character.json` | 1 added | 26 | 0 | 0 |
+
+The six copies take 979,698 bytes as files and 120,981 bytes as rows and paths. No export changed
+`templates/dialogue.json`, `templates/profiles.json` or `settings.json`, so those three readers are proven by
+tests on small trees and not by a real change. No row has an ordinal name in these exports. The list
+`FilesWithoutRows` was `globals.json` and `templates/achievements.json` for `WTT-Armory`, and
+`templates/character.json` and `templates/customisationStorage.json` for `AllTheClothes` and `FemalePMCVoice`;
+it is empty for all of them now.
+
+The scenario "A file that no reader knows stops the import" is not built. A changed file that no reader holds
+keeps its canonical hash and appears in `FilesWithoutRows`, as before; the import does not refuse it.
 
 ## Links
 

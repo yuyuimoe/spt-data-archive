@@ -6,7 +6,7 @@ Instructions for AI coding agents and for new developers. Claude Code, Codex, Cu
 
 SPT Data Archive stores the data model of the SPT server (`sp-tushonka/server-csharp`) in PostgreSQL. It keeps official data and mod data in separate tables. A public read-only GraphQL API serves the data.
 
-The code compiles (TD-01 is done). Ten migrations exist and are applied, and 420 tests pass against a real Postgres: 398 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
+The code compiles (TD-01 is done). Eleven migrations exist and are applied, and 438 tests pass against a real Postgres: 416 xUnit tests and the 22 Gherkin scenarios of `mod-api.feature`, which Reqnroll runs (TD-02, TD-06). The other feature files are not bound yet (TD-62).
 
 ## Read first
 
@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 # The same checks, one by one:
 dotnet build SptArchive.slnx
-dotnet test SptArchive.slnx             # 420 tests (22 are scenarios); needs the development database (below)
+dotnet test SptArchive.slnx             # 438 tests (22 are scenarios); needs the development database (below)
 
 # The development database, with no .env file. Loopback only. "down -v" deletes the data.
 podman compose -f docker/compose.yml up -d
@@ -117,8 +117,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   an archive machine agree.
 - **One feature file runs as a test.** `Reqnroll.xunit.v3` 3.3.4 runs the 19 scenarios of `docs/specs/mod-api.feature`
   inside `dotnet test` (ADR-0012, TD-06). The other five feature files stay unbound and keep their tags (TD-62).
-- **Done:** the solution builds, ten migrations are applied, and 420 tests pass (TD-01, TD-02, TD-04, TD-05,
-  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 398 xUnit
+- **Done:** the solution builds, eleven migrations are applied, and 438 tests pass (TD-01, TD-02, TD-04, TD-05,
+  TD-06, TD-07, TD-15, TD-21, TD-29, TD-39, TD-40, TD-44, TD-45, TD-50, TD-51, TD-52, TD-53, TD-54, TD-55), 416 xUnit
   tests and 22 Gherkin scenarios.
   The exporter dumps every table of a run in the layout of the server database (TD-32, ADR-0027) and `run/`:
   the loaded mods, the manifest of every file, the text of every configuration file and every HTTP route
@@ -193,23 +193,34 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
 - **Gherkin runs as tests.** Reqnroll (`Reqnroll.xunit.v3` 3.3.4, ADR-0012) runs the 22 scenarios of
   `docs/specs/mod-api.feature` inside `dotnet test`, from `tests/SptArchive.Tests/Specs`. The test project links
   each bound feature file by name, and a file that it does not link keeps its `@unverified` tags (TD-62).
-- **Next slice:** the readers of the seven files that still hold no row (ADR-0044, accepted 2026-10-21,
-  TD-76). Measured on 2026-10-21 in the baseline of 4.1.6: `globals.json` 704,308 B with 488 item presets,
-  `templates/dialogue.json` 4,693,993 B with 53 elements, `templates/profiles.json` 1,078,871 B with 9
-  editions, `settings.json` 345,329 B, `templates/achievements.json` 121,613 B with 79 objects, and two
-  small lists. Four of the seven changed in the 19 exports of the development machine, in six copies of
-  979,698 B, and `templates/dialogue.json` and `settings.json` changed in none of them. The address of a
-  change is stable (TD-72, done on 2026-10-21): an array element is named by its identity field or by its
-  string value, so rows with a numeric segment fell from 29,341 to 3,382 over four real runs, and an array with a
-  missing or repeated identity keeps its index and logs a warning. The pool of ADR-0042 still pays nothing:
-  those runs hold 1.0 rows for each address and the break-even is 1.6 (TD-77). ADR-0043 is Accepted, implemented and measured in ADR-0044: a
-  loose-loot file is a directory of spawn points, and the ten files that `WTT-Armory` moves take
-  548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558
+- **A loose-loot file is split into its spawn points.** ADR-0043 is Accepted, implemented and measured: a
+  `locations/<map>/looseLoot.json` is a directory of spawn points, and the ten files that `WTT-Armory` moves
+  take 548,447,155 bytes while its 36 spawn-point rows take 56,301 bytes (the largest is 3,583, which is 558
   times below the limit of `rawJson`). `FactoryClassic` replaces two maps and writes 404 rows of 4,623,791
-  bytes and 1,050 removal paths of 19,394,570 bytes. The baseline cache and the catalogue of the paths
-  inside a jsonb document (TD-68) follow. No map mod is imported since ADR-0041, so the dataset of one is a
-  projection (TD-67), and a path filter over those rows reads every document of the table (TD-70). A dataset
-  that the archive already holds keeps the rows it had, because a dataset is never rewritten (TD-75).
+  bytes and 1,050 removal paths of 19,394,570 bytes.
+- **The address of a change is stable.** An array element is named by the first identity field it holds
+  (`_id`, `Id`, `_name`, `Name`, `QuestName`, `template.Id`, `locationId`, `Role`, `id`, `tpl`) or, for a
+  string, by its value (`ArrayIdentity`, TD-72, done on 2026-10-21). The fallback is per array: one element
+  without an identity, with an empty one, or with one that a sibling repeats keeps the whole array on its
+  index and logs one warning for the file, the shape and the reason. Measured over the four real runs that
+  write rows, paths with a numeric segment fell from 29,341 to 3,382, and a copy of `AllTheClothes` with
+  every array reversed keeps 321 of 321 addresses where the old code kept 323 of 454. The pool of ADR-0042
+  still pays nothing: those runs hold 1.0 rows for each address and the break-even is 1.6 (TD-77). The index
+  that remains is the filter groups of an item (2,792 rows in `WTT-Armory`, elements `{Filter,Shift}`), which
+  hold no identity field.
+- **The seven files that held no row have rows.** `globals.json`, `settings.json`, `templates/dialogue.json`,
+  `profiles.json`, `achievements.json`, `character.json` and `customisationStorage.json` become one row for each
+  object, in ten kinds (`dialogue`, `preset`, `bot-preset`, `scattering`, `global`, `setting`, `profile`,
+  `achievement`, `storage`, `character`; ADR-0044, amendment 1, TD-76). The migration `WidenKindChecks` widens the
+  four kind checks. The content hash did not move: the dataset hash of 13 real exports is the same with and
+  without the readers. The baseline holds 408 item presets (`WTT-Armory` 488). `WTT-Armory` writes 80 preset
+  rows, 1 `config` row with 63 paths and 8 achievement rows; `AllTheClothes` writes 45 storage rows and 79
+  character rows. A dataset that the archive already holds keeps the rows it had (TD-75).
+- **Next slice:** the baseline cache and the catalogue of the paths inside a jsonb document (TD-68). No map
+  mod is imported since ADR-0041, so the dataset of one is a projection (TD-67), and a path filter over those
+  rows reads every document of the table (TD-70). A dataset that the archive already holds keeps the rows it
+  had, because a dataset is never rewritten (TD-75). The pool of ADR-0042 waits for two datasets that change
+  one address (TD-77).
 - **Storage is jsonb with lz4, and three engines were compared.** The migration `SetToastCompressionLz4` sets
   lz4 on the 27 jsonb columns and `compose.yaml` sets it for the columns a later migration adds
   (ADR-0041, ratified 2026-10-21). Measured against CouchDB 3.4.3 and Cassandra 5.0.9 on the same 132 MB map
@@ -230,8 +241,8 @@ Stop and ask the driver when a step needs a decision. Do not skip a step without
   measurement says the pool pays from 1.6 change rows for each address: the archive holds 1.0,
   so the storage waits for two datasets that change one object (TD-77); the address is stable (TD-72). ADR-0043 (one row for each spawn point of a loose-loot file) is
   Accepted and implemented, ratified by Yui on 2026-10-21. ADR-0044 (one row for each object of every file
-  that a run changes) and ADR-0045 (the link to the source of a file, which waits for exporter 1.6.0) are
-  Accepted, ratified by Yui on 2026-10-21, and neither is implemented (TD-76). ADR-0005 and ADR-0010 are
+  that a run changes) is Accepted and implemented for the seven files (TD-76). ADR-0045 (the link to the source
+  of a file) waits for exporter 1.6.0. It is Accepted and not implemented. ADR-0005 and ADR-0010 are
   superseded; ADR-0001 to 0004, 0006 to 0009, 0011 to 0029 and 0031 to 0037 are Accepted.
 - **Not built:** the baseline cache and the catalog (ADR-0013 action items). The container runner, the exporter
   and the importer exist and ran on nineteen real mod runs (`docs/runbooks/mod-export.md`), including a curated

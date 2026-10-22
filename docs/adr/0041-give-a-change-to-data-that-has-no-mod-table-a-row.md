@@ -116,6 +116,16 @@ link when the archive holds one.
    bytes of `locations/lighthouse/looseLoot.json` become 3,611 spawn points of 36,558 bytes on average, and
    `WTT-Armory` adds 2 of them to that file and 21 in total, which take 44,347 bytes.
 
+## Amendment 2: the kind check names fifteen kinds, 2026-10-22
+
+**This amendment changes no decision of this ADR.** Decision 1 names five kinds and the migration
+`AddDatabaseObjects` wrote those five into the check `ck_mod_database_objects_kind`. ADR-0044, amendment 1,
+writes ten more kinds into the same table, so the check names the fifteen: `location`, `bot`, `hideout`,
+`price`, `handbook`, `dialogue`, `preset`, `bot-preset`, `scattering`, `global`, `setting`, `profile`,
+`achievement`, `storage` and `character`. The migration `WidenKindChecks` states the list, and it widens the
+three other checks (`mod_templates`, `mod_change_paths`, `mod_id_maps`) to the same fifteen kinds in one
+statement, so a kind cannot be valid in one table and refused in another.
+
 ## Options Considered
 
 | Dimension | A. Hash only (today) | B. One row per object, whole document | C. Rows per changed value, and a source table per file (chosen) | D. Five `mod_*` tables, one for each kind |

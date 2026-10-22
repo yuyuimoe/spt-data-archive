@@ -69,15 +69,15 @@ public sealed class DatabaseObjectTests : IDisposable
     public void A_changed_file_of_another_table_is_still_a_file_with_no_row()
     {
         var baseline = ObjectTree.Baseline();
-        baseline["globals.json"] = """{"time":1}""";
+        baseline["templates/anUnknownTable.json"] = """{"time":1}""";
 
         var run = ObjectTree.RunOverBaseline();
-        run["globals.json"] = """{"time":2}""";
+        run["templates/anUnknownTable.json"] = """{"time":2}""";
 
         var diff = Diff(baseline, run);
 
-        Assert.Equal("globals.json", Assert.Single(diff.FilesWithoutRows));
-        Assert.Contains("globals.json", diff.UnstoredChanges.Keys);
+        Assert.Equal("templates/anUnknownTable.json", Assert.Single(diff.FilesWithoutRows));
+        Assert.Contains("templates/anUnknownTable.json", diff.UnstoredChanges.Keys);
     }
 
     [Fact]
